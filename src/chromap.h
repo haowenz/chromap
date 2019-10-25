@@ -35,8 +35,7 @@ struct MappingWithBarcode {
   uint16_t fragment_length;
   uint8_t mapq;
   bool operator<(const MappingWithBarcode& m) const {
-    //return std::tie(cell_barcode, fragment_start_position, fragment_length, mapq, read_id) < std::tie(m.cell_barcode, m.fragment_start_position, m.fragment_length, m.mapq, m.read_id);
-    return std::tie(cell_barcode, fragment_start_position, fragment_length) < std::tie(m.cell_barcode, m.fragment_start_position, m.fragment_length) && std::tie(mapq, read_id) > std::tie(m.mapq, read_id);
+    return std::tie(cell_barcode, fragment_start_position, fragment_length, mapq, read_id) < std::tie(m.cell_barcode, m.fragment_start_position, m.fragment_length, m.mapq, m.read_id);
   }
   bool operator==(const MappingWithBarcode& m) const {
     //return std::tie(cell_barcode, fragment_start_position, fragment_length, mapq) == std::tie(m.cell_barcode, m.fragment_start_position, m.fragment_length, m.mapq);
@@ -50,8 +49,7 @@ struct MappingWithoutBarcode {
   uint16_t fragment_length;
   uint8_t mapq;
   bool operator<(const MappingWithoutBarcode& m) const {
-    //return std::tie(fragment_start_position, fragment_length, mapq, read_id) < std::tie(m.fragment_start_position, m.fragment_length, m.mapq, m.read_id);
-    return std::tie(fragment_start_position, fragment_length) < std::tie(m.fragment_start_position, m.fragment_length) && std::tie(mapq, read_id) > std::tie(m.mapq, read_id);
+    return std::tie(fragment_start_position, fragment_length, mapq, read_id) < std::tie(m.fragment_start_position, m.fragment_length, m.mapq, m.read_id);
   }
   bool operator==(const MappingWithoutBarcode& m) const {
     //return std::tie(fragment_start_position, fragment_length, mapq) == std::tie(m.fragment_start_position, m.fragment_length, m.mapq);
@@ -68,8 +66,7 @@ struct PairedEndMappingWithBarcode {
   uint16_t positive_alignment_length;
   uint16_t negative_alignment_length;
   bool operator<(const PairedEndMappingWithBarcode& m) const {
-    //return std::tie(cell_barcode, fragment_start_position, fragment_length, mapq, read_id) < std::tie(m.cell_barcode, m.fragment_start_position, m.fragment_length, m.mapq, m.read_id);
-    return std::tie(cell_barcode, fragment_start_position, fragment_length) < std::tie(m.cell_barcode, m.fragment_start_position, m.fragment_length) && std::tie(mapq, read_id) > std::tie(m.mapq, read_id);
+    return std::tie(cell_barcode, fragment_start_position, fragment_length, mapq, read_id, positive_alignment_length, negative_alignment_length) < std::tie(m.cell_barcode, m.fragment_start_position, m.fragment_length, m.mapq, m.read_id, m.positive_alignment_length, m.negative_alignment_length);
   }
   bool operator==(const PairedEndMappingWithBarcode& m) const {
     //return std::tie(cell_barcode, fragment_start_position, fragment_length, mapq) == std::tie(m.cell_barcode, m.fragment_start_position, m.fragment_length, m.mapq);
@@ -85,8 +82,7 @@ struct PairedEndMappingWithoutBarcode {
   uint16_t positive_alignment_length;
   uint16_t negative_alignment_length;
   bool operator<(const PairedEndMappingWithoutBarcode& m) const {
-    //return std::tie(fragment_start_position, fragment_length, mapq, read_id) < std::tie(m.fragment_start_position, m.fragment_length, m.mapq, m.read_id);
-    return std::tie(fragment_start_position, fragment_length) < std::tie(m.fragment_start_position, m.fragment_length) && std::tie(mapq, read_id) > std::tie(m.mapq, read_id);
+    return std::tie(fragment_start_position, fragment_length, mapq, read_id, positive_alignment_length, negative_alignment_length) < std::tie(m.fragment_start_position, m.fragment_length, m.mapq, m.read_id, m.positive_alignment_length, m.negative_alignment_length);
   }
   bool operator==(const PairedEndMappingWithoutBarcode& m) const {
     //return std::tie(fragment_start_position, fragment_length, mapq) == std::tie(m.fragment_start_position, m.fragment_length, m.mapq);
@@ -139,6 +135,7 @@ class Chromap {
   void ProcessBestMappingsForPairedEndReadOnOneDirection(Direction first_read_direction, uint32_t pair_index, uint8_t mapq, int min_num_errors1, int num_best_mappings1, int second_min_num_errors1, int num_second_best_mappings1, const SequenceBatch &read_batch1, const std::vector<std::pair<int, uint64_t> > &mappings1, int min_num_errors2, int num_best_mappings2, int second_min_num_errors2, int num_second_best_mappings2, const SequenceBatch &read_batch2, const SequenceBatch &reference, const SequenceBatch &barcode_batch, const std::vector<int> &best_mapping_indices, const std::vector<std::pair<int, uint64_t> > &mappings2, const std::vector<std::pair<uint32_t, uint32_t> > &best_mappings, int min_sum_errors, int num_best_mappings, int second_min_sum_errors, int num_second_best_mappings, int *best_mapping_index, int *num_best_mappings_reported, std::vector<std::vector<MappingRecord> > *mappings_on_diff_ref_seqs);
   void GenerateBestMappingsForPairedEndRead(uint32_t pair_index, int min_num_errors1, int num_best_mappings1, int second_min_num_errors1, int num_second_best_mappings1, const SequenceBatch &read_batch1, const std::vector<std::pair<int, uint64_t> > &positive_mappings1, const std::vector<std::pair<int, uint64_t> > &negative_mappings1, int min_num_errors2, int num_best_mappings2, int second_min_num_errors2, int num_second_best_mappings2, const SequenceBatch &read_batch2, const SequenceBatch &reference, const SequenceBatch &barcode_batch, const std::vector<std::pair<int, uint64_t> > &positive_mappings2, const std::vector<std::pair<int, uint64_t> > &negative_mappings2, std::vector<int> *best_mapping_indices, std::mt19937 *generator, std::vector<std::pair<uint32_t, uint32_t> > *F1R2_best_mappings, std::vector<std::pair<uint32_t, uint32_t> > *F2R1_best_mappings, int *min_sum_errors, int *num_best_mappings, int *second_min_sum_errors, int *num_second_best_mappings, std::vector<std::vector<MappingRecord> > *mappings_on_diff_ref_seqs);
   void EmplaceBackMappingRecord(uint32_t read_id, uint32_t barcode, uint32_t fragment_start_position, uint16_t fragment_length, uint8_t mapq, uint16_t positive_alignment_length, uint16_t negative_alignment_length2, std::vector<MappingRecord> *mappings_on_diff_ref_seqs);
+  void OutputPairedEndMappingsInVector(uint8_t mapq_threshold, uint32_t num_reference_sequences, const SequenceBatch &reference, const std::vector<std::vector<MappingRecord> > &mappings, OutputTools &output_tools);
   void OutputPairedEndMappings(uint32_t num_reference_sequences, const SequenceBatch &reference, const std::vector<std::vector<MappingRecord> > &mappings);
 
   // For single-end read mapping
@@ -156,6 +153,7 @@ class Chromap {
   void AllocateMultiMappings(uint32_t num_reference_sequences);
   void RemovePCRDuplicate(uint32_t num_reference_sequences);
   void MoveMappingsInBuffersToMappingContainer(uint32_t num_reference_sequences, std::vector<std::vector<std::vector<MappingRecord> > > *mappings_on_diff_ref_seqs_for_diff_threads_for_saving);
+  void GenerateMappingStatistics(uint32_t num_reference_sequences, const std::vector<std::vector<MappingRecord> > &uni_mappings, const std::vector<std::vector<MappingRecord> > &multi_mappings);
   inline static double GetRealTime() {
     struct timeval tp;
     struct timezone tzp;

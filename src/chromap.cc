@@ -351,49 +351,30 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
   std::cerr << "Number of multi-mappings: " << num_mappings_ - num_uniquely_mapped_reads_ << ".\n";
   std::cerr << "Number of fragments: " << num_mappings_for_test << ".\n";
   std::cerr << "Mapped all reads in " << Chromap<>::GetRealTime() - real_start_mapping_time << "s.\n";
-  uint64_t num_uni_mappings = 0;
-  uint64_t num_multi_mappings = 0;
-  for (auto &mappings_on_one_ref_seq : mappings_on_diff_ref_seqs_) {
-    for(auto &mapping: mappings_on_one_ref_seq) {
-      if (mapping.mapq < 30) {
-        ++num_multi_mappings;
-      } else {
-        ++num_uni_mappings;
-      }
-    }
-  } 
-  std::cerr << "To verify again, # uni-mapped fragments: " << num_uni_mappings << ", # multi-mapped fragments: " << num_multi_mappings << ".\n";
+  GenerateMappingStatistics(num_reference_sequences, mappings_on_diff_ref_seqs_, mappings_on_diff_ref_seqs_);
   std::vector<std::vector<MappingRecord> > &mappings = remove_pcr_duplicates_ ? deduped_mappings_on_diff_ref_seqs_ : mappings_on_diff_ref_seqs_;
   if (remove_pcr_duplicates_) {
     RemovePCRDuplicate(num_reference_sequences);
-    num_uni_mappings = 0;
-    num_multi_mappings = 0;
-    for (auto &mappings_on_one_ref_seq : mappings) {
-      for(auto &mapping: mappings_on_one_ref_seq) {
-        if (mapping.mapq < 30) {
-          ++num_multi_mappings;
-        } else {
-          ++num_uni_mappings;
-        }
-      }
-    } 
-    std::cerr << "After removing PCR duplications, # uni-mapped fragments: " << num_uni_mappings << ", # multi-mapped fragments: " << num_multi_mappings << ".\n";
+    std::cerr << "After removing PCR duplications, ";
+    GenerateMappingStatistics(num_reference_sequences, mappings, mappings);
   }
   if (allocate_multi_mappings_) {
     AllocateMultiMappings(num_reference_sequences);
-    num_uni_mappings = 0;
-    num_multi_mappings = 0;
-    for (auto &mappings_on_one_ref_seq : mappings) {
-      for(auto &mapping: mappings_on_one_ref_seq) {
-        if (mapping.mapq >= 30) {
-          ++num_uni_mappings;
-        }
-      }
-    } 
-    for (auto &multi_mappings_on_one_ref_seq : allocated_multi_mappings_on_diff_ref_seqs_) {
-      num_multi_mappings += multi_mappings_on_one_ref_seq.size();
-    } 
-    std::cerr << "After allocating multi-reads, # uni-mapped fragments: " << num_uni_mappings << ", # multi-mapped fragments: " << num_multi_mappings << ".\n";
+    std::cerr << "After allocating multi-mappings, ";
+    GenerateMappingStatistics(num_reference_sequences, mappings, allocated_multi_mappings_on_diff_ref_seqs_);
+//    num_uni_mappings = 0;
+//    num_multi_mappings = 0;
+//    for (auto &mappings_on_one_ref_seq : mappings) {
+//      for(auto &mapping: mappings_on_one_ref_seq) {
+//        if (mapping.mapq >= 30) {
+//          ++num_uni_mappings;
+//        }
+//      }
+//    } 
+//    for (auto &multi_mappings_on_one_ref_seq : allocated_multi_mappings_on_diff_ref_seqs_) {
+//      num_multi_mappings += multi_mappings_on_one_ref_seq.size();
+//    } 
+//    std::cerr << "After allocating multi-reads, # uni-mapped fragments: " << num_uni_mappings << ", # multi-mapped fragments: " << num_multi_mappings << ".\n";
   }
   OutputPairedEndMappings(num_reference_sequences, reference, mappings);
   reference.FinalizeLoading();
@@ -401,15 +382,33 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
 }
 
 template <typename MappingRecord>
-void Chromap<MappingRecord>::OutputPairedEndMappings(uint32_t num_reference_sequences, const SequenceBatch &reference, const std::vector<std::vector<MappingRecord> > &mappings) {
-  OutputTools output_tools(mapping_output_file_path_);
-  output_tools.InitializeMappingOutput();
+void Chromap<MappingRecord>::GenerateMappingStatistics(uint32_t num_reference_sequences, const std::vector<std::vector<MappingRecord> > &uni_mappings, const std::vector<std::vector<MappingRecord> > &multi_mappings) {
+  uint64_t num_uni_mappings = 0;
+  uint64_t num_multi_mappings = 0;
+  for (auto &uni_mappings_on_one_ref_seq : uni_mappings) {
+    for(auto &uni_mapping: uni_mappings_on_one_ref_seq) {
+      if (uni_mapping.mapq >= 30) {
+        ++num_uni_mappings;
+      }
+    }
+  } 
+  for (auto &multi_mappings_on_one_ref_seq : multi_mappings) {
+    for(auto &multi_mapping: multi_mappings_on_one_ref_seq) {
+      if (multi_mapping.mapq < 30) {
+        ++num_multi_mappings;
+      }
+    }
+  } 
+  std::cerr << "# uni-mappings: " << num_uni_mappings << ", # multi-mappings: " << num_multi_mappings << ".\n";
+}
+
+template <typename MappingRecord>
+void Chromap<MappingRecord>::OutputPairedEndMappingsInVector(uint8_t mapq_threshold, uint32_t num_reference_sequences, const SequenceBatch &reference, const std::vector<std::vector<MappingRecord> > &mappings, OutputTools &output_tools) {
   for (uint32_t ri = 0; ri < num_reference_sequences; ++ri) {
-    uint8_t mapq_threshold = (allocate_multi_mappings_ || only_output_unique_mappings_) ? 30 : 0;
     for (auto it = mappings[ri].begin(); it != mappings[ri].end(); ++it) {
-      uint8_t strand = it->positive_alignment_length & (uint8_t)1;
-      uint16_t positive_alignment_length = it->positive_alignment_length >> 1;
       if (it->mapq >= mapq_threshold) {
+        uint8_t strand = it->positive_alignment_length & (uint8_t)1;
+        uint16_t positive_alignment_length = it->positive_alignment_length >> 1;
         uint32_t positive_read_end = it->fragment_start_position + positive_alignment_length;
         uint32_t negative_read_end = it->fragment_start_position + it-> fragment_length;
         uint32_t negative_read_start = negative_read_end - it -> negative_alignment_length;
@@ -418,17 +417,17 @@ void Chromap<MappingRecord>::OutputPairedEndMappings(uint32_t num_reference_sequ
         output_tools.AppendMappingOutput(output_tools.GeneratePairedEndTagAlignLine(strand, reference.GetSequenceNameAt(ri), it->fragment_start_position, positive_read_end, reference.GetSequenceNameAt(ri), negative_read_start, negative_read_end));
       }
     }
-    if (allocate_multi_mappings_) {
-      for (auto it = allocated_multi_mappings_on_diff_ref_seqs_[ri].begin(); it != allocated_multi_mappings_on_diff_ref_seqs_[ri].end(); ++it) {
-        uint8_t strand = it->positive_alignment_length & (uint8_t)1;
-        uint16_t positive_alignment_length = it->positive_alignment_length >> 1;
-        uint32_t positive_read_end = it->fragment_start_position + positive_alignment_length;
-        uint32_t negative_read_end = it->fragment_start_position + it-> fragment_length;
-        uint32_t negative_read_start = negative_read_end - it -> negative_alignment_length;
-        //output_tools.AppendMappingOutput(output_tools.GenerateBEDPELine(reference.GetSequenceNameAt(ri), it->fragment_start_position, it->fragment_length));
-        output_tools.AppendMappingOutput(output_tools.GeneratePairedEndTagAlignLine(strand, reference.GetSequenceNameAt(ri), it->fragment_start_position, positive_read_end, reference.GetSequenceNameAt(ri), negative_read_start, negative_read_end));
-      }
-    }
+  }
+}
+
+template <typename MappingRecord>
+void Chromap<MappingRecord>::OutputPairedEndMappings(uint32_t num_reference_sequences, const SequenceBatch &reference, const std::vector<std::vector<MappingRecord> > &mappings) {
+  OutputTools output_tools(mapping_output_file_path_);
+  output_tools.InitializeMappingOutput();
+  uint8_t mapq_threshold = (allocate_multi_mappings_ || only_output_unique_mappings_) ? 30 : 0;
+  OutputPairedEndMappingsInVector(mapq_threshold, num_reference_sequences, reference, mappings, output_tools);
+  if (allocate_multi_mappings_ && (!only_output_unique_mappings_)) {
+    OutputPairedEndMappingsInVector(0, num_reference_sequences, reference, allocated_multi_mappings_on_diff_ref_seqs_, output_tools);
   }
   output_tools.FinalizeMappingOutput();
 }
@@ -853,11 +852,11 @@ void Chromap<MappingRecord>::RemovePCRDuplicate(uint32_t num_reference_sequences
   uint32_t count = 0;
   double real_dedupe_start_time = Chromap<>::GetRealTime();
   for (uint32_t ri = 0; ri < num_reference_sequences; ++ri) {
-    double real_start_time = Chromap<>::GetRealTime();
+    //double real_start_time = Chromap<>::GetRealTime();
     //radix_sort_with_barcode(mappings_on_diff_ref_seqs_[ri].data(), mappings_on_diff_ref_seqs_[ri].data() + mappings_on_diff_ref_seqs_[ri].size());
     std::sort(mappings_on_diff_ref_seqs_[ri].begin(), mappings_on_diff_ref_seqs_[ri].end());
     count += mappings_on_diff_ref_seqs_[ri].size(); 
-    std::cerr << "Sorted " << mappings_on_diff_ref_seqs_[ri].size() << " elements on " << ri << " in " << Chromap<>::GetRealTime() - real_start_time << "s.\n";
+    //std::cerr << "Sorted " << mappings_on_diff_ref_seqs_[ri].size() << " elements on " << ri << " in " << Chromap<>::GetRealTime() - real_start_time << "s.\n";
   }
   std::cerr << "Sorted " << count << " elements in " << Chromap<>::GetRealTime() - real_dedupe_start_time << "s.\n";
   count = 0;
@@ -905,7 +904,7 @@ void Chromap<MappingRecord>::AllocateMultiMappings(uint32_t num_reference_sequen
     allocated_multi_mappings_on_diff_ref_seqs_[ri].reserve(multi_mapping_indices.size() - num_multi_mappings);
     num_multi_mappings = multi_mapping_indices.size();
   }
-  std::cerr << "Got all " << multi_mapping_indices.size() << " multi-mappings!\n";
+  //std::cerr << "Got all " << multi_mapping_indices.size() << " multi-mappings!\n";
   std::sort(multi_mapping_indices.begin(), multi_mapping_indices.end());
   std::vector<uint32_t> weights;
   weights.reserve(max_num_best_mappings_);
