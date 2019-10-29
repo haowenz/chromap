@@ -350,6 +350,9 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
   std::cerr << "Mapped all reads in " << Chromap<>::GetRealTime() - real_start_mapping_time << "s.\n";
   OutputMappingStatistics();
   OutputMappingStatistics(num_reference_sequences, mappings_on_diff_ref_seqs_, mappings_on_diff_ref_seqs_);
+  if (Tn5_shift_) {
+    ApplyTn5ShiftOnPairedEndMapping(num_reference_sequences, &mappings_on_diff_ref_seqs_);
+  }
   std::vector<std::vector<MappingRecord> > &mappings = remove_pcr_duplicates_ ? deduped_mappings_on_diff_ref_seqs_ : mappings_on_diff_ref_seqs_;
   if (remove_pcr_duplicates_) {
     RemovePCRDuplicate(num_reference_sequences);
@@ -697,6 +700,9 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
   OutputMappingStatistics();
   std::cerr << "Mapped all reads in " << Chromap<>::GetRealTime() - real_start_mapping_time << "s.\n";
   OutputMappingStatistics(num_reference_sequences, mappings_on_diff_ref_seqs_, mappings_on_diff_ref_seqs_);
+  if (Tn5_shift_) {
+    ApplyTn5ShiftOnSingleEndMapping(num_reference_sequences, &mappings_on_diff_ref_seqs_);
+  }
   std::vector<std::vector<MappingRecord> > &mappings = remove_pcr_duplicates_ ? deduped_mappings_on_diff_ref_seqs_ : mappings_on_diff_ref_seqs_;
   if (remove_pcr_duplicates_) {
     RemovePCRDuplicate(num_reference_sequences);
@@ -760,12 +766,14 @@ void Chromap<MappingRecord>::ProcessBestMappingsForSingleEndRead(Direction mappi
         if (mapping_direction == kPositive) { 
           BandedTraceback(min_num_errors, reference.GetSequenceAt(rid) + verification_window_start_position, read, read_length, &mapping_start_position);
           uint32_t start_position = verification_window_start_position + mapping_start_position;
+          uint16_t fragment_length = position - start_position + 1;
           mapq |= 1;
-          EmplaceBackMappingRecord(read_id, read_name, (uint16_t)read_length, barcode_key, start_position, (uint16_t)(position - start_position), mapq, &((*mappings_on_diff_ref_seqs)[rid]));
+          EmplaceBackMappingRecord(read_id, read_name, (uint16_t)read_length, barcode_key, start_position, fragment_length, mapq, &((*mappings_on_diff_ref_seqs)[rid]));
         } else {
           BandedTraceback(min_num_errors, reference.GetSequenceAt(rid) + verification_window_start_position, negative_read.data(), read_length, &mapping_start_position);
           uint32_t start_position = verification_window_start_position + mapping_start_position;
-          EmplaceBackMappingRecord(read_id, read_name, (uint16_t)read_length, barcode_key, start_position, (uint16_t)(position - start_position), mapq, &((*mappings_on_diff_ref_seqs)[rid]));
+          uint16_t fragment_length = position - start_position + 1;
+          EmplaceBackMappingRecord(read_id, read_name, (uint16_t)read_length, barcode_key, start_position, fragment_length, mapq, &((*mappings_on_diff_ref_seqs)[rid]));
         }
         (*num_best_mappings_reported)++;
         if (*num_best_mappings_reported == std::min(max_num_best_mappings_, num_best_mappings)) {
@@ -1133,6 +1141,39 @@ void Chromap<MappingRecord>::OutputMappingStatistics(uint32_t num_reference_sequ
   } 
   std::cerr << "# uni-mappings: " << num_uni_mappings << ", # multi-mappings: " << num_multi_mappings << ".\n";
 }
+
+template <typename MappingRecord>
+void Chromap<MappingRecord>::ApplyTn5ShiftOnSingleEndMapping(uint32_t num_reference_sequences, std::vector<std::vector<MappingRecord> > *mappings) {
+  uint64_t num_shifted_mappings = 0;
+  for (auto &mappings_on_one_ref_seq : *mappings) {
+    for(auto &mapping: mappings_on_one_ref_seq) {
+      uint8_t strand = mapping.mapq & 1;
+      if (strand == 1) {
+        mapping.fragment_start_position += 4;
+        mapping.fragment_length -= 4;
+      } else {
+        mapping.fragment_length -= 5;
+      }
+      ++num_shifted_mappings;
+    }
+  } 
+  std::cerr << "# shifted mappings: " << num_shifted_mappings << ".\n";
+}
+
+template <typename MappingRecord>
+void Chromap<MappingRecord>::ApplyTn5ShiftOnPairedEndMapping(uint32_t num_reference_sequences, std::vector<std::vector<MappingRecord> > *mappings) {
+  uint64_t num_shifted_mappings = 0;
+  for (auto &mappings_on_one_ref_seq : *mappings) {
+    for(auto &mapping: mappings_on_one_ref_seq) {
+      mapping.fragment_start_position += 4;
+      mapping.positive_alignment_length -= 4;
+      mapping.fragment_length -= 9;
+      mapping.negative_alignment_length -= 5;
+      ++num_shifted_mappings;
+    }
+  } 
+  std::cerr << "# shifted mappings: " << num_shifted_mappings << ".\n";
+}
 } // namespace chromap
 
 int main(int argc, char *argv[]) {
@@ -1155,6 +1196,7 @@ int main(int argc, char *argv[]) {
     ("remove-pcr-duplicates", "Remove PCR duplicates")
     ("allocate-multi-mappings", "Allocate multi-mappings")
     ("unique-mappings", "Only output unique mappings")
+    ("Tn5-shift", "Perform Tn5 shift")
     ("BED", "Output mappings in BED/BEDPE format")
     ("TagAlign", "Output mappings in TagAlign/PairedTagAlign format")
     ("PAF", "Output mappings in PAF format")
@@ -1228,6 +1270,10 @@ int main(int argc, char *argv[]) {
   bool only_output_unique_mappings = false;
   if (result.count("unique-mappings")) {
     only_output_unique_mappings = true;
+  }
+  bool Tn5_shift = false;
+  if (result.count("Tn5-shift")) {
+    Tn5_shift = true;
   }
   bool output_mapping_in_BED = false;
   if (result.count("BED")) {
@@ -1329,6 +1375,9 @@ int main(int argc, char *argv[]) {
       std::cerr << "WARNING: you want to drop mapped reads with more than " << drop_repetitive_reads << " mappings. But you want to output top " << max_num_best_mappings << " best mappings. In this case, it will only output " << drop_repetitive_reads << " best mappings.\n";
       max_num_best_mappings = drop_repetitive_reads;
     }
+    if (Tn5_shift) {
+      std::cerr << "Perform Tn5 shift.\n";
+    }
     if (output_mapping_in_BED) {
       std::cerr << "Output mappings in BED/BEDPE format.\n";
     } else if (output_mapping_in_TagAlign) {
@@ -1350,27 +1399,27 @@ int main(int argc, char *argv[]) {
     std::cerr << "Output file: " << output_file_path << "\n";
     if (result.count("2") == 0) {
       if (output_mapping_in_PAF) {
-        chromap::Chromap<chromap::PAFMapping> chromap_for_mapping(error_threshold, min_num_seeds_required_for_mapping, max_seed_frequencies, max_num_best_mappings, num_threads, min_read_length, multi_mapping_allocation_seed, drop_repetitive_reads, trim_adapters, remove_pcr_duplicates, is_bulk_data, allocate_multi_mappings, only_output_unique_mappings, output_mapping_in_BED, output_mapping_in_TagAlign, output_mapping_in_PAF, reference_file_path, index_file_path, read_file1_path, output_file_path);
+        chromap::Chromap<chromap::PAFMapping> chromap_for_mapping(error_threshold, min_num_seeds_required_for_mapping, max_seed_frequencies, max_num_best_mappings, num_threads, min_read_length, multi_mapping_allocation_seed, drop_repetitive_reads, trim_adapters, remove_pcr_duplicates, is_bulk_data, allocate_multi_mappings, only_output_unique_mappings, Tn5_shift, output_mapping_in_BED, output_mapping_in_TagAlign, output_mapping_in_PAF, reference_file_path, index_file_path, read_file1_path, output_file_path);
         chromap_for_mapping.MapSingleEndReads();
       } else {
         if (result.count("b") != 0) {
-          chromap::Chromap<chromap::MappingWithBarcode> chromap_for_mapping(error_threshold, min_num_seeds_required_for_mapping, max_seed_frequencies, max_num_best_mappings, num_threads, min_read_length, multi_mapping_allocation_seed, drop_repetitive_reads, trim_adapters, remove_pcr_duplicates, is_bulk_data, allocate_multi_mappings, only_output_unique_mappings, output_mapping_in_BED, output_mapping_in_TagAlign, output_mapping_in_PAF, reference_file_path, index_file_path, read_file1_path, output_file_path);
+          chromap::Chromap<chromap::MappingWithBarcode> chromap_for_mapping(error_threshold, min_num_seeds_required_for_mapping, max_seed_frequencies, max_num_best_mappings, num_threads, min_read_length, multi_mapping_allocation_seed, drop_repetitive_reads, trim_adapters, remove_pcr_duplicates, is_bulk_data, allocate_multi_mappings, only_output_unique_mappings, Tn5_shift, output_mapping_in_BED, output_mapping_in_TagAlign, output_mapping_in_PAF, reference_file_path, index_file_path, read_file1_path, output_file_path);
           chromap_for_mapping.MapSingleEndReads();
         } else {
-          chromap::Chromap<chromap::MappingWithoutBarcode> chromap_for_mapping(error_threshold, min_num_seeds_required_for_mapping, max_seed_frequencies, max_num_best_mappings, num_threads, min_read_length, multi_mapping_allocation_seed, drop_repetitive_reads, trim_adapters, remove_pcr_duplicates, is_bulk_data, allocate_multi_mappings, only_output_unique_mappings, output_mapping_in_BED, output_mapping_in_TagAlign, output_mapping_in_PAF, reference_file_path, index_file_path, read_file1_path, output_file_path);
+          chromap::Chromap<chromap::MappingWithoutBarcode> chromap_for_mapping(error_threshold, min_num_seeds_required_for_mapping, max_seed_frequencies, max_num_best_mappings, num_threads, min_read_length, multi_mapping_allocation_seed, drop_repetitive_reads, trim_adapters, remove_pcr_duplicates, is_bulk_data, allocate_multi_mappings, only_output_unique_mappings, Tn5_shift, output_mapping_in_BED, output_mapping_in_TagAlign, output_mapping_in_PAF, reference_file_path, index_file_path, read_file1_path, output_file_path);
           chromap_for_mapping.MapSingleEndReads();
         }
       }
     } else {
       if (output_mapping_in_PAF) {
-        chromap::Chromap<chromap::PairedPAFMapping> chromap_for_mapping(error_threshold, min_num_seeds_required_for_mapping, max_seed_frequencies, max_num_best_mappings, max_insert_size, num_threads, min_read_length, multi_mapping_allocation_seed, drop_repetitive_reads, trim_adapters, remove_pcr_duplicates, is_bulk_data, allocate_multi_mappings, only_output_unique_mappings, output_mapping_in_BED, output_mapping_in_TagAlign, output_mapping_in_PAF, reference_file_path, index_file_path, read_file1_path, read_file2_path, barcode_file_path, output_file_path);
+        chromap::Chromap<chromap::PairedPAFMapping> chromap_for_mapping(error_threshold, min_num_seeds_required_for_mapping, max_seed_frequencies, max_num_best_mappings, max_insert_size, num_threads, min_read_length, multi_mapping_allocation_seed, drop_repetitive_reads, trim_adapters, remove_pcr_duplicates, is_bulk_data, allocate_multi_mappings, only_output_unique_mappings, Tn5_shift, output_mapping_in_BED, output_mapping_in_TagAlign, output_mapping_in_PAF, reference_file_path, index_file_path, read_file1_path, read_file2_path, barcode_file_path, output_file_path);
         chromap_for_mapping.MapPairedEndReads();
       } else {
         if (result.count("b") != 0) {
-          chromap::Chromap<chromap::PairedEndMappingWithBarcode> chromap_for_mapping(error_threshold, min_num_seeds_required_for_mapping, max_seed_frequencies, max_num_best_mappings, max_insert_size, num_threads, min_read_length, multi_mapping_allocation_seed, drop_repetitive_reads, trim_adapters, remove_pcr_duplicates, is_bulk_data, allocate_multi_mappings, only_output_unique_mappings, output_mapping_in_BED, output_mapping_in_TagAlign, output_mapping_in_PAF, reference_file_path, index_file_path, read_file1_path, read_file2_path, barcode_file_path, output_file_path);
+          chromap::Chromap<chromap::PairedEndMappingWithBarcode> chromap_for_mapping(error_threshold, min_num_seeds_required_for_mapping, max_seed_frequencies, max_num_best_mappings, max_insert_size, num_threads, min_read_length, multi_mapping_allocation_seed, drop_repetitive_reads, trim_adapters, remove_pcr_duplicates, is_bulk_data, allocate_multi_mappings, only_output_unique_mappings, Tn5_shift, output_mapping_in_BED, output_mapping_in_TagAlign, output_mapping_in_PAF, reference_file_path, index_file_path, read_file1_path, read_file2_path, barcode_file_path, output_file_path);
           chromap_for_mapping.MapPairedEndReads();
         } else {
-          chromap::Chromap<chromap::PairedEndMappingWithoutBarcode> chromap_for_mapping(error_threshold, min_num_seeds_required_for_mapping, max_seed_frequencies, max_num_best_mappings, max_insert_size, num_threads, min_read_length, multi_mapping_allocation_seed, drop_repetitive_reads, trim_adapters, remove_pcr_duplicates, is_bulk_data, allocate_multi_mappings, only_output_unique_mappings, output_mapping_in_BED, output_mapping_in_TagAlign, output_mapping_in_PAF, reference_file_path, index_file_path, read_file1_path, read_file2_path, barcode_file_path, output_file_path);
+          chromap::Chromap<chromap::PairedEndMappingWithoutBarcode> chromap_for_mapping(error_threshold, min_num_seeds_required_for_mapping, max_seed_frequencies, max_num_best_mappings, max_insert_size, num_threads, min_read_length, multi_mapping_allocation_seed, drop_repetitive_reads, trim_adapters, remove_pcr_duplicates, is_bulk_data, allocate_multi_mappings, only_output_unique_mappings, Tn5_shift, output_mapping_in_BED, output_mapping_in_TagAlign, output_mapping_in_PAF, reference_file_path, index_file_path, read_file1_path, read_file2_path, barcode_file_path, output_file_path);
           chromap_for_mapping.MapPairedEndReads();
         }
       }
