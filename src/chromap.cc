@@ -8,7 +8,6 @@
 
 #include "cxxopts.hpp"
 #include "IITree.h"
-//#include "output_tools.h"
 
 namespace chromap {
 template <typename MappingRecord>
@@ -196,6 +195,14 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
       mappings_on_diff_ref_seqs_for_diff_threads_for_saving[ti][i].reserve((num_loaded_pairs + num_loaded_pairs / 1000 * max_num_best_mappings_) / num_threads_ / num_reference_sequences);
     }
   }
+  if (output_mapping_in_BED_) {
+    output_tools = std::unique_ptr<BEDPEOutputTools<MappingRecord> >(new BEDPEOutputTools<MappingRecord>);
+  } else if (output_mapping_in_TagAlign_) {
+    output_tools = std::unique_ptr<PairedTagAlignOutputTools<MappingRecord> >(new PairedTagAlignOutputTools<MappingRecord>);
+  } else if (output_mapping_in_PAF_) {
+    output_tools = std::unique_ptr<PairedPAFOutputTools<MappingRecord> >(new PairedPAFOutputTools<MappingRecord>);
+  }
+  output_tools->InitializeMappingOutput(mapping_output_file_path_);
   static uint64_t thread_num_candidates = 0;
   static uint64_t thread_num_mappings = 0;
   static uint64_t thread_num_mapped_reads = 0; 
@@ -340,81 +347,35 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
   if (!is_bulk_data_) {
     barcode_batch_for_loading.FinalizeLoading();
   }
-  std::cerr << "Number of reads: " << num_reads_ << ".\n";
-  std::cerr << "Number of mapped reads: " << num_mapped_reads_ << ".\n";
-  std::cerr << "Number of uniquely mapped reads: " << num_uniquely_mapped_reads_ << ".\n";
-  std::cerr << "Number of reads have multi-mappings: " << num_mapped_reads_ - num_uniquely_mapped_reads_ << ".\n";
-  //std::cerr << "Number of duplicated reads: " << num_duplicated_reads_ << ".\n";
-  std::cerr << "Number of candidates: " << num_candidates_ << ".\n";
-  std::cerr << "Number of mappings: " << num_mappings_ << ".\n";
-  std::cerr << "Number of uni-mappings: " << num_uniquely_mapped_reads_ << ".\n";
-  std::cerr << "Number of multi-mappings: " << num_mappings_ - num_uniquely_mapped_reads_ << ".\n";
-  std::cerr << "Number of fragments: " << num_mappings_for_test << ".\n";
   std::cerr << "Mapped all reads in " << Chromap<>::GetRealTime() - real_start_mapping_time << "s.\n";
-  GenerateMappingStatistics(num_reference_sequences, mappings_on_diff_ref_seqs_, mappings_on_diff_ref_seqs_);
+  OutputMappingStatistics();
+  OutputMappingStatistics(num_reference_sequences, mappings_on_diff_ref_seqs_, mappings_on_diff_ref_seqs_);
   std::vector<std::vector<MappingRecord> > &mappings = remove_pcr_duplicates_ ? deduped_mappings_on_diff_ref_seqs_ : mappings_on_diff_ref_seqs_;
   if (remove_pcr_duplicates_) {
     RemovePCRDuplicate(num_reference_sequences);
     std::cerr << "After removing PCR duplications, ";
-    GenerateMappingStatistics(num_reference_sequences, mappings, mappings);
+    OutputMappingStatistics(num_reference_sequences, mappings, mappings);
   }
   if (allocate_multi_mappings_) {
     AllocateMultiMappings(num_reference_sequences);
     std::cerr << "After allocating multi-mappings, ";
-    GenerateMappingStatistics(num_reference_sequences, mappings, allocated_multi_mappings_on_diff_ref_seqs_);
-//    num_uni_mappings = 0;
-//    num_multi_mappings = 0;
-//    for (auto &mappings_on_one_ref_seq : mappings) {
-//      for(auto &mapping: mappings_on_one_ref_seq) {
-//        if (mapping.mapq >= 30) {
-//          ++num_uni_mappings;
-//        }
-//      }
-//    } 
-//    for (auto &multi_mappings_on_one_ref_seq : allocated_multi_mappings_on_diff_ref_seqs_) {
-//      num_multi_mappings += multi_mappings_on_one_ref_seq.size();
-//    } 
-//    std::cerr << "After allocating multi-reads, # uni-mapped fragments: " << num_uni_mappings << ", # multi-mapped fragments: " << num_multi_mappings << ".\n";
+    OutputMappingStatistics(num_reference_sequences, mappings, allocated_multi_mappings_on_diff_ref_seqs_);
   }
   OutputPairedEndMappings(num_reference_sequences, reference, mappings);
+  output_tools->FinalizeMappingOutput();
   reference.FinalizeLoading();
   std::cerr << "Total time: " << Chromap<>::GetRealTime() - real_start_time << "s.\n";
 }
 
-template <typename MappingRecord>
-void Chromap<MappingRecord>::GenerateMappingStatistics(uint32_t num_reference_sequences, const std::vector<std::vector<MappingRecord> > &uni_mappings, const std::vector<std::vector<MappingRecord> > &multi_mappings) {
-  uint64_t num_uni_mappings = 0;
-  uint64_t num_multi_mappings = 0;
-  for (auto &uni_mappings_on_one_ref_seq : uni_mappings) {
-    for(auto &uni_mapping: uni_mappings_on_one_ref_seq) {
-      if (uni_mapping.mapq >= 30) {
-        ++num_uni_mappings;
-      }
-    }
-  } 
-  for (auto &multi_mappings_on_one_ref_seq : multi_mappings) {
-    for(auto &multi_mapping: multi_mappings_on_one_ref_seq) {
-      if (multi_mapping.mapq < 30) {
-        ++num_multi_mappings;
-      }
-    }
-  } 
-  std::cerr << "# uni-mappings: " << num_uni_mappings << ", # multi-mappings: " << num_multi_mappings << ".\n";
-}
+
 
 template <typename MappingRecord>
-void Chromap<MappingRecord>::OutputPairedEndMappingsInVector(uint8_t mapq_threshold, uint32_t num_reference_sequences, const SequenceBatch &reference, const std::vector<std::vector<MappingRecord> > &mappings, OutputTools &output_tools) {
+void Chromap<MappingRecord>::OutputPairedEndMappingsInVector(uint8_t mapq_threshold, uint32_t num_reference_sequences, const SequenceBatch &reference, const std::vector<std::vector<MappingRecord> > &mappings) {
   for (uint32_t ri = 0; ri < num_reference_sequences; ++ri) {
     for (auto it = mappings[ri].begin(); it != mappings[ri].end(); ++it) {
-      if (it->mapq >= mapq_threshold) {
-        uint8_t strand = it->positive_alignment_length & (uint8_t)1;
-        uint16_t positive_alignment_length = it->positive_alignment_length >> 1;
-        uint32_t positive_read_end = it->fragment_start_position + positive_alignment_length;
-        uint32_t negative_read_end = it->fragment_start_position + it-> fragment_length;
-        uint32_t negative_read_start = negative_read_end - it -> negative_alignment_length;
-        //output_tools.AppendMappingOutput(output_tools.GenerateBEDPELine(reference.GetSequenceNameAt(ri), it->fragment_start_position + 4, it->fragment_length - 5));
-        //output_tools.AppendMappingOutput(output_tools.GenerateBEDPELine(reference.GetSequenceNameAt(ri), it->fragment_start_position, it->fragment_length));
-        output_tools.AppendMappingOutput(output_tools.GeneratePairedEndTagAlignLine(strand, reference.GetSequenceNameAt(ri), it->fragment_start_position, positive_read_end, reference.GetSequenceNameAt(ri), negative_read_start, negative_read_end));
+      uint8_t mapq = (it->mapq) >> 1;
+      if (mapq >= mapq_threshold) {
+        output_tools->AppendMapping(ri, reference, *it);
       }
     }
   }
@@ -422,14 +383,11 @@ void Chromap<MappingRecord>::OutputPairedEndMappingsInVector(uint8_t mapq_thresh
 
 template <typename MappingRecord>
 void Chromap<MappingRecord>::OutputPairedEndMappings(uint32_t num_reference_sequences, const SequenceBatch &reference, const std::vector<std::vector<MappingRecord> > &mappings) {
-  OutputTools output_tools(mapping_output_file_path_);
-  output_tools.InitializeMappingOutput();
   uint8_t mapq_threshold = (allocate_multi_mappings_ || only_output_unique_mappings_) ? 30 : 0;
-  OutputPairedEndMappingsInVector(mapq_threshold, num_reference_sequences, reference, mappings, output_tools);
+  OutputPairedEndMappingsInVector(mapq_threshold, num_reference_sequences, reference, mappings);
   if (allocate_multi_mappings_ && (!only_output_unique_mappings_)) {
-    OutputPairedEndMappingsInVector(0, num_reference_sequences, reference, allocated_multi_mappings_on_diff_ref_seqs_, output_tools);
+    OutputPairedEndMappingsInVector(0, num_reference_sequences, reference, allocated_multi_mappings_on_diff_ref_seqs_);
   }
-  output_tools.FinalizeMappingOutput();
 }
 
 template <typename MappingRecord>
@@ -504,13 +462,18 @@ void Chromap<MappingRecord>::GenerateBestMappingsForPairedEndReadOnOneDirection(
 }
 
 template<>
-void Chromap<PairedEndMappingWithoutBarcode>::EmplaceBackMappingRecord(uint32_t read_id, uint32_t barcode, uint32_t fragment_start_position, uint16_t fragment_length, uint8_t mapq, uint16_t positive_alignment_length, uint16_t negative_alignment_length, std::vector<PairedEndMappingWithoutBarcode> *mappings_on_diff_ref_seqs) {
+void Chromap<PairedEndMappingWithoutBarcode>::EmplaceBackMappingRecord(uint32_t read_id, const char *read1_name, const char *read2_name, uint16_t read1_length, uint16_t read2_length, uint32_t barcode, uint32_t fragment_start_position, uint16_t fragment_length, uint8_t mapq, uint16_t positive_alignment_length, uint16_t negative_alignment_length, std::vector<PairedEndMappingWithoutBarcode> *mappings_on_diff_ref_seqs) {
   mappings_on_diff_ref_seqs->emplace_back(PairedEndMappingWithoutBarcode{read_id, fragment_start_position, fragment_length, mapq, positive_alignment_length, negative_alignment_length});
 }
 
 template<>
-void Chromap<PairedEndMappingWithBarcode>::EmplaceBackMappingRecord(uint32_t read_id, uint32_t barcode, uint32_t fragment_start_position, uint16_t fragment_length, uint8_t mapq, uint16_t positive_alignment_length, uint16_t negative_alignment_length, std::vector<PairedEndMappingWithBarcode> *mappings_on_diff_ref_seqs) {
+void Chromap<PairedEndMappingWithBarcode>::EmplaceBackMappingRecord(uint32_t read_id, const char *read1_name, const char *read2_name, uint16_t read1_length, uint16_t read2_length, uint32_t barcode, uint32_t fragment_start_position, uint16_t fragment_length, uint8_t mapq, uint16_t positive_alignment_length, uint16_t negative_alignment_length, std::vector<PairedEndMappingWithBarcode> *mappings_on_diff_ref_seqs) {
   mappings_on_diff_ref_seqs->emplace_back(PairedEndMappingWithBarcode{read_id, barcode, fragment_start_position, fragment_length, mapq, positive_alignment_length, negative_alignment_length});
+}
+
+template<>
+void Chromap<PairedPAFMapping>::EmplaceBackMappingRecord(uint32_t read_id, const char *read1_name, const char *read2_name, uint16_t read1_length, uint16_t read2_length, uint32_t barcode, uint32_t fragment_start_position, uint16_t fragment_length, uint8_t mapq, uint16_t positive_alignment_length, uint16_t negative_alignment_length, std::vector<PairedPAFMapping> *mappings_on_diff_ref_seqs) {
+  mappings_on_diff_ref_seqs->emplace_back(PairedPAFMapping{read_id, std::string(read1_name), std::string(read2_name), read1_length, read2_length, fragment_start_position, fragment_length, positive_alignment_length, negative_alignment_length, mapq});
 }
 
 template <typename MappingRecord>
@@ -546,45 +509,29 @@ void Chromap<MappingRecord>::ProcessBestMappingsForPairedEndReadOnOneDirection(D
         int mapping_start_position2;
         if (first_read_direction == kPositive) {
           BandedTraceback(mappings1[i1].first, reference.GetSequenceAt(rid1) + verification_window_start_position1, read1, read1_length, &mapping_start_position1);
-          //PAF mapping1(read1.GetName(), read1.GetLength(), 0, read1.GetLength(), '+', reference.GetSequenceAt(rid1).GetName(), reference.GetSequenceAt(rid1).GetLength(), verification_window_start_position1 + mapping_start_position1, position1, read1.GetLength() - mappings1[i1].first, read1.GetLength(), mapq);
-          //AppendReadMappingOutput(mapping1.GetPAFString());
           BandedTraceback(mappings2[i2].first, reference.GetSequenceAt(rid2) + verification_window_start_position2, negative_read2.data(), read2_length, &mapping_start_position2);
           uint32_t fragment_start_position = verification_window_start_position1 + mapping_start_position1;
           uint16_t fragment_length = position2 - fragment_start_position + 1;
+          mapq |= (uint8_t)1;
           uint16_t positive_alignment_length = position1 + 1 - fragment_start_position;
-          positive_alignment_length <<= 1;
-          positive_alignment_length |= (uint16_t)1;
           uint16_t negative_alignment_length = position2 + 1 - (verification_window_start_position2 + mapping_start_position2);
           uint32_t barcode_key = 0;
           if (!is_bulk_data_) {
             barcode_key = barcode_batch.GenerateSeedFromSequenceAt(pair_index, 0, barcode_batch.GetSequenceLengthAt(pair_index));
           }
-//#pragma omp critical
-//          {
-          EmplaceBackMappingRecord(read_id, barcode_key, fragment_start_position, fragment_length, mapq, positive_alignment_length, negative_alignment_length, &((*mappings_on_diff_ref_seqs)[rid1]));
-//          }
-          //PAF mapping2(read2.GetName(), read2.GetLength(), 0, read2.GetLength(), '-', reference.GetSequenceAt(rid2).GetName(), reference.GetSequenceAt(rid2).GetLength(), verification_window_start_position2 + mapping_start_position2, position2, read2.GetLength() - mappings2[i2].first, read2.GetLength(), mapq);
-          //AppendReadMappingOutput(mapping2.GetPAFString());
+          EmplaceBackMappingRecord(read_id, read_batch1.GetSequenceNameAt(pair_index), read_batch2.GetSequenceNameAt(pair_index), (uint16_t)read_batch1.GetSequenceLengthAt(pair_index), (uint16_t)read_batch2.GetSequenceLengthAt(pair_index), barcode_key, fragment_start_position, fragment_length, mapq, positive_alignment_length, negative_alignment_length, &((*mappings_on_diff_ref_seqs)[rid1]));
         } else {
           BandedTraceback(mappings1[i1].first, reference.GetSequenceAt(rid1) + verification_window_start_position1, negative_read1.data(), read1_length, &mapping_start_position1);
-          //PAF mapping1(read1.GetName(), read1.GetLength(), 0, read1.GetLength(), '-', reference.GetSequenceAt(rid1).GetName(), reference.GetSequenceAt(rid1).GetLength(), verification_window_start_position1 + mapping_start_position1, position1, read1.GetLength() - mappings1[i1].first, read1.GetLength(), mapq);
-          //AppendReadMappingOutput(mapping1.GetPAFString());
           BandedTraceback(mappings2[i2].first, reference.GetSequenceAt(rid2) + verification_window_start_position2, read2, read2_length, &mapping_start_position2);
           uint32_t fragment_start_position = verification_window_start_position2 + mapping_start_position2;
           uint16_t fragment_length = position1 - fragment_start_position + 1;
           uint16_t positive_alignment_length = position2 + 1 - fragment_start_position;
-          positive_alignment_length <<= 1;
           uint16_t negative_alignment_length = position1 + 1 - (verification_window_start_position1 + mapping_start_position1);
           uint32_t barcode_key = 0;
           if (!is_bulk_data_) {
             barcode_key = barcode_batch.GenerateSeedFromSequenceAt(pair_index, 0, barcode_batch.GetSequenceLengthAt(pair_index));
           }
-//#pragma omp critical 
-//          {
-          EmplaceBackMappingRecord(read_id, barcode_key, fragment_start_position, fragment_length, mapq, positive_alignment_length, negative_alignment_length, &((*mappings_on_diff_ref_seqs)[rid1]));
-//          }
-          //PAF mapping2(read2.GetName(), read2.GetLength(), 0, read2.GetLength(), '+', reference.GetSequenceAt(rid2).GetName(), reference.GetSequenceAt(rid2).GetLength(), verification_window_start_position2 + mapping_start_position2, position2, read2.GetLength() - mappings2[i2].first, read2.GetLength(), mapq);
-          //AppendReadMappingOutput(mapping2.GetPAFString());
+          EmplaceBackMappingRecord(read_id, read_batch1.GetSequenceNameAt(pair_index), read_batch2.GetSequenceNameAt(pair_index), (uint16_t)read_batch1.GetSequenceLengthAt(pair_index), (uint16_t)read_batch2.GetSequenceLengthAt(pair_index), barcode_key, fragment_start_position, fragment_length, mapq, positive_alignment_length, negative_alignment_length, &((*mappings_on_diff_ref_seqs)[rid1]));
         }
         (*num_best_mappings_reported)++;
         if (*num_best_mappings_reported == std::min(max_num_best_mappings_, num_best_mappings)) {
@@ -612,6 +559,7 @@ void Chromap<MappingRecord>::GenerateBestMappingsForPairedEndRead(uint32_t pair_
   } else if (*num_best_mappings < 5) {
     mapq = 5;
   }
+  mapq <<= 1;
   if (*num_best_mappings <= drop_repetitive_reads_) { 
     // we will use reservoir sampling 
     //std::vector<int> best_mapping_indices(max_num_best_mappings_);
@@ -649,14 +597,21 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
   //index.Statistics(num_sequences, reference);
   SequenceBatch read_batch(read_batch_size_);
   read_batch.InitializeLoading(single_end_read_file_path_);
-  //OutputTools<MappingRecord> output_tools(num_threads_, num_reference_sequences, read_batch_size_, mapping_output_file_path_);
-  //output_tools.InitializeMappingOutput();
+  if (output_mapping_in_BED_) {
+    output_tools = std::unique_ptr<BEDOutputTools<MappingRecord> >(new BEDOutputTools<MappingRecord>);
+  } else if (output_mapping_in_TagAlign_) {
+    output_tools = std::unique_ptr<TagAlignOutputTools<MappingRecord> >(new TagAlignOutputTools<MappingRecord>);
+  } else if (output_mapping_in_PAF_) {
+    output_tools = std::unique_ptr<PAFOutputTools<MappingRecord> >(new PAFOutputTools<MappingRecord>);
+  }
+  output_tools->InitializeMappingOutput(mapping_output_file_path_);
   double real_start_mapping_time = Chromap<>::GetRealTime();
   // TODO(Haowen): start openmp parallel region and declare private variables
   //{
   uint64_t thread_num_candidates = 0;
   uint64_t thread_num_mappings = 0;
   uint64_t thread_num_mapped_reads = 0; 
+  uint64_t thread_num_uniquely_mapped_reads = 0;
   std::vector<std::pair<uint64_t, uint64_t> > minimizers;
   std::vector<uint64_t> positive_hits;
   std::vector<uint64_t> negative_hits;
@@ -670,10 +625,16 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
   std::vector<std::pair<int, uint64_t> > negative_mappings;
   positive_mappings.reserve(max_seed_frequencies_[0]);
   negative_mappings.reserve(max_seed_frequencies_[0]);
-  std::vector<std::vector<MappingRecord> > mappings_on_diff_ref_seqs(num_reference_sequences);
+  mappings_on_diff_ref_seqs_.reserve(num_reference_sequences);
+  deduped_mappings_on_diff_ref_seqs_.reserve(num_reference_sequences);
   for (uint32_t i = 0; i < num_reference_sequences; ++i) {
-    mappings_on_diff_ref_seqs[i].reserve((read_batch_size_ + read_batch_size_ / 100 * max_num_best_mappings_) / num_threads_ / num_reference_sequences);
+    mappings_on_diff_ref_seqs_.emplace_back(std::vector<MappingRecord>());
+    deduped_mappings_on_diff_ref_seqs_.emplace_back(std::vector<MappingRecord>());
   }
+  //std::vector<std::vector<MappingRecord> > mappings_on_diff_ref_seqs(num_reference_sequences);
+  //for (uint32_t i = 0; i < num_reference_sequences; ++i) {
+  //  mappings_on_diff_ref_seqs[i].reserve((read_batch_size_ + read_batch_size_ / 100 * max_num_best_mappings_) / num_threads_ / num_reference_sequences);
+  //}
   uint32_t num_reads_in_current_batch = read_batch.LoadBatch();
   while (num_reads_in_current_batch > 0) {
     num_reads_ += num_reads_in_current_batch;
@@ -705,10 +666,14 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
         uint32_t current_num_mappings = positive_mappings.size() + negative_mappings.size();
         //std::cerr << "Verified candidates!\n";
         if (current_num_mappings > 0) {
+          std::vector<std::vector<MappingRecord> > &mappings_on_diff_ref_seqs = mappings_on_diff_ref_seqs_;//mappings_on_diff_ref_seqs_for_diff_threads[omp_get_thread_num()];
           GenerateBestMappingsForSingleEndRead(min_num_errors, num_best_mappings, second_min_num_errors, num_second_best_mappings, read_batch, read_index, reference, positive_mappings, negative_mappings, &mappings_on_diff_ref_seqs);
           thread_num_mappings += std::min(num_best_mappings, max_num_best_mappings_);
           //std::cerr << "Generated output!\n";
           ++thread_num_mapped_reads;
+          if (num_best_mappings == 1) {
+            ++thread_num_uniquely_mapped_reads;
+          }
         }
       }
     //  if (current_num_mappings == 0) {
@@ -716,43 +681,69 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
     //  }
     }
     num_reads_in_current_batch = read_batch.LoadBatch();
-    for (uint32_t i = 0; i < num_reference_sequences; ++i) {
-      mappings_on_diff_ref_seqs[i].reserve(mappings_on_diff_ref_seqs[i].size() + (read_batch_size_ + read_batch_size_ / 100 * max_num_best_mappings_) / num_threads_ / num_reference_sequences);
-    }
+    //for (uint32_t i = 0; i < num_reference_sequences; ++i) {
+    //  mappings_on_diff_ref_seqs[i].reserve(mappings_on_diff_ref_seqs[i].size() + (read_batch_size_ + read_batch_size_ / 100 * max_num_best_mappings_) / num_threads_ / num_reference_sequences);
+    //}
   }
   // TODO(Haowen): update shared mapping stats using critical region or atom operation
   {
     num_candidates_ += thread_num_candidates;
     num_mappings_ += thread_num_mappings;
     num_mapped_reads_ += thread_num_mapped_reads;
+    num_uniquely_mapped_reads_ += thread_num_uniquely_mapped_reads;
   } // end of updating shared mapping stats
   //} // end of openmp parallel region
-  //output_tools.FinalizeMappingOutput();
   read_batch.FinalizeLoading();
-  reference.FinalizeLoading();
-  std::cerr << "Number of reads: " << num_reads_ << "." << std::endl;
-  std::cerr << "Number of mapped reads: " << num_mapped_reads_ << "." << std::endl;
-  std::cerr << "Number of candidates: " << num_candidates_ << "." << std::endl;
-  std::cerr << "Number of mappings: " << num_mappings_ << "." << std::endl;
+  OutputMappingStatistics();
   std::cerr << "Mapped all reads in " << Chromap<>::GetRealTime() - real_start_mapping_time << "s.\n";
+  OutputMappingStatistics(num_reference_sequences, mappings_on_diff_ref_seqs_, mappings_on_diff_ref_seqs_);
+  std::vector<std::vector<MappingRecord> > &mappings = remove_pcr_duplicates_ ? deduped_mappings_on_diff_ref_seqs_ : mappings_on_diff_ref_seqs_;
+  if (remove_pcr_duplicates_) {
+    RemovePCRDuplicate(num_reference_sequences);
+    std::cerr << "After removing PCR duplications, ";
+    OutputMappingStatistics(num_reference_sequences, mappings, mappings);
+  }
+  if (allocate_multi_mappings_) {
+    AllocateMultiMappings(num_reference_sequences);
+    std::cerr << "After allocating multi-mappings, ";
+    OutputMappingStatistics(num_reference_sequences, mappings, allocated_multi_mappings_on_diff_ref_seqs_);
+  }
+  OutputPairedEndMappings(num_reference_sequences, reference, mappings);
+  output_tools->FinalizeMappingOutput();
+  reference.FinalizeLoading();
   std::cerr << "Total time: " << Chromap<>::GetRealTime() - real_start_time << "s.\n";
 }
 
 template<>
-void Chromap<MappingWithoutBarcode>::EmplaceBackMappingRecord(uint32_t read_id, uint32_t barcode, uint32_t fragment_start_position, uint16_t fragment_length, uint8_t mapq, std::vector<MappingWithoutBarcode> *mappings_on_diff_ref_seqs) {
+void Chromap<MappingWithoutBarcode>::EmplaceBackMappingRecord(uint32_t read_id, const char *read_name, uint16_t read_length, uint32_t barcode, uint32_t fragment_start_position, uint16_t fragment_length, uint8_t mapq, std::vector<MappingWithoutBarcode> *mappings_on_diff_ref_seqs) {
   mappings_on_diff_ref_seqs->emplace_back(MappingWithoutBarcode{read_id, fragment_start_position, fragment_length, mapq});
 }
 
 template<>
-void Chromap<MappingWithBarcode>::EmplaceBackMappingRecord(uint32_t read_id, uint32_t barcode, uint32_t fragment_start_position, uint16_t fragment_length, uint8_t mapq, std::vector<MappingWithBarcode> *mappings_on_diff_ref_seqs) {
+void Chromap<MappingWithBarcode>::EmplaceBackMappingRecord(uint32_t read_id, const char *read_name, uint16_t read_length, uint32_t barcode, uint32_t fragment_start_position, uint16_t fragment_length, uint8_t mapq, std::vector<MappingWithBarcode> *mappings_on_diff_ref_seqs) {
   mappings_on_diff_ref_seqs->emplace_back(MappingWithBarcode{read_id, barcode, fragment_start_position, fragment_length, mapq});
 }
+
+template<>
+void Chromap<PAFMapping>::EmplaceBackMappingRecord(uint32_t read_id, const char *read_name, uint16_t read_length, uint32_t barcode, uint32_t fragment_start_position, uint16_t fragment_length, uint8_t mapq, std::vector<PAFMapping> *mappings_on_diff_ref_seqs) {
+  mappings_on_diff_ref_seqs->emplace_back(PAFMapping{read_id, std::string(read_name), read_length, fragment_start_position, fragment_length, mapq});
+}
+
+//template<>
+//void Chromap<PairedEndMappingWithoutBarcode>::EmplaceBackMappingRecord(const PairedEndMappingWithoutBarcode &mapping, std::vector<PairedEndMappingWithoutBarcode> *mappings_on_diff_ref_seqs) {
+//  mappings_on_diff_ref_seqs->emplace_back(mapping);
+//}
+//
+//template<>
+//void Chromap<PairedEndMappingWithBarcode>::EmplaceBackMappingRecord(const PairedEndMappingWithBarcode &mapping, std::vector<PairedEndMappingWithBarcode> *mappings_on_diff_ref_seqs) {
+//  mappings_on_diff_ref_seqs->emplace_back(mapping);
+//}
 
 template <typename MappingRecord>
 void Chromap<MappingRecord>::ProcessBestMappingsForSingleEndRead(Direction mapping_direction, uint8_t mapq, int min_num_errors, int num_best_mappings, const SequenceBatch &read_batch, uint32_t read_index, const SequenceBatch &reference, const std::vector<int> &best_mapping_indices, const std::vector<std::pair<int, uint64_t> > &mappings, int *best_mapping_index, int *num_best_mappings_reported, std::vector<std::vector<MappingRecord> > *mappings_on_diff_ref_seqs) {
   const char *read = read_batch.GetSequenceAt(read_index);
   uint32_t read_id = read_batch.GetSequenceIdAt(read_index);
-  //const char *read_name = read_batch.GetSequenceNameAt(read_index);
+  const char *read_name = read_batch.GetSequenceNameAt(read_index);
   uint32_t read_length = read_batch.GetSequenceLengthAt(read_index);
   const std::string &negative_read = read_batch.GetNegativeSequenceAt(read_index);
   for (uint32_t mi = 0; mi < mappings.size(); ++mi) {
@@ -761,21 +752,20 @@ void Chromap<MappingRecord>::ProcessBestMappingsForSingleEndRead(Direction mappi
         uint32_t rid = mappings[mi].second >> 32;
         uint32_t position = mappings[mi].second;
         uint32_t verification_window_start_position = position + 1 - read_length - error_threshold_;
+        uint32_t barcode_key = 0;
+        if (!is_bulk_data_) {
+          barcode_key = 0;//barcode_batch.GenerateSeedFromSequenceAt(read_index, 0, barcode_batch.GetSequenceLengthAt(read_index));
+        }
         int mapping_start_position;
         if (mapping_direction == kPositive) { 
           BandedTraceback(min_num_errors, reference.GetSequenceAt(rid) + verification_window_start_position, read, read_length, &mapping_start_position);
           uint32_t start_position = verification_window_start_position + mapping_start_position;
-          (*mappings_on_diff_ref_seqs)[rid].emplace_back(MappingRecord{read_id, start_position, (uint16_t)(position - start_position), mapq});
-          //PAF mapping(read_batch, read_index, 0, read_length, '+', reference, rid, verification_window_start_position + mapping_start_position, position, read_length - min_num_errors, read_length, mapq);
-          //AppendReadMappingOutput(mapping.GetPAFString());
-          //output_tools.AppendMappingOutput(output_tools.GeneratePAFLine(read_batch, read_index, 0, read_length, '+', reference, rid, verification_window_start_position + mapping_start_position, position, read_length - min_num_errors, read_length, mapq));
+          mapq |= 1;
+          EmplaceBackMappingRecord(read_id, read_name, (uint16_t)read_length, barcode_key, start_position, (uint16_t)(position - start_position), mapq, &((*mappings_on_diff_ref_seqs)[rid]));
         } else {
           BandedTraceback(min_num_errors, reference.GetSequenceAt(rid) + verification_window_start_position, negative_read.data(), read_length, &mapping_start_position);
           uint32_t start_position = verification_window_start_position + mapping_start_position;
-          (*mappings_on_diff_ref_seqs)[rid].emplace_back(MappingRecord{read_id, start_position, (uint16_t)(position - start_position), mapq});
-          //PAF mapping(read_batch, read_index, 0, read_length, '-', reference, rid, verification_window_start_position + mapping_start_position, position, read_length - min_num_errors, read_length, mapq);
-          //AppendReadMappingOutput(mapping.GetPAFString());
-          //output_tools.AppendReadMappingOutput(output_tools.GeneratePAFLine(read_batch, read_index, 0, read_length, '-', reference, rid, verification_window_start_position + mapping_start_position, position, read_length - min_num_errors, read_length, mapq));
+          EmplaceBackMappingRecord(read_id, read_name, (uint16_t)read_length, barcode_key, start_position, (uint16_t)(position - start_position), mapq, &((*mappings_on_diff_ref_seqs)[rid]));
         }
         (*num_best_mappings_reported)++;
         if (*num_best_mappings_reported == std::min(max_num_best_mappings_, num_best_mappings)) {
@@ -797,6 +787,7 @@ void Chromap<MappingRecord>::GenerateBestMappingsForSingleEndRead(int min_num_er
   } else if (num_best_mappings < 5) {
     mapq = 5;
   }
+  mapq <<= 1;
   // we will use reservoir sampling 
   std::vector<int> best_mapping_indices(max_num_best_mappings_);
   std::iota(best_mapping_indices.begin(), best_mapping_indices.end(), 0);
@@ -839,7 +830,6 @@ void Chromap<MappingRecord>::MoveMappingsInBuffersToMappingContainer(uint32_t nu
   double real_start_time = Chromap<>::GetRealTime();
   for (int ti = 0; ti < num_threads_; ++ti) {
     for (uint32_t i = 0; i < num_reference_sequences; ++i) {
-      num_mappings_for_test += (*mappings_on_diff_ref_seqs_for_diff_threads_for_saving)[ti][i].size();
       mappings_on_diff_ref_seqs_[i].insert(mappings_on_diff_ref_seqs_[i].end(), std::make_move_iterator((*mappings_on_diff_ref_seqs_for_diff_threads_for_saving)[ti][i].begin()), std::make_move_iterator((*mappings_on_diff_ref_seqs_for_diff_threads_for_saving)[ti][i].end()));
       (*mappings_on_diff_ref_seqs_for_diff_threads_for_saving)[ti][i].clear();
     }
@@ -849,17 +839,17 @@ void Chromap<MappingRecord>::MoveMappingsInBuffersToMappingContainer(uint32_t nu
 
 template <typename MappingRecord>
 void Chromap<MappingRecord>::RemovePCRDuplicate(uint32_t num_reference_sequences) {
-  uint32_t count = 0;
+  uint32_t num_mappings = 0;
   double real_dedupe_start_time = Chromap<>::GetRealTime();
   for (uint32_t ri = 0; ri < num_reference_sequences; ++ri) {
     //double real_start_time = Chromap<>::GetRealTime();
     //radix_sort_with_barcode(mappings_on_diff_ref_seqs_[ri].data(), mappings_on_diff_ref_seqs_[ri].data() + mappings_on_diff_ref_seqs_[ri].size());
     std::sort(mappings_on_diff_ref_seqs_[ri].begin(), mappings_on_diff_ref_seqs_[ri].end());
-    count += mappings_on_diff_ref_seqs_[ri].size(); 
+    num_mappings += mappings_on_diff_ref_seqs_[ri].size(); 
     //std::cerr << "Sorted " << mappings_on_diff_ref_seqs_[ri].size() << " elements on " << ri << " in " << Chromap<>::GetRealTime() - real_start_time << "s.\n";
   }
-  std::cerr << "Sorted " << count << " elements in " << Chromap<>::GetRealTime() - real_dedupe_start_time << "s.\n";
-  count = 0;
+  std::cerr << "Sorted " << num_mappings << " elements in " << Chromap<>::GetRealTime() - real_dedupe_start_time << "s.\n";
+  num_mappings = 0;
   for (uint32_t ri = 0; ri < num_reference_sequences; ++ri) {
     if (mappings_on_diff_ref_seqs_[ri].size() != 0) {
       deduped_mappings_on_diff_ref_seqs_[ri].emplace_back(mappings_on_diff_ref_seqs_[ri].front());
@@ -873,12 +863,11 @@ void Chromap<MappingRecord>::RemovePCRDuplicate(uint32_t num_reference_sequences
         }
       }
       std::vector<MappingRecord>().swap(mappings_on_diff_ref_seqs_[ri]);
-      count += deduped_mappings_on_diff_ref_seqs_[ri].size();
+      num_mappings += deduped_mappings_on_diff_ref_seqs_[ri].size();
     }
   }
-  std::cerr << count << " mappings left after dedupe in " << Chromap<>::GetRealTime() - real_dedupe_start_time << "s.\n";
+  std::cerr << num_mappings << " mappings left after dedupe in " << Chromap<>::GetRealTime() - real_dedupe_start_time << "s.\n";
 }
-
 
 template <typename MappingRecord>
 void Chromap<MappingRecord>::AllocateMultiMappings(uint32_t num_reference_sequences) {
@@ -894,7 +883,7 @@ void Chromap<MappingRecord>::AllocateMultiMappings(uint32_t num_reference_sequen
     allocated_multi_mappings_on_diff_ref_seqs_.emplace_back(std::vector<MappingRecord>());
     for (uint32_t mi = 0; mi < mappings[ri].size(); ++mi) {
       MappingRecord &mapping = mappings[ri][mi];
-      if (mapping.mapq < 30) { // we have to ensure that the mapq is lower than 30 if and only if it is a multi-read.
+      if ((mapping.mapq >> 1) < 30) { // we have to ensure that the mapq is lower than 30 if and only if it is a multi-read.
         multi_mapping_indices.emplace_back(mapping.read_id, ri, mi);
       } else {
         unique_mapping_trees[ri].add(mapping.fragment_start_position, mapping.fragment_start_position + mapping.fragment_length, 1);
@@ -1110,6 +1099,40 @@ void Chromap<MappingRecord>::BandedTraceback(int min_num_errors, const char *pat
     }
   }
 }
+
+template <typename MappingRecord>
+void Chromap<MappingRecord>::OutputMappingStatistics() {
+  std::cerr << "Number of reads: " << num_reads_ << ".\n";
+  //std::cerr << "Number of duplicated reads: " << num_duplicated_reads_ << ".\n";
+  std::cerr << "Number of mapped reads: " << num_mapped_reads_ << ".\n";
+  std::cerr << "Number of uniquely mapped reads: " << num_uniquely_mapped_reads_ << ".\n";
+  std::cerr << "Number of reads have multi-mappings: " << num_mapped_reads_ - num_uniquely_mapped_reads_ << ".\n";
+  std::cerr << "Number of candidates: " << num_candidates_ << ".\n";
+  std::cerr << "Number of mappings: " << num_mappings_ << ".\n";
+  std::cerr << "Number of uni-mappings: " << num_uniquely_mapped_reads_ << ".\n";
+  std::cerr << "Number of multi-mappings: " << num_mappings_ - num_uniquely_mapped_reads_ << ".\n";
+}
+
+template <typename MappingRecord>
+void Chromap<MappingRecord>::OutputMappingStatistics(uint32_t num_reference_sequences, const std::vector<std::vector<MappingRecord> > &uni_mappings, const std::vector<std::vector<MappingRecord> > &multi_mappings) {
+  uint64_t num_uni_mappings = 0;
+  uint64_t num_multi_mappings = 0;
+  for (auto &uni_mappings_on_one_ref_seq : uni_mappings) {
+    for(auto &uni_mapping: uni_mappings_on_one_ref_seq) {
+      if ((uni_mapping.mapq >> 1) >= 30) {
+        ++num_uni_mappings;
+      }
+    }
+  } 
+  for (auto &multi_mappings_on_one_ref_seq : multi_mappings) {
+    for(auto &multi_mapping: multi_mappings_on_one_ref_seq) {
+      if ((multi_mapping.mapq >> 1) < 30) {
+        ++num_multi_mappings;
+      }
+    }
+  } 
+  std::cerr << "# uni-mappings: " << num_uni_mappings << ", # multi-mappings: " << num_multi_mappings << ".\n";
+}
 } // namespace chromap
 
 int main(int argc, char *argv[]) {
@@ -1132,6 +1155,9 @@ int main(int argc, char *argv[]) {
     ("remove-pcr-duplicates", "Remove PCR duplicates")
     ("allocate-multi-mappings", "Allocate multi-mappings")
     ("unique-mappings", "Only output unique mappings")
+    ("BED", "Output mappings in BED/BEDPE format")
+    ("TagAlign", "Output mappings in TagAlign/PairedTagAlign format")
+    ("PAF", "Output mappings in PAF format")
     ("t,num-threads", "# threads for mapping [1]", cxxopts::value<int>())
     ("r,ref", "Reference file", cxxopts::value<std::string>())
     ("x,index", "Index file", cxxopts::value<std::string>())
@@ -1202,6 +1228,18 @@ int main(int argc, char *argv[]) {
   bool only_output_unique_mappings = false;
   if (result.count("unique-mappings")) {
     only_output_unique_mappings = true;
+  }
+  bool output_mapping_in_BED = false;
+  if (result.count("BED")) {
+    output_mapping_in_BED = true;
+  }
+  bool output_mapping_in_TagAlign = false;
+  if (result.count("TagAlign")) {
+    output_mapping_in_TagAlign = true;
+  }
+  bool output_mapping_in_PAF = false;
+  if (result.count("PAF")) {
+    output_mapping_in_PAF = true;
   }
 
   if (result.count("i")) {
@@ -1291,6 +1329,15 @@ int main(int argc, char *argv[]) {
       std::cerr << "WARNING: you want to drop mapped reads with more than " << drop_repetitive_reads << " mappings. But you want to output top " << max_num_best_mappings << " best mappings. In this case, it will only output " << drop_repetitive_reads << " best mappings.\n";
       max_num_best_mappings = drop_repetitive_reads;
     }
+    if (output_mapping_in_BED) {
+      std::cerr << "Output mappings in BED/BEDPE format.\n";
+    } else if (output_mapping_in_TagAlign) {
+      std::cerr << "Output mappings in TagAlign/PairedTagAlign format.\n";
+    } else if (output_mapping_in_PAF) {
+      std::cerr << "Output mappings in PAF format.\n";
+    } else {
+      chromap::Chromap<>::ExitWithMessage("No output format specified!");
+    }
     std::cerr << "Reference file: " << reference_file_path << "\n";
     std::cerr << "Index file: " << index_file_path << "\n";
     std::cerr << "Read file 1: " << read_file1_path << "\n";
@@ -1302,15 +1349,30 @@ int main(int argc, char *argv[]) {
     }
     std::cerr << "Output file: " << output_file_path << "\n";
     if (result.count("2") == 0) {
-      chromap::Chromap<chromap::MappingWithoutBarcode> chromap_for_mapping(error_threshold, min_num_seeds_required_for_mapping, max_seed_frequencies, max_num_best_mappings, max_insert_size, num_threads, reference_file_path, index_file_path, read_file1_path, output_file_path);
-      chromap_for_mapping.MapSingleEndReads();
+      if (output_mapping_in_PAF) {
+        chromap::Chromap<chromap::PAFMapping> chromap_for_mapping(error_threshold, min_num_seeds_required_for_mapping, max_seed_frequencies, max_num_best_mappings, num_threads, min_read_length, multi_mapping_allocation_seed, drop_repetitive_reads, trim_adapters, remove_pcr_duplicates, is_bulk_data, allocate_multi_mappings, only_output_unique_mappings, output_mapping_in_BED, output_mapping_in_TagAlign, output_mapping_in_PAF, reference_file_path, index_file_path, read_file1_path, output_file_path);
+        chromap_for_mapping.MapSingleEndReads();
+      } else {
+        if (result.count("b") != 0) {
+          chromap::Chromap<chromap::MappingWithBarcode> chromap_for_mapping(error_threshold, min_num_seeds_required_for_mapping, max_seed_frequencies, max_num_best_mappings, num_threads, min_read_length, multi_mapping_allocation_seed, drop_repetitive_reads, trim_adapters, remove_pcr_duplicates, is_bulk_data, allocate_multi_mappings, only_output_unique_mappings, output_mapping_in_BED, output_mapping_in_TagAlign, output_mapping_in_PAF, reference_file_path, index_file_path, read_file1_path, output_file_path);
+          chromap_for_mapping.MapSingleEndReads();
+        } else {
+          chromap::Chromap<chromap::MappingWithoutBarcode> chromap_for_mapping(error_threshold, min_num_seeds_required_for_mapping, max_seed_frequencies, max_num_best_mappings, num_threads, min_read_length, multi_mapping_allocation_seed, drop_repetitive_reads, trim_adapters, remove_pcr_duplicates, is_bulk_data, allocate_multi_mappings, only_output_unique_mappings, output_mapping_in_BED, output_mapping_in_TagAlign, output_mapping_in_PAF, reference_file_path, index_file_path, read_file1_path, output_file_path);
+          chromap_for_mapping.MapSingleEndReads();
+        }
+      }
     } else {
-      if (result.count("b") != 0) {
-        chromap::Chromap<chromap::PairedEndMappingWithBarcode> chromap_for_mapping(error_threshold, min_num_seeds_required_for_mapping, max_seed_frequencies, max_num_best_mappings, max_insert_size, num_threads, min_read_length, multi_mapping_allocation_seed, drop_repetitive_reads, trim_adapters, remove_pcr_duplicates, is_bulk_data, allocate_multi_mappings, only_output_unique_mappings, reference_file_path, index_file_path, read_file1_path, read_file2_path, barcode_file_path, output_file_path);
+      if (output_mapping_in_PAF) {
+        chromap::Chromap<chromap::PairedPAFMapping> chromap_for_mapping(error_threshold, min_num_seeds_required_for_mapping, max_seed_frequencies, max_num_best_mappings, max_insert_size, num_threads, min_read_length, multi_mapping_allocation_seed, drop_repetitive_reads, trim_adapters, remove_pcr_duplicates, is_bulk_data, allocate_multi_mappings, only_output_unique_mappings, output_mapping_in_BED, output_mapping_in_TagAlign, output_mapping_in_PAF, reference_file_path, index_file_path, read_file1_path, read_file2_path, barcode_file_path, output_file_path);
         chromap_for_mapping.MapPairedEndReads();
       } else {
-        chromap::Chromap<chromap::PairedEndMappingWithoutBarcode> chromap_for_mapping(error_threshold, min_num_seeds_required_for_mapping, max_seed_frequencies, max_num_best_mappings, max_insert_size, num_threads, min_read_length, multi_mapping_allocation_seed, drop_repetitive_reads, trim_adapters, remove_pcr_duplicates, is_bulk_data, allocate_multi_mappings, only_output_unique_mappings, reference_file_path, index_file_path, read_file1_path, read_file2_path, barcode_file_path, output_file_path);
-        chromap_for_mapping.MapPairedEndReads();
+        if (result.count("b") != 0) {
+          chromap::Chromap<chromap::PairedEndMappingWithBarcode> chromap_for_mapping(error_threshold, min_num_seeds_required_for_mapping, max_seed_frequencies, max_num_best_mappings, max_insert_size, num_threads, min_read_length, multi_mapping_allocation_seed, drop_repetitive_reads, trim_adapters, remove_pcr_duplicates, is_bulk_data, allocate_multi_mappings, only_output_unique_mappings, output_mapping_in_BED, output_mapping_in_TagAlign, output_mapping_in_PAF, reference_file_path, index_file_path, read_file1_path, read_file2_path, barcode_file_path, output_file_path);
+          chromap_for_mapping.MapPairedEndReads();
+        } else {
+          chromap::Chromap<chromap::PairedEndMappingWithoutBarcode> chromap_for_mapping(error_threshold, min_num_seeds_required_for_mapping, max_seed_frequencies, max_num_best_mappings, max_insert_size, num_threads, min_read_length, multi_mapping_allocation_seed, drop_repetitive_reads, trim_adapters, remove_pcr_duplicates, is_bulk_data, allocate_multi_mappings, only_output_unique_mappings, output_mapping_in_BED, output_mapping_in_TagAlign, output_mapping_in_PAF, reference_file_path, index_file_path, read_file1_path, read_file2_path, barcode_file_path, output_file_path);
+          chromap_for_mapping.MapPairedEndReads();
+        }
       }
     }
   } else if (result.count("h")) {

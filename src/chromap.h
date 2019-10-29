@@ -1,12 +1,13 @@
 #ifndef CHROMAP_H_
 #define CHROMAP_H_
 
-#include <string>
-#include <vector>
+#include <memory>
 #include <random>
+#include <string>
 #include <sys/time.h>
 #include <sys/resource.h>
 #include <tuple>
+#include <vector>
 
 #include "index.h"
 #include "khash.h"
@@ -24,70 +25,8 @@ KHASH_MAP_INIT_INT64(k128, uint128_t);
 KHASH_MAP_INIT_INT(k32, uint32_t);
 
 enum Direction {
-    kPositive,
-    kNegative,
-};
-
-struct MappingWithBarcode {
-  uint32_t read_id;
-  uint32_t cell_barcode;
-  uint32_t fragment_start_position;
-  uint16_t fragment_length;
-  uint8_t mapq;
-  bool operator<(const MappingWithBarcode& m) const {
-    return std::tie(cell_barcode, fragment_start_position, fragment_length, mapq, read_id) < std::tie(m.cell_barcode, m.fragment_start_position, m.fragment_length, m.mapq, m.read_id);
-  }
-  bool operator==(const MappingWithBarcode& m) const {
-    //return std::tie(cell_barcode, fragment_start_position, fragment_length, mapq) == std::tie(m.cell_barcode, m.fragment_start_position, m.fragment_length, m.mapq);
-    return std::tie(cell_barcode, fragment_start_position, fragment_length) == std::tie(m.cell_barcode, m.fragment_start_position, m.fragment_length);
-  }
-};
-
-struct MappingWithoutBarcode {
-  uint32_t read_id;
-  uint32_t fragment_start_position;
-  uint16_t fragment_length;
-  uint8_t mapq;
-  bool operator<(const MappingWithoutBarcode& m) const {
-    return std::tie(fragment_start_position, fragment_length, mapq, read_id) < std::tie(m.fragment_start_position, m.fragment_length, m.mapq, m.read_id);
-  }
-  bool operator==(const MappingWithoutBarcode& m) const {
-    //return std::tie(fragment_start_position, fragment_length, mapq) == std::tie(m.fragment_start_position, m.fragment_length, m.mapq);
-    return std::tie(fragment_start_position, fragment_length) == std::tie(m.fragment_start_position, m.fragment_length);
-  }
-};
-
-struct PairedEndMappingWithBarcode {
-  uint32_t read_id;
-  uint32_t cell_barcode;
-  uint32_t fragment_start_position;
-  uint16_t fragment_length;
-  uint8_t mapq;
-  uint16_t positive_alignment_length;
-  uint16_t negative_alignment_length;
-  bool operator<(const PairedEndMappingWithBarcode& m) const {
-    return std::tie(cell_barcode, fragment_start_position, fragment_length, mapq, read_id, positive_alignment_length, negative_alignment_length) < std::tie(m.cell_barcode, m.fragment_start_position, m.fragment_length, m.mapq, m.read_id, m.positive_alignment_length, m.negative_alignment_length);
-  }
-  bool operator==(const PairedEndMappingWithBarcode& m) const {
-    //return std::tie(cell_barcode, fragment_start_position, fragment_length, mapq) == std::tie(m.cell_barcode, m.fragment_start_position, m.fragment_length, m.mapq);
-    return std::tie(cell_barcode, fragment_start_position, fragment_length) == std::tie(m.cell_barcode, m.fragment_start_position, m.fragment_length);
-  }
-};
-
-struct PairedEndMappingWithoutBarcode {
-  uint32_t read_id;
-  uint32_t fragment_start_position;
-  uint16_t fragment_length;
-  uint8_t mapq;
-  uint16_t positive_alignment_length;
-  uint16_t negative_alignment_length;
-  bool operator<(const PairedEndMappingWithoutBarcode& m) const {
-    return std::tie(fragment_start_position, fragment_length, mapq, read_id, positive_alignment_length, negative_alignment_length) < std::tie(m.fragment_start_position, m.fragment_length, m.mapq, m.read_id, m.positive_alignment_length, m.negative_alignment_length);
-  }
-  bool operator==(const PairedEndMappingWithoutBarcode& m) const {
-    //return std::tie(fragment_start_position, fragment_length, mapq) == std::tie(m.fragment_start_position, m.fragment_length, m.mapq);
-    return std::tie(fragment_start_position, fragment_length) == std::tie(m.fragment_start_position, m.fragment_length);
-  }
+  kPositive,
+  kNegative,
 };
 
 #define SortMappingWithoutBarcode(m) (((((m).fragment_start_position<<16)|(m).fragment_length)<<8)|(m).mapq)
@@ -101,12 +40,12 @@ class Chromap {
   }
 
   // For mapping single-end reads
-  Chromap(int error_threshold, int min_num_seeds_required_for_mapping, const std::vector<int> &max_seed_frequencies, int max_num_best_mappings, int max_insert_size, int num_threads, const std::string &reference_file_path, const std::string &index_file_path, const std::string &single_end_read_file_path, const std::string &mapping_output_file_path) : error_threshold_(error_threshold), min_num_seeds_required_for_mapping_(min_num_seeds_required_for_mapping), max_seed_frequencies_(max_seed_frequencies), max_num_best_mappings_(max_num_best_mappings), max_insert_size_(max_insert_size), num_threads_(num_threads), reference_file_path_(reference_file_path), index_file_path_(index_file_path), single_end_read_file_path_(single_end_read_file_path), mapping_output_file_path_(mapping_output_file_path) {
+  Chromap(int error_threshold, int min_num_seeds_required_for_mapping, const std::vector<int> &max_seed_frequencies, int max_num_best_mappings, int num_threads, int min_read_length, int multi_mapping_allocation_seed, int drop_repetitive_reads, bool trim_adapters, bool remove_pcr_duplicates, bool is_bulk_data, bool allocate_multi_mappings, bool only_output_unique_mappings, bool output_mapping_in_BED, bool output_mapping_in_TagAlign, bool output_mapping_in_PAF, const std::string &reference_file_path, const std::string &index_file_path, const std::string &single_end_read_file_path, const std::string &mapping_output_file_path) : error_threshold_(error_threshold), min_num_seeds_required_for_mapping_(min_num_seeds_required_for_mapping), max_seed_frequencies_(max_seed_frequencies), max_num_best_mappings_(max_num_best_mappings), num_threads_(num_threads), min_read_length_(min_read_length), multi_mapping_allocation_seed_(multi_mapping_allocation_seed), drop_repetitive_reads_(drop_repetitive_reads), trim_adapters_(trim_adapters), remove_pcr_duplicates_(remove_pcr_duplicates), is_bulk_data_(is_bulk_data), allocate_multi_mappings_(allocate_multi_mappings), only_output_unique_mappings_(only_output_unique_mappings), output_mapping_in_BED_(output_mapping_in_BED), output_mapping_in_TagAlign_(output_mapping_in_TagAlign), output_mapping_in_PAF_(output_mapping_in_PAF), reference_file_path_(reference_file_path), index_file_path_(index_file_path), single_end_read_file_path_(single_end_read_file_path), mapping_output_file_path_(mapping_output_file_path) {
     barcode_lookup_table_ = NULL;
   } 
 
   // For mapping paired-end reads
-  Chromap(int error_threshold, int min_num_seeds_required_for_mapping, const std::vector<int> &max_seed_frequencies, int max_num_best_mappings, int max_insert_size, int num_threads, int min_read_length, int multi_mapping_allocation_seed, int drop_repetitive_reads, bool trim_adapters, bool remove_pcr_duplicates, bool is_bulk_data, bool allocate_multi_mappings, bool only_output_unique_mappings, const std::string &reference_file_path, const std::string &index_file_path, const std::string &read_file1_path, const std::string &read_file2_path, const std::string &barcode_file_path, const std::string &mapping_output_file_path) : error_threshold_(error_threshold), min_num_seeds_required_for_mapping_(min_num_seeds_required_for_mapping), max_seed_frequencies_(max_seed_frequencies), max_num_best_mappings_(max_num_best_mappings), max_insert_size_(max_insert_size), num_threads_(num_threads), min_read_length_(min_read_length), multi_mapping_allocation_seed_(multi_mapping_allocation_seed), drop_repetitive_reads_(drop_repetitive_reads), trim_adapters_(trim_adapters), remove_pcr_duplicates_(remove_pcr_duplicates), is_bulk_data_(is_bulk_data), allocate_multi_mappings_(allocate_multi_mappings), only_output_unique_mappings_(only_output_unique_mappings), reference_file_path_(reference_file_path), index_file_path_(index_file_path), read_file1_path_(read_file1_path), read_file2_path_(read_file2_path), barcode_file_path_(barcode_file_path), mapping_output_file_path_(mapping_output_file_path) {
+  Chromap(int error_threshold, int min_num_seeds_required_for_mapping, const std::vector<int> &max_seed_frequencies, int max_num_best_mappings, int max_insert_size, int num_threads, int min_read_length, int multi_mapping_allocation_seed, int drop_repetitive_reads, bool trim_adapters, bool remove_pcr_duplicates, bool is_bulk_data, bool allocate_multi_mappings, bool only_output_unique_mappings, bool output_mapping_in_BED, bool output_mapping_in_TagAlign, bool output_mapping_in_PAF, const std::string &reference_file_path, const std::string &index_file_path, const std::string &read_file1_path, const std::string &read_file2_path, const std::string &barcode_file_path, const std::string &mapping_output_file_path) : error_threshold_(error_threshold), min_num_seeds_required_for_mapping_(min_num_seeds_required_for_mapping), max_seed_frequencies_(max_seed_frequencies), max_num_best_mappings_(max_num_best_mappings), max_insert_size_(max_insert_size), num_threads_(num_threads), min_read_length_(min_read_length), multi_mapping_allocation_seed_(multi_mapping_allocation_seed), drop_repetitive_reads_(drop_repetitive_reads), trim_adapters_(trim_adapters), remove_pcr_duplicates_(remove_pcr_duplicates), is_bulk_data_(is_bulk_data), allocate_multi_mappings_(allocate_multi_mappings), only_output_unique_mappings_(only_output_unique_mappings), output_mapping_in_BED_(output_mapping_in_BED), output_mapping_in_TagAlign_(output_mapping_in_TagAlign), output_mapping_in_PAF_(output_mapping_in_PAF), reference_file_path_(reference_file_path), index_file_path_(index_file_path), read_file1_path_(read_file1_path), read_file2_path_(read_file2_path), barcode_file_path_(barcode_file_path), mapping_output_file_path_(mapping_output_file_path) {
     barcode_lookup_table_ = kh_init(k32);
   } 
 
@@ -134,15 +73,15 @@ class Chromap {
   void GenerateBestMappingsForPairedEndReadOnOneDirection(Direction first_read_direction, uint32_t pair_index, int min_num_errors1, int num_best_mappings1, int second_min_num_errors1, int num_second_best_mappings1, const SequenceBatch &read_batch1, const std::vector<std::pair<int, uint64_t> > &mappings1, int min_num_errors2, int num_best_mappings2, int second_min_num_errors2, int num_second_best_mappings2, const SequenceBatch &read_batch2, const SequenceBatch &reference, const std::vector<std::pair<int, uint64_t> > &mappings2, std::vector<std::pair<uint32_t, uint32_t> > *best_mappings, int *min_sum_errors, int *num_best_mappings, int *second_min_sum_errors, int *num_second_best_mappings);
   void ProcessBestMappingsForPairedEndReadOnOneDirection(Direction first_read_direction, uint32_t pair_index, uint8_t mapq, int min_num_errors1, int num_best_mappings1, int second_min_num_errors1, int num_second_best_mappings1, const SequenceBatch &read_batch1, const std::vector<std::pair<int, uint64_t> > &mappings1, int min_num_errors2, int num_best_mappings2, int second_min_num_errors2, int num_second_best_mappings2, const SequenceBatch &read_batch2, const SequenceBatch &reference, const SequenceBatch &barcode_batch, const std::vector<int> &best_mapping_indices, const std::vector<std::pair<int, uint64_t> > &mappings2, const std::vector<std::pair<uint32_t, uint32_t> > &best_mappings, int min_sum_errors, int num_best_mappings, int second_min_sum_errors, int num_second_best_mappings, int *best_mapping_index, int *num_best_mappings_reported, std::vector<std::vector<MappingRecord> > *mappings_on_diff_ref_seqs);
   void GenerateBestMappingsForPairedEndRead(uint32_t pair_index, int min_num_errors1, int num_best_mappings1, int second_min_num_errors1, int num_second_best_mappings1, const SequenceBatch &read_batch1, const std::vector<std::pair<int, uint64_t> > &positive_mappings1, const std::vector<std::pair<int, uint64_t> > &negative_mappings1, int min_num_errors2, int num_best_mappings2, int second_min_num_errors2, int num_second_best_mappings2, const SequenceBatch &read_batch2, const SequenceBatch &reference, const SequenceBatch &barcode_batch, const std::vector<std::pair<int, uint64_t> > &positive_mappings2, const std::vector<std::pair<int, uint64_t> > &negative_mappings2, std::vector<int> *best_mapping_indices, std::mt19937 *generator, std::vector<std::pair<uint32_t, uint32_t> > *F1R2_best_mappings, std::vector<std::pair<uint32_t, uint32_t> > *F2R1_best_mappings, int *min_sum_errors, int *num_best_mappings, int *second_min_sum_errors, int *num_second_best_mappings, std::vector<std::vector<MappingRecord> > *mappings_on_diff_ref_seqs);
-  void EmplaceBackMappingRecord(uint32_t read_id, uint32_t barcode, uint32_t fragment_start_position, uint16_t fragment_length, uint8_t mapq, uint16_t positive_alignment_length, uint16_t negative_alignment_length2, std::vector<MappingRecord> *mappings_on_diff_ref_seqs);
-  void OutputPairedEndMappingsInVector(uint8_t mapq_threshold, uint32_t num_reference_sequences, const SequenceBatch &reference, const std::vector<std::vector<MappingRecord> > &mappings, OutputTools &output_tools);
+  void EmplaceBackMappingRecord(uint32_t read_id, const char *read1_name, const char *read2_name, uint16_t read1_length, uint16_t read2_length, uint32_t barcode, uint32_t fragment_start_position, uint16_t fragment_length, uint8_t mapq, uint16_t positive_alignment_length, uint16_t negative_alignment_length, std::vector<MappingRecord> *mappings_on_diff_ref_seqs);
+  void OutputPairedEndMappingsInVector(uint8_t mapq_threshold, uint32_t num_reference_sequences, const SequenceBatch &reference, const std::vector<std::vector<MappingRecord> > &mappings);
   void OutputPairedEndMappings(uint32_t num_reference_sequences, const SequenceBatch &reference, const std::vector<std::vector<MappingRecord> > &mappings);
 
   // For single-end read mapping
   void MapSingleEndReads();
   void GenerateBestMappingsForSingleEndRead(int min_num_errors, int num_best_mappings, int second_min_num_errors, int num_second_best_mappings, const SequenceBatch &read_batch, uint32_t read_index, const SequenceBatch &reference, const std::vector<std::pair<int, uint64_t> > &positive_mappings, const std::vector<std::pair<int, uint64_t> > &negative_mappings, std::vector<std::vector<MappingRecord> > *mappings_on_diff_ref_seqs);
   void ProcessBestMappingsForSingleEndRead(Direction mapping_direction, uint8_t mapq, int min_num_errors, int num_best_mappings, const SequenceBatch &read_batch, uint32_t read_index, const SequenceBatch &reference, const std::vector<int> &best_mapping_indices, const std::vector<std::pair<int, uint64_t> > &mappings, int *best_mapping_index, int *num_best_mappings_reported, std::vector<std::vector<MappingRecord> > *mappings_on_diff_ref_seqs);
-  void EmplaceBackMappingRecord(uint32_t read_id, uint32_t barcode, uint32_t fragment_start_position, uint16_t fragment_length, uint8_t mapq, std::vector<MappingRecord> *mappings_on_diff_ref_seqs);
+  void EmplaceBackMappingRecord(uint32_t read_id, const char* read_name, uint16_t read_length, uint32_t barcode, uint32_t fragment_start_position, uint16_t fragment_length, uint8_t mapq, std::vector<MappingRecord> *mappings_on_diff_ref_seqs);
 
   // Supportive functions
   void ConstructIndex();
@@ -153,7 +92,8 @@ class Chromap {
   void AllocateMultiMappings(uint32_t num_reference_sequences);
   void RemovePCRDuplicate(uint32_t num_reference_sequences);
   void MoveMappingsInBuffersToMappingContainer(uint32_t num_reference_sequences, std::vector<std::vector<std::vector<MappingRecord> > > *mappings_on_diff_ref_seqs_for_diff_threads_for_saving);
-  void GenerateMappingStatistics(uint32_t num_reference_sequences, const std::vector<std::vector<MappingRecord> > &uni_mappings, const std::vector<std::vector<MappingRecord> > &multi_mappings);
+  void OutputMappingStatistics();
+  void OutputMappingStatistics(uint32_t num_reference_sequences, const std::vector<std::vector<MappingRecord> > &uni_mappings, const std::vector<std::vector<MappingRecord> > &multi_mappings);
   inline static double GetRealTime() {
     struct timeval tp;
     struct timezone tzp;
@@ -171,6 +111,7 @@ class Chromap {
   }
 
  private:
+  // Parameters
   int kmer_size_;
   int window_size_;
   int error_threshold_;
@@ -181,15 +122,16 @@ class Chromap {
   int num_threads_;
   int min_read_length_;
   int multi_mapping_allocation_seed_;
-  int drop_repetitive_reads_;
+  int drop_repetitive_reads_; // Read with more than this number of mappings will be dropped.
   bool trim_adapters_;
   bool remove_pcr_duplicates_;
   bool is_bulk_data_;
   bool allocate_multi_mappings_;
   bool only_output_unique_mappings_;
-  // The number of reads for single-end reads
-  // The number of read pairs for paired-end reads
-  uint32_t read_batch_size_ = 1000000; // default batch size
+  bool output_mapping_in_BED_;
+  bool output_mapping_in_TagAlign_;
+  bool output_mapping_in_PAF_;
+  uint32_t read_batch_size_ = 1000000; // default batch size, # reads for single-end reads, # read pairs for paired-end reads
   std::string reference_file_path_;
   std::string index_file_path_;
   std::string single_end_read_file_path_;
@@ -198,22 +140,23 @@ class Chromap {
   std::string barcode_file_path_;
   std::string mapping_output_file_path_;
   FILE *mapping_output_file_;
-  // For dedupe
+  // For identical read dedupe
   int allocated_barcode_lookup_table_size_ = (1 << 10);
   khash_t(k32)* barcode_lookup_table_;
   std::vector<khash_t(k128)* > read_lookup_tables_;
-  // For mapping results
-  uint32_t num_mappings_for_test = 0;
+  // For mapping
   std::vector<std::vector<MappingRecord> > mappings_on_diff_ref_seqs_;
   std::vector<std::vector<MappingRecord> > deduped_mappings_on_diff_ref_seqs_;
   std::vector<std::vector<MappingRecord> > allocated_multi_mappings_on_diff_ref_seqs_;
-  // Setup some shared variables for mapping stats
+  //OutputTools<MappingRecord> *output_tools;
+  std::unique_ptr<OutputTools<MappingRecord> > output_tools;
+  // For mapping stats
   uint64_t num_candidates_ = 0;
   uint64_t num_mappings_ = 0;
   uint64_t num_mapped_reads_ = 0;
   uint64_t num_uniquely_mapped_reads_ = 0;
   uint64_t num_reads_ = 0;
-  uint64_t num_duplicated_reads_ = 0;
+  uint64_t num_duplicated_reads_ = 0; // # identical reads
 };
 } // namespace chromap
 
