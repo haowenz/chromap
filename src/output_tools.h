@@ -156,9 +156,10 @@ class BEDPEOutputTools : public OutputTools<MappingRecord> {
 template <typename MappingRecord>
 class TagAlignOutputTools : public OutputTools<MappingRecord> {
   inline void AppendMapping(uint32_t rid, const SequenceBatch &reference, const MappingRecord &mapping) {
+    std::string strand = (mapping.mapq & 1) == 1 ? "+" : "-";
     const char *reference_sequence_name = reference.GetSequenceNameAt(rid);
     uint32_t mapping_end_position = mapping.fragment_start_position + mapping.fragment_length;
-    this->AppendMappingOutput(std::string(reference_sequence_name) + "\t" + std::to_string(mapping.fragment_start_position) + "\t" + std::to_string(mapping_end_position) + "\n");
+    this->AppendMappingOutput(std::string(reference_sequence_name) + "\t" + std::to_string(mapping.fragment_start_position) + "\t" + std::to_string(mapping_end_position) + "\tN\t1000\t" + strand + "\n");
   }
 };
 
