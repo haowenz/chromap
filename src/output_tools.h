@@ -126,11 +126,21 @@ class OutputTools {
   inline uint32_t GetNumMappings() const {
     return num_mappings_;
   }
+  inline std::string Seed2Sequence(uint64_t seed, uint32_t seed_length) const {
+    std::string sequence;
+    sequence.reserve(seed_length);
+    uint64_t mask = 3;
+    for (uint32_t i = 0; i < seed_length; ++i) {
+      sequence.push_back(SequenceBatch::Uint8ToChar((seed >> ((seed_length - 1 - i) * 2)) & mask));
+    }
+    return sequence;
+  }
 
  protected:
   std::string mapping_output_file_path_; 
   FILE *mapping_output_file_;
   uint32_t num_mappings_;
+  uint32_t cell_barcode_length_ = 16;
 };
 
 template <typename MappingRecord>
@@ -143,6 +153,16 @@ class BEDOutputTools : public OutputTools<MappingRecord> {
   }
 };
 
+template <>
+class BEDOutputTools<MappingWithBarcode> : public OutputTools<MappingWithBarcode> {
+  inline void AppendMapping(uint32_t rid, const SequenceBatch &reference, const MappingWithBarcode &mapping) {
+    std::string strand = (mapping.mapq & 1) == 1 ? "+" : "-";
+    const char *reference_sequence_name = reference.GetSequenceNameAt(rid);
+    uint32_t mapping_end_position = mapping.fragment_start_position + mapping.fragment_length;
+    this->AppendMappingOutput(std::string(reference_sequence_name) + "\t" + std::to_string(mapping.fragment_start_position) + "\t" + std::to_string(mapping_end_position) + "\t" + Seed2Sequence(mapping.cell_barcode, cell_barcode_length_) +"\n");
+  }
+};
+
 template <typename MappingRecord>
 class BEDPEOutputTools : public OutputTools<MappingRecord> {
   inline void AppendMapping(uint32_t rid, const SequenceBatch &reference, const MappingRecord &mapping) {
@@ -150,6 +170,16 @@ class BEDPEOutputTools : public OutputTools<MappingRecord> {
     const char *reference_sequence_name = reference.GetSequenceNameAt(rid);
     uint32_t mapping_end_position = mapping.fragment_start_position + mapping.fragment_length;
     this->AppendMappingOutput(std::string(reference_sequence_name) + "\t" + std::to_string(mapping.fragment_start_position) + "\t" + std::to_string(mapping_end_position) + "\tN\t1000\t" + strand + "\n");
+  }
+};
+
+template <>
+class BEDPEOutputTools<PairedEndMappingWithBarcode> : public OutputTools<PairedEndMappingWithBarcode> {
+  inline void AppendMapping(uint32_t rid, const SequenceBatch &reference, const PairedEndMappingWithBarcode &mapping) {
+    std::string strand = (mapping.mapq & 1) == 1 ? "+" : "-";
+    const char *reference_sequence_name = reference.GetSequenceNameAt(rid);
+    uint32_t mapping_end_position = mapping.fragment_start_position + mapping.fragment_length;
+    this->AppendMappingOutput(std::string(reference_sequence_name) + "\t" + std::to_string(mapping.fragment_start_position) + "\t" + std::to_string(mapping_end_position) + "\t" + Seed2Sequence(mapping.cell_barcode, cell_barcode_length_) + "\n");
   }
 };
 
