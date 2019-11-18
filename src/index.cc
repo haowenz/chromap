@@ -232,7 +232,8 @@ void Index::Save() {
   num_bytes += sizeof(uint64_t) * occurrence_table_size;
   assert(err != 0);
   fclose(index_file);
-  std::cerr << "Index size: " << num_bytes / (1024.0 * 1024 * 1024) << "GB, saved in " << Chromap<>::GetRealTime() - real_start_time << "s.\n";
+  //std::cerr << "Index size: " << num_bytes / (1024.0 * 1024 * 1024) << "GB, saved in " << Chromap<>::GetRealTime() - real_start_time << "s.\n";
+  std::cerr << "Saved in " << Chromap<>::GetRealTime() - real_start_time << "s.\n";
 }
 
 void Index::Load() {

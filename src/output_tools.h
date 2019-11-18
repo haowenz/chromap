@@ -11,6 +11,12 @@
 #include "chromap.h"
 
 namespace chromap {
+
+template <typename MappingRecord>
+bool ReadIdLess(const std::pair<uint32_t, MappingRecord> &a, const std::pair<uint32_t, MappingRecord> &b) { 
+  return a.second.read_id < b.second.read_id; 
+}
+
 struct PAFMapping {
   uint32_t read_id;
   std::string read_name;

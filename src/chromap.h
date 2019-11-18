@@ -21,6 +21,13 @@ struct uint128_t {
   uint64_t second;
 };
 
+struct StackCell {
+  size_t x; // node
+  int k, w; // k: level; w: 0 if left child hasn't been processed
+  StackCell() {};
+  StackCell(int k_, size_t x_, int w_) : x(x_), k(k_), w(w_) {};
+};
+
 KHASH_MAP_INIT_INT64(k128, uint128_t);
 KHASH_MAP_INIT_INT(k32, uint32_t);
 
@@ -82,6 +89,7 @@ class Chromap {
   void EmplaceBackMappingRecord(uint32_t read_id, const char* read_name, uint16_t read_length, uint32_t barcode, uint32_t fragment_start_position, uint16_t fragment_length, uint8_t mapq, std::vector<MappingRecord> *mappings_on_diff_ref_seqs);
   void ApplyTn5ShiftOnSingleEndMapping(uint32_t num_reference_sequences, std::vector<std::vector<MappingRecord> > *mappings);
   uint32_t LoadSingleEndReadsWithBarcodes(SequenceBatch *read_batch, SequenceBatch *barcode_batch);
+
   // Supportive functions
   void ConstructIndex();
   int BandedAlignPatternToText(const char *pattern, const char *text, const int read_length, int *mapping_end_location);
@@ -110,6 +118,9 @@ class Chromap {
     exit(-1);
   }
 
+  void SortOutputMappings(uint32_t num_reference_sequences, std::vector<std::vector<MappingRecord> > *mappings);
+  void BuildAugmentedTree(uint32_t ref_id);
+  uint32_t GetNumOverlappedMappings(uint32_t ref_id, const MappingRecord &mapping);
  private:
   // Parameters
   int kmer_size_;
@@ -148,7 +159,10 @@ class Chromap {
   // For mapping
   std::vector<std::vector<MappingRecord> > mappings_on_diff_ref_seqs_;
   std::vector<std::vector<MappingRecord> > deduped_mappings_on_diff_ref_seqs_;
-  std::vector<std::vector<MappingRecord> > allocated_multi_mappings_on_diff_ref_seqs_;
+  std::vector<std::pair<uint32_t, MappingRecord> > multi_mappings_;
+  std::vector<std::vector<MappingRecord> > allocated_mappings_on_diff_ref_seqs_;
+  std::vector<std::vector<uint32_t> > tree_extras_on_diff_ref_seqs_;
+  std::vector<std::pair<int, uint32_t> > tree_info_on_diff_ref_seqs_; // (max_level, # nodes)
   std::unique_ptr<OutputTools<MappingRecord> > output_tools;
   // For mapping stats
   uint64_t num_candidates_ = 0;

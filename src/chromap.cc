@@ -7,7 +7,6 @@
 #include <random>
 
 #include "cxxopts.hpp"
-#include "IITree.h"
 
 namespace chromap {
 template <typename MappingRecord>
@@ -353,18 +352,21 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
   if (Tn5_shift_) {
     ApplyTn5ShiftOnPairedEndMapping(num_reference_sequences, &mappings_on_diff_ref_seqs_);
   }
-  std::vector<std::vector<MappingRecord> > &mappings = remove_pcr_duplicates_ ? deduped_mappings_on_diff_ref_seqs_ : mappings_on_diff_ref_seqs_;
   if (remove_pcr_duplicates_) {
     RemovePCRDuplicate(num_reference_sequences);
     std::cerr << "After removing PCR duplications, ";
-    OutputMappingStatistics(num_reference_sequences, mappings, mappings);
+    OutputMappingStatistics(num_reference_sequences, deduped_mappings_on_diff_ref_seqs_, deduped_mappings_on_diff_ref_seqs_);
   }
   if (allocate_multi_mappings_) {
     AllocateMultiMappings(num_reference_sequences);
     std::cerr << "After allocating multi-mappings, ";
-    OutputMappingStatistics(num_reference_sequences, mappings, allocated_multi_mappings_on_diff_ref_seqs_);
+    OutputMappingStatistics(num_reference_sequences, allocated_mappings_on_diff_ref_seqs_, allocated_mappings_on_diff_ref_seqs_);
+    SortOutputMappings(num_reference_sequences, &allocated_mappings_on_diff_ref_seqs_);
+    OutputPairedEndMappings(num_reference_sequences, reference, allocated_mappings_on_diff_ref_seqs_);
+  } else {
+    std::vector<std::vector<MappingRecord> > &mappings = remove_pcr_duplicates_ ? deduped_mappings_on_diff_ref_seqs_ : mappings_on_diff_ref_seqs_;
+    OutputPairedEndMappings(num_reference_sequences, reference, mappings);
   }
-  OutputPairedEndMappings(num_reference_sequences, reference, mappings);
   output_tools->FinalizeMappingOutput();
   reference.FinalizeLoading();
   std::cerr << "Total time: " << Chromap<>::GetRealTime() - real_start_time << "s.\n";
@@ -384,11 +386,8 @@ void Chromap<MappingRecord>::OutputPairedEndMappingsInVector(uint8_t mapq_thresh
 
 template <typename MappingRecord>
 void Chromap<MappingRecord>::OutputPairedEndMappings(uint32_t num_reference_sequences, const SequenceBatch &reference, const std::vector<std::vector<MappingRecord> > &mappings) {
-  uint8_t mapq_threshold = (allocate_multi_mappings_ || only_output_unique_mappings_) ? 30 : 0;
+  uint8_t mapq_threshold = only_output_unique_mappings_ ? 30 : 0;
   OutputPairedEndMappingsInVector(mapq_threshold, num_reference_sequences, reference, mappings);
-  if (allocate_multi_mappings_ && (!only_output_unique_mappings_)) {
-    OutputPairedEndMappingsInVector(0, num_reference_sequences, reference, allocated_multi_mappings_on_diff_ref_seqs_);
-  }
 }
 
 template <typename MappingRecord>
@@ -504,7 +503,7 @@ void Chromap<MappingRecord>::ProcessBestMappingsForPairedEndReadOnOneDirection(D
         uint32_t position1 = mappings1[i1].second;
         //uint32_t verification_window_start_position1 = position1 + 1 - read1_length - error_threshold_;
         uint32_t verification_window_start_position1 = position1 + 1 > (read1_length + error_threshold_) ? position1 + 1 - read1_length - error_threshold_ : 0;
-        if (position1 + error_threshold_ >= reference.GetSequenceLengthAt(rid1)) {
+        if (position1 >= reference.GetSequenceLengthAt(rid1)) {
           verification_window_start_position1 = reference.GetSequenceLengthAt(rid1) - error_threshold_ - read1_length; 
         }
         int mapping_start_position1;
@@ -512,7 +511,7 @@ void Chromap<MappingRecord>::ProcessBestMappingsForPairedEndReadOnOneDirection(D
         uint32_t position2 = mappings2[i2].second;
         //uint32_t verification_window_start_position2 = position2 + 1 - read2_length - error_threshold_;
         uint32_t verification_window_start_position2 = position2 + 1 > (read2_length + error_threshold_) ? position2 + 1 - read2_length - error_threshold_ : 0;
-        if (position2 + error_threshold_ >= reference.GetSequenceLengthAt(rid2)) {
+        if (position2 >= reference.GetSequenceLengthAt(rid2)) {
           verification_window_start_position2 = reference.GetSequenceLengthAt(rid2) - error_threshold_ - read2_length; 
         }
         int mapping_start_position2;
@@ -755,18 +754,21 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
   if (Tn5_shift_) {
     ApplyTn5ShiftOnSingleEndMapping(num_reference_sequences, &mappings_on_diff_ref_seqs_);
   }
-  std::vector<std::vector<MappingRecord> > &mappings = remove_pcr_duplicates_ ? deduped_mappings_on_diff_ref_seqs_ : mappings_on_diff_ref_seqs_;
   if (remove_pcr_duplicates_) {
     RemovePCRDuplicate(num_reference_sequences);
     std::cerr << "After removing PCR duplications, ";
-    OutputMappingStatistics(num_reference_sequences, mappings, mappings);
+    OutputMappingStatistics(num_reference_sequences, deduped_mappings_on_diff_ref_seqs_, deduped_mappings_on_diff_ref_seqs_);
   }
   if (allocate_multi_mappings_) {
     AllocateMultiMappings(num_reference_sequences);
     std::cerr << "After allocating multi-mappings, ";
-    OutputMappingStatistics(num_reference_sequences, mappings, allocated_multi_mappings_on_diff_ref_seqs_);
+    OutputMappingStatistics(num_reference_sequences, allocated_mappings_on_diff_ref_seqs_, allocated_mappings_on_diff_ref_seqs_);
+    SortOutputMappings(num_reference_sequences, &allocated_mappings_on_diff_ref_seqs_);
+    OutputPairedEndMappings(num_reference_sequences, reference, allocated_mappings_on_diff_ref_seqs_);
+  } else {
+    std::vector<std::vector<MappingRecord> > &mappings = remove_pcr_duplicates_ ? deduped_mappings_on_diff_ref_seqs_ : mappings_on_diff_ref_seqs_;
+    OutputPairedEndMappings(num_reference_sequences, reference, mappings);
   }
-  OutputPairedEndMappings(num_reference_sequences, reference, mappings);
   output_tools->FinalizeMappingOutput();
   reference.FinalizeLoading();
   std::cerr << "Total time: " << Chromap<>::GetRealTime() - real_start_time << "s.\n";
@@ -807,7 +809,10 @@ void Chromap<MappingRecord>::ProcessBestMappingsForSingleEndRead(Direction mappi
       if (*best_mapping_index == best_mapping_indices[*num_best_mappings_reported]) {
         uint32_t rid = mappings[mi].second >> 32;
         uint32_t position = mappings[mi].second;
-        uint32_t verification_window_start_position = position + 1 - read_length - error_threshold_;
+        uint32_t verification_window_start_position = position + 1 > (read_length + error_threshold_) ? position + 1 - read_length - error_threshold_ : 0;
+        if (position >= reference.GetSequenceLengthAt(rid)) {
+          verification_window_start_position = reference.GetSequenceLengthAt(rid) - error_threshold_ - read_length; 
+        }
         uint32_t barcode_key = 0;
         if (!is_bulk_data_) {
           barcode_key = barcode_batch.GenerateSeedFromSequenceAt(read_index, 0, barcode_batch.GetSequenceLengthAt(read_index));
@@ -947,6 +952,17 @@ void Chromap<MappingRecord>::MoveMappingsInBuffersToMappingContainer(uint32_t nu
 }
 
 template <typename MappingRecord>
+void Chromap<MappingRecord>::SortOutputMappings(uint32_t num_reference_sequences, std::vector<std::vector<MappingRecord> > *mappings) {
+  double real_dedupe_start_time = Chromap<>::GetRealTime();
+  uint32_t num_mappings = 0;
+  for (uint32_t ri = 0; ri < num_reference_sequences; ++ri) {
+    std::sort((*mappings)[ri].begin(), (*mappings)[ri].end());
+    num_mappings += (*mappings)[ri].size(); 
+  }
+  std::cerr << "Sorted " << num_mappings << " elements in " << Chromap<>::GetRealTime() - real_dedupe_start_time << "s.\n";
+}
+
+template <typename MappingRecord>
 void Chromap<MappingRecord>::RemovePCRDuplicate(uint32_t num_reference_sequences) {
   uint32_t num_mappings = 0;
   double real_dedupe_start_time = Chromap<>::GetRealTime();
@@ -979,51 +995,143 @@ void Chromap<MappingRecord>::RemovePCRDuplicate(uint32_t num_reference_sequences
 }
 
 template <typename MappingRecord>
+void Chromap<MappingRecord>::BuildAugmentedTree(uint32_t ref_id) {
+  //std::sort(mappings.begin(), mappings.end(), IntervalLess());
+  int max_level = 0;
+  size_t i, last_i = 0; // last_i points to the rightmost node in the tree
+  uint32_t last = 0; // last is the max value at node last_i
+  int k;
+  std::vector<MappingRecord> &mappings = allocated_mappings_on_diff_ref_seqs_[ref_id];
+  std::vector<uint32_t> &extras = tree_extras_on_diff_ref_seqs_[ref_id];
+  if (mappings.size() == 0) {
+    max_level = -1;
+  }
+  for (i = 0; i < mappings.size(); i += 2) { 
+    last_i = i; 
+    //last = mappings[i].max = mappings[i].en; // leaves (i.e. at level 0)
+    last = extras[i] = mappings[i].fragment_start_position + mappings[i].fragment_length; // leaves (i.e. at level 0)
+  }
+  for (k = 1; 1LL<<k <= (int64_t)mappings.size(); ++k) { // process internal nodes in the bottom-up order
+    size_t x = 1LL<<(k-1);
+    size_t i0 = (x<<1) - 1;
+    size_t step = x<<2; // i0 is the first node
+    for (i = i0; i < mappings.size(); i += step) { // traverse all nodes at level k
+      uint32_t el = extras[i - x];                          // max value of the left child
+      uint32_t er = i + x < mappings.size()? extras[i + x] : last; // of the right child
+      uint32_t e = mappings[i].fragment_start_position + mappings[i].fragment_length;
+      e = e > el? e : el;
+      e = e > er? e : er;
+      extras[i] = e; // set the max value for node i
+    }
+    last_i = last_i>>k&1? last_i - x : last_i + x; // last_i now points to the parent of the original last_i
+    if (last_i < mappings.size() && extras[last_i] > last) // update last accordingly
+      last = extras[last_i];
+  }
+  max_level = k - 1;
+  tree_info_on_diff_ref_seqs_.emplace_back(max_level, mappings.size());
+}
+
+template <typename MappingRecord>
+uint32_t Chromap<MappingRecord>::GetNumOverlappedMappings(uint32_t ref_id, const MappingRecord &mapping) {
+  int t = 0;
+  StackCell stack[64];
+  //out.clear();
+  int num_overlapped_mappings = 0;
+  int max_level = tree_info_on_diff_ref_seqs_[ref_id].first;
+  uint32_t num_tree_nodes = tree_info_on_diff_ref_seqs_[ref_id].second;
+  std::vector<MappingRecord> &mappings = allocated_mappings_on_diff_ref_seqs_[ref_id];
+  std::vector<uint32_t> &extras = tree_extras_on_diff_ref_seqs_[ref_id];
+  //uint32_t interval_start = mapping.fragment_start_position; 
+  uint32_t interval_start = mapping.fragment_start_position > (uint32_t)multi_mapping_allocation_distance_ ? mapping.fragment_start_position - multi_mapping_allocation_distance_ : 0;
+  uint32_t interval_end = mapping.fragment_start_position + mapping.fragment_length + (uint32_t)multi_mapping_allocation_distance_;
+  stack[t++] = StackCell(max_level, (1LL<<max_level) - 1, 0); // push the root; this is a top down traversal
+  while (t) { // the following guarantees that numbers in out[] are always sorted
+    StackCell z = stack[--t];
+    if (z.k <= 3) { // we are in a small subtree; traverse every node in this subtree
+      size_t i, i0 = z.x >> z.k << z.k, i1 = i0 + (1LL<<(z.k+1)) - 1;
+      if (i1 >= num_tree_nodes) {
+        i1 = num_tree_nodes;
+      }
+      for (i = i0; i < i1 && mappings[i].fragment_start_position < interval_end; ++i) {
+        if (interval_start < mappings[i].fragment_start_position + mappings[i].fragment_length) { // if overlap, append to out[]
+          //out.push_back(i);
+          ++num_overlapped_mappings;
+        }
+      }
+    } else if (z.w == 0) { // if left child not processed
+      size_t y = z.x - (1LL<<(z.k-1)); // the left child of z.x; NB: y may be out of range (i.e. y>=a.size())
+      stack[t++] = StackCell(z.k, z.x, 1); // re-add node z.x, but mark the left child having been processed
+      if (y >= num_tree_nodes || extras[y] > interval_start) // push the left child if y is out of range or may overlap with the query
+        stack[t++] = StackCell(z.k - 1, y, 0);
+    } else if (z.x < num_tree_nodes && mappings[z.x].fragment_start_position < interval_end) { // need to push the right child
+      if (interval_start < mappings[z.x].fragment_start_position + mappings[z.x].fragment_length) {
+        //out.push_back(z.x); // test if z.x overlaps the query; if yes, append to out[]
+        ++num_overlapped_mappings;
+      }
+      stack[t++] = StackCell(z.k - 1, z.x + (1LL<<(z.k-1)), 0); // push the right child
+    }
+  }
+  return num_overlapped_mappings;
+}
+
+template <typename MappingRecord>
 void Chromap<MappingRecord>::AllocateMultiMappings(uint32_t num_reference_sequences) {
   double real_start_time = Chromap<>::GetRealTime();
   std::vector<std::vector<MappingRecord> > &mappings = remove_pcr_duplicates_ ? deduped_mappings_on_diff_ref_seqs_ : mappings_on_diff_ref_seqs_;
-  allocated_multi_mappings_on_diff_ref_seqs_.reserve(num_reference_sequences);
-  std::vector<std::tuple<uint32_t, uint32_t, uint32_t> > multi_mapping_indices;
-  multi_mapping_indices.reserve(num_mappings_ - num_uniquely_mapped_reads_);
-  std::vector<IITree<uint32_t, uint8_t> > unique_mapping_trees(num_reference_sequences);
-  uint32_t num_multi_mappings = 0;
+  multi_mappings_.reserve((num_mapped_reads_ - num_uniquely_mapped_reads_) / 2);
+  allocated_mappings_on_diff_ref_seqs_.reserve(num_reference_sequences);
+  tree_extras_on_diff_ref_seqs_.reserve(num_reference_sequences);
+  tree_info_on_diff_ref_seqs_.reserve(num_reference_sequences);
+  // two passes, one for memory pre-allocation, another to move the mappings.
   for (uint32_t ri = 0; ri < num_reference_sequences; ++ri) {
-    allocated_multi_mappings_on_diff_ref_seqs_.emplace_back(std::vector<MappingRecord>());
+    allocated_mappings_on_diff_ref_seqs_.emplace_back(std::vector<MappingRecord>());
+    tree_extras_on_diff_ref_seqs_.emplace_back(std::vector<uint32_t>());
+    uint32_t num_uni_mappings = 0;
+    uint32_t num_multi_mappings = 0;
     for (uint32_t mi = 0; mi < mappings[ri].size(); ++mi) {
       MappingRecord &mapping = mappings[ri][mi];
       if ((mapping.mapq >> 1) < 30) { // we have to ensure that the mapq is lower than 30 if and only if it is a multi-read.
-        multi_mapping_indices.emplace_back(mapping.read_id, ri, mi);
+        ++num_multi_mappings;
       } else {
-        unique_mapping_trees[ri].add(mapping.fragment_start_position, mapping.fragment_start_position + mapping.fragment_length, 1);
+        ++num_uni_mappings;
       }
     }
-    unique_mapping_trees[ri].index();
-    allocated_multi_mappings_on_diff_ref_seqs_[ri].reserve(multi_mapping_indices.size() - num_multi_mappings);
-    num_multi_mappings = multi_mapping_indices.size();
+    allocated_mappings_on_diff_ref_seqs_[ri].reserve(num_uni_mappings);
+    tree_extras_on_diff_ref_seqs_[ri].reserve(num_uni_mappings);
+    for (uint32_t mi = 0; mi < mappings[ri].size(); ++mi) {
+      MappingRecord &mapping = mappings[ri][mi];
+      if ((mapping.mapq >> 1) < 30) { // we have to ensure that the mapq is lower than 30 if and only if it is a multi-read.
+        multi_mappings_.emplace_back(ri, mapping);
+      } else {
+        allocated_mappings_on_diff_ref_seqs_[ri].emplace_back(mapping);
+        tree_extras_on_diff_ref_seqs_[ri].emplace_back(0);
+      }
+    }
+    std::vector<MappingRecord>().swap(mappings[ri]);
+    BuildAugmentedTree(ri);
   }
-  //std::cerr << "Got all " << multi_mapping_indices.size() << " multi-mappings!\n";
-  std::sort(multi_mapping_indices.begin(), multi_mapping_indices.end());
+  std::cerr << "Got all " << multi_mappings_.size() << " multi-mappings!\n";
+  std::stable_sort(multi_mappings_.begin(), multi_mappings_.end(), ReadIdLess<MappingRecord>);
   std::vector<uint32_t> weights;
   weights.reserve(max_num_best_mappings_);
-  std::vector<size_t> overlaps;
   uint32_t sum_weight = 0;
-  assert(multi_mapping_indices.size() > 0);
-  uint32_t previous_read_id = std::get<0>(multi_mapping_indices[0]);
+  assert(multi_mappings_.size() > 0);
+  uint32_t previous_read_id = multi_mappings_[0].second.read_id;
   uint32_t start_mapping_index = 0;
   // add a fake mapping at the end and make sure its id is different from the last one
-  assert(multi_mapping_indices.size() != UINT32_MAX);
-  multi_mapping_indices.emplace_back(UINT32_MAX, std::get<1>(multi_mapping_indices.back()), std::get<2>(multi_mapping_indices.back()));
+  assert(multi_mappings_.size() != UINT32_MAX);
+  std::pair<uint32_t, MappingRecord> foo_mapping = multi_mappings_.back();
+  foo_mapping.second.read_id = UINT32_MAX;
+  multi_mappings_.emplace_back(foo_mapping);
   std::mt19937 generator(multi_mapping_allocation_seed_);
-  uint32_t current_read_id, reference_id, mapping_index;
-  uint32_t allocated_read_id, allocated_reference_id, allocated_mapping_index;
+  uint32_t current_read_id;//, reference_id, mapping_index;
+  //uint32_t allocated_read_id, allocated_reference_id, allocated_mapping_index;
   uint32_t num_allocated_multi_mappings = 0;
   uint32_t num_multi_mappings_without_overlapping_unique_mappings = 0;
-  for (uint32_t mi = 0; mi < multi_mapping_indices.size(); ++mi) {
-    std::tie(current_read_id, reference_id, mapping_index) = multi_mapping_indices[mi];
-    MappingRecord current_multi_mapping = mappings[reference_id][mapping_index];
-    uint32_t interval_start = current_multi_mapping.fragment_start_position > (uint32_t)multi_mapping_allocation_distance_ ? current_multi_mapping.fragment_start_position - multi_mapping_allocation_distance_ : 0;
-    unique_mapping_trees[reference_id].overlap(interval_start, current_multi_mapping.fragment_start_position + current_multi_mapping.fragment_length + multi_mapping_allocation_distance_, overlaps);
-    uint32_t num_overlaps = overlaps.size();
+  for (uint32_t mi = 0; mi < multi_mappings_.size(); ++mi) {
+    std::pair<uint32_t, MappingRecord> &current_multi_mapping = multi_mappings_[mi];//mappings[reference_id][mapping_index];
+    current_read_id = current_multi_mapping.second.read_id;
+    uint32_t num_overlaps = GetNumOverlappedMappings(current_multi_mapping.first, current_multi_mapping.second);
     //std::cerr << mi << " " << current_read_id << " " << previous_read_id << " " << reference_id << " " << mapping_index << " " << interval_start << " " << num_overlaps << " " << sum_weight << "\n";
     if (current_read_id == previous_read_id) {
       weights.emplace_back(num_overlaps);
@@ -1033,19 +1141,19 @@ void Chromap<MappingRecord>::AllocateMultiMappings(uint32_t num_reference_sequen
       if (sum_weight == 0) {
         ++num_multi_mappings_without_overlapping_unique_mappings;
         //assert(weights.size() > 1); // After PCR dedupe, some multi-reads may become uni-reads. For now, we just assign it to that unique mapping positions.
-        std::fill(weights.begin(), weights.end(), 1);
+        //std::fill(weights.begin(), weights.end(), 1); // We drop the multi-mappings that have no overlap with uni-mappings.
+      } else {
+        std::discrete_distribution<uint32_t> distribution(weights.begin(), weights.end());
+        uint32_t randomly_assigned_mapping_index = distribution(generator);
+        allocated_mappings_on_diff_ref_seqs_[multi_mappings_[start_mapping_index + randomly_assigned_mapping_index].first].emplace_back(multi_mappings_[start_mapping_index + randomly_assigned_mapping_index].second);
+        ++num_allocated_multi_mappings;
       }
-      std::discrete_distribution<uint32_t> distribution(weights.begin(), weights.end());
-      uint32_t randomly_assigned_mapping_index = distribution(generator);
-      std::tie(allocated_read_id, allocated_reference_id, allocated_mapping_index) = multi_mapping_indices[start_mapping_index + randomly_assigned_mapping_index];
-      allocated_multi_mappings_on_diff_ref_seqs_[allocated_reference_id].emplace_back(mappings[allocated_reference_id][allocated_mapping_index]);
       // update current
       weights.clear();
       weights.emplace_back(num_overlaps);
       sum_weight = num_overlaps;
       start_mapping_index = mi;
       previous_read_id = current_read_id;
-      ++num_allocated_multi_mappings;
     }
   }
   std::cerr << "Allocated " << num_allocated_multi_mappings << " multi-mappings in "<< Chromap<>::GetRealTime() - real_start_time << "s.\n";
@@ -1455,7 +1563,8 @@ int main(int argc, char *argv[]) {
       std::cerr << "Only output unique mappings after mapping.\n";
     } 
     if (allocate_multi_mappings && only_output_unique_mappings) {
-      std::cerr << "WARNING: you want to output unique mappings only but you ask to allocate multi-mappings! In this case, it will only output unique mappings.\n";
+      std::cerr << "WARNING: you want to output unique mappings only but you ask to allocate multi-mappings! In this case, it won't allocate multi-mappings and will only output unique mappings.\n";
+      allocate_multi_mappings = false;
     }
     if (max_num_best_mappings > drop_repetitive_reads) {
       std::cerr << "WARNING: you want to drop mapped reads with more than " << drop_repetitive_reads << " mappings. But you want to output top " << max_num_best_mappings << " best mappings. In this case, only reads with <=" << drop_repetitive_reads << " best mappings will be output.\n";
