@@ -129,7 +129,6 @@ void Index::Construct(uint32_t num_sequences, const SequenceBatch &reference) {
   std::cerr << "Sorted minimizers.\n";
   uint32_t num_minimizers = tmp_table.size();
   assert(num_minimizers != 0 && num_minimizers <= INT_MAX); // Here I make sure the # minimizers is less than the limit of signed int32, so that I can use int to store position later.
-  kh_resize(k64, lookup_table_, num_minimizers);
   occurrence_table_.reserve(num_minimizers);
   uint64_t previous_key = tmp_table[0].first;
   uint32_t num_previous_minimizer_occurrences = 0;
