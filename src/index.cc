@@ -54,12 +54,13 @@ void Index::GenerateMinimizerSketch(const SequenceBatch &sequence_batch, uint32_
       if (seeds_in_two_strands[0] == seeds_in_two_strands[1]) {
         continue; // skip "symmetric k-mers" as we don't know it strand
       }
-      //uint64_t hash_keys_for_two_seeds[2] = {Hash64(seeds_in_two_strands[0], mask), Hash64(seeds_in_two_strands[1], mask)};
-      uint64_t strand = seeds_in_two_strands[0] < seeds_in_two_strands[1] ? 0 : 1; // strand
-      //int strand = hash_keys_for_two_seeds[0] < hash_keys_for_two_seeds[1] ? 0 : 1; // strand
+      uint64_t hash_keys_for_two_seeds[2] = {Hash64(seeds_in_two_strands[0], mask), Hash64(seeds_in_two_strands[1], mask)};
+      uint64_t strand = hash_keys_for_two_seeds[0] < hash_keys_for_two_seeds[1] ? 0 : 1; // strand
+      //uint64_t strand = seeds_in_two_strands[0] < seeds_in_two_strands[1] ? 0 : 1; // strand
       ++unambiguous_length;
       if (unambiguous_length >= kmer_size_) {
-        current_seed.first = Hash64(seeds_in_two_strands[strand], mask);
+        //current_seed.first = Hash64(seeds_in_two_strands[strand], mask);
+        current_seed.first = Hash64(hash_keys_for_two_seeds[strand], mask);
         current_seed.second = ((((uint64_t)sequence_index) << 32 | (uint32_t)position) << 1) | strand;
       }
     } else {
