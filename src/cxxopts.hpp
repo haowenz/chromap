@@ -551,7 +551,7 @@ namespace cxxopts
       // if we got to here, then `t` is a positive number that fits into
       // `R`. So to avoid MSVC C4146, we first cast it to `R`.
       // See https://github.com/jarro2783/cxxopts/issues/62 for more details.
-      return -static_cast<R>(t-1)-1;
+      return static_cast<R>(-static_cast<R>(t-1)-1);
     }
 
     template <typename R, typename T>
@@ -611,7 +611,7 @@ namespace cxxopts
           throw_or_mimic<argument_incorrect_type>(text);
         }
 
-        US next = result * base + digit;
+        const US next = static_cast<US>(result * base + digit);
         if (result > next)
         {
           throw_or_mimic<argument_incorrect_type>(text);
@@ -762,6 +762,17 @@ namespace cxxopts
       value = std::move(result);
     }
 #endif
+
+    inline
+    void parse_value(const std::string& text, char& c)
+    {
+      if (text.length() != 1)
+      {
+        throw_or_mimic<argument_incorrect_type>(text);
+      }
+
+      c = text[0];
+    }
 
     template <typename T>
     struct type_is_container
@@ -1502,7 +1513,14 @@ namespace cxxopts
 
       if (o.has_default && (!o.is_boolean || o.default_value != "false"))
       {
-        desc += toLocalString(" (default: " + o.default_value + ")");
+        if(o.default_value != "")
+        {
+          desc += toLocalString(" (default: " + o.default_value + ")");
+        }
+        else
+        {
+          desc += toLocalString(" (default: \"\")");
+        }
       }
 
       String result;
@@ -1541,6 +1559,7 @@ namespace cxxopts
             stringAppend(result, "\n");
             stringAppend(result, start, ' ');
             startLine = lastSpace + 1;
+            lastSpace = startLine;
           }
           size = 0;
         }
