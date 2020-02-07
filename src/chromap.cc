@@ -1482,12 +1482,12 @@ uint8_t Chromap<MappingRecord>::GetMAPQ(int num_positive_candidates, int num_neg
 
 int main(int argc, char *argv[]) {
   cxxopts::Options options("chromap", "A short read mapper for chromatin biology");
-  options
-    .add_options()
-    ("i,index-mode", "Build index")
-    ("m,map", "Map reads")
+  options.add_options("Indexing")
+    ("i,build-index", "Build index")
     ("k,kmer", "Kmer length [17]", cxxopts::value<int>())
-    ("w,window", "Window size [5]", cxxopts::value<int>())
+    ("w,window", "Window size [5]", cxxopts::value<int>());
+  options.add_options("Mapping")
+    ("m,map", "Map reads")
     ("e,error-threshold", "Max # errors allowed to map a read [3]", cxxopts::value<int>())
     ("A,match-score", "Match score [1]", cxxopts::value<int>())
     ("B,mismatch-penalty", "Mismatch penalty [4]", cxxopts::value<int>())
@@ -1506,18 +1506,21 @@ int main(int argc, char *argv[]) {
     ("allocate-multi-mappings", "Allocate multi-mappings")
     ("unique-mappings", "Only output unique mappings")
     ("Tn5-shift", "Perform Tn5 shift")
-    ("BED", "Output mappings in BED/BEDPE format")
-    ("TagAlign", "Output mappings in TagAlign/PairedTagAlign format")
-    ("PAF", "Output mappings in PAF format")
-    ("t,num-threads", "# threads for mapping [1]", cxxopts::value<int>())
+    ("t,num-threads", "# threads for mapping [1]", cxxopts::value<int>());
+  options.add_options("Input")
     ("r,ref", "Reference file", cxxopts::value<std::string>())
     ("x,index", "Index file", cxxopts::value<std::string>())
     ("1,read1", "Single-end read file or paired-end read file 1", cxxopts::value<std::string>())
     ("2,read2", "Paired-end read file 2", cxxopts::value<std::string>())
-    ("b,barcode", "Cell barcode file", cxxopts::value<std::string>())
+    ("b,barcode", "Cell barcode file", cxxopts::value<std::string>());
+  options.add_options("Output")
     ("o,output", "Output file", cxxopts::value<std::string>())
-    ("h,help", "Print help")
-    ;
+    ("BED", "Output mappings in BED/BEDPE format")
+    ("TagAlign", "Output mappings in TagAlign/PairedTagAlign format")
+    ("PAF", "Output mappings in PAF format");
+  options.add_options()
+    ("h,help", "Print help");
+
   auto result = options.parse(argc, argv);
   // Optional parameters
   int kmer_size = 17;
@@ -1755,9 +1758,9 @@ int main(int argc, char *argv[]) {
       }
     }
   } else if (result.count("h")) {
-    std::cerr << options.help();
+    std::cerr << options.help({"", "Indexing", "Mapping", "Input", "Output"});
   } else {
-    std::cerr << options.help();
+    std::cerr << options.help({"", "Indexing", "Mapping", "Input", "Output"});
   }
   return 0;
 } 
