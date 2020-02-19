@@ -1,4 +1,4 @@
-cpp_source=sequence_batch.cc index.cc chromap.cc
+cpp_source=sequence_batch.cc index.cc ksw.cc chromap.cc
 src_dir=src
 objs_dir=objs
 objs+= $(patsubst %.cc, $(objs_dir)/%.o, $(cpp_source))
