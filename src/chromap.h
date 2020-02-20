@@ -38,6 +38,14 @@ enum Direction {
 
 #define SortMappingWithoutBarcode(m) (((((m).fragment_start_position<<16)|(m).fragment_length)<<8)|(m).mapq)
 //#define SortMappingWithoutBarcode(m) (m)
+
+class ChromapDriver {
+ public:
+  ChromapDriver() {}
+  ~ChromapDriver() {}
+  void ParseArgsAndRun(int argc, char *argv[]);
+};
+
 template <typename MappingRecord = MappingWithoutBarcode>
 class Chromap {
  public:

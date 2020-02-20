@@ -1488,9 +1488,8 @@ uint8_t Chromap<MappingRecord>::GetMAPQ(int num_positive_candidates, int num_neg
   mapq <<= 1;
   return (uint8_t)mapq;
 }
-} // namespace chromap
 
-int main(int argc, char *argv[]) {
+void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
   cxxopts::Options options("chromap", "A short read mapper for chromatin biology");
   options.add_options("Indexing")
     ("i,build-index", "Build index")
@@ -1777,5 +1776,11 @@ int main(int argc, char *argv[]) {
   } else {
     std::cerr << options.help({"", "Indexing", "Mapping", "Input", "Output"});
   }
+}
+} // namespace chromap
+
+int main(int argc, char *argv[]) {
+  chromap::ChromapDriver chromap_driver;
+  chromap_driver.ParseArgsAndRun(argc, argv);
   return 0;
-} 
+}
