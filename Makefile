@@ -15,10 +15,10 @@ dir:
 	mkdir -p $(objs_dir)
 
 $(exec): $(objs)
-	$(cxx) $(cxxflags) $(ldflags) $(objs) -o $(exec)
+	$(cxx) $(cxxflags) $(objs) -o $(exec) $(ldflags)
 	
 $(objs_dir)/%.o: $(src_dir)/%.cc
-	$(cxx) $(cxxflags) $(ldflags) -c $< -o $@
+	$(cxx) $(cxxflags) -c $< -o $@ $(ldflags)
 
 .PHONY: clean
 clean:
