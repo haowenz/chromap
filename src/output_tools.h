@@ -128,7 +128,7 @@ class OutputTools {
     fclose(mapping_output_file_);
   }
   inline void AppendMappingOutput(const std::string &line) {
-    fprintf(mapping_output_file_, line.data());
+    fprintf(mapping_output_file_, "%s", line.data());
   }
   virtual void AppendMapping(uint32_t rid, const SequenceBatch &reference, const MappingRecord &mapping) = 0;
   inline std::string GeneratePAFLine(const SequenceBatch &query_batch, uint32_t query_index, const int query_start, const int query_end, const char relative_strand, const SequenceBatch &target_batch, uint32_t target_index, const int target_start, const int target_end, const int num_matches, const int alignment_length, const int mapping_quality) {
