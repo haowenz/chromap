@@ -30,6 +30,16 @@ struct StackCell {
 
 KHASH_MAP_INIT_INT64(k128, uint128_t);
 KHASH_MAP_INIT_INT(k32, uint32_t);
+KHASH_SET_INIT_INT(k32_set);
+
+struct BarcodeWithQual {
+  uint32_t corrected_base_index;
+  char correct_base;
+  char qual;
+  bool operator>(const BarcodeWithQual& b) const {
+    return std::tie(qual, corrected_base_index, correct_base) > std::tie(b.qual, b.corrected_base_index, b.correct_base);
+  }
+};
 
 enum Direction {
   kPositive,
@@ -52,14 +62,19 @@ class Chromap {
   // For index construction
   Chromap(int kmer_size, int window_size, int num_threads, const std::string &reference_file_path, const std::string &index_file_path) : kmer_size_(kmer_size), window_size_(window_size), num_threads_(num_threads), reference_file_path_(reference_file_path), index_file_path_(index_file_path) {
     barcode_lookup_table_ = NULL;
+    barcode_whitelist_lookup_table_ = NULL;
   }
 
   // For mapping
-  Chromap(int error_threshold, int match_score, int mismatch_penalty, const std::vector<int> &gap_open_penalties, const std::vector<int> &gap_extension_penalties, int min_num_seeds_required_for_mapping, const std::vector<int> &max_seed_frequencies, int max_num_best_mappings, int max_insert_size, uint8_t mapq_threshold, int num_threads, int min_read_length, int multi_mapping_allocation_distance, int multi_mapping_allocation_seed, int drop_repetitive_reads, bool trim_adapters, bool remove_pcr_duplicates, bool is_bulk_data, bool allocate_multi_mappings, bool only_output_unique_mappings, bool Tn5_shift, bool output_mapping_in_BED, bool output_mapping_in_TagAlign, bool output_mapping_in_PAF, const std::string &reference_file_path, const std::string &index_file_path, const std::string &read_file1_path, const std::string &read_file2_path, const std::string &barcode_file_path, const std::string &mapping_output_file_path) : error_threshold_(error_threshold), match_score_(match_score), mismatch_penalty_(mismatch_penalty), gap_open_penalties_(gap_open_penalties), gap_extension_penalties_(gap_extension_penalties), min_num_seeds_required_for_mapping_(min_num_seeds_required_for_mapping), max_seed_frequencies_(max_seed_frequencies), max_num_best_mappings_(max_num_best_mappings), max_insert_size_(max_insert_size), mapq_threshold_(mapq_threshold), num_threads_(num_threads), min_read_length_(min_read_length), multi_mapping_allocation_distance_(multi_mapping_allocation_distance), multi_mapping_allocation_seed_(multi_mapping_allocation_seed), drop_repetitive_reads_(drop_repetitive_reads), trim_adapters_(trim_adapters), remove_pcr_duplicates_(remove_pcr_duplicates), is_bulk_data_(is_bulk_data), allocate_multi_mappings_(allocate_multi_mappings), only_output_unique_mappings_(only_output_unique_mappings), Tn5_shift_(Tn5_shift), output_mapping_in_BED_(output_mapping_in_BED), output_mapping_in_TagAlign_(output_mapping_in_TagAlign), output_mapping_in_PAF_(output_mapping_in_PAF), reference_file_path_(reference_file_path), index_file_path_(index_file_path), read_file1_path_(read_file1_path), read_file2_path_(read_file2_path), barcode_file_path_(barcode_file_path), mapping_output_file_path_(mapping_output_file_path) {
+  Chromap(int error_threshold, int match_score, int mismatch_penalty, const std::vector<int> &gap_open_penalties, const std::vector<int> &gap_extension_penalties, int min_num_seeds_required_for_mapping, const std::vector<int> &max_seed_frequencies, int max_num_best_mappings, int max_insert_size, uint8_t mapq_threshold, int num_threads, int min_read_length, int multi_mapping_allocation_distance, int multi_mapping_allocation_seed, int drop_repetitive_reads, bool trim_adapters, bool remove_pcr_duplicates, bool is_bulk_data, bool allocate_multi_mappings, bool only_output_unique_mappings, bool Tn5_shift, bool output_mapping_in_BED, bool output_mapping_in_TagAlign, bool output_mapping_in_PAF, const std::string &reference_file_path, const std::string &index_file_path, const std::string &read_file1_path, const std::string &read_file2_path, const std::string &barcode_file_path, const std::string &barcode_whitelist_file_path, const std::string &mapping_output_file_path) : error_threshold_(error_threshold), match_score_(match_score), mismatch_penalty_(mismatch_penalty), gap_open_penalties_(gap_open_penalties), gap_extension_penalties_(gap_extension_penalties), min_num_seeds_required_for_mapping_(min_num_seeds_required_for_mapping), max_seed_frequencies_(max_seed_frequencies), max_num_best_mappings_(max_num_best_mappings), max_insert_size_(max_insert_size), mapq_threshold_(mapq_threshold), num_threads_(num_threads), min_read_length_(min_read_length), multi_mapping_allocation_distance_(multi_mapping_allocation_distance), multi_mapping_allocation_seed_(multi_mapping_allocation_seed), drop_repetitive_reads_(drop_repetitive_reads), trim_adapters_(trim_adapters), remove_pcr_duplicates_(remove_pcr_duplicates), is_bulk_data_(is_bulk_data), allocate_multi_mappings_(allocate_multi_mappings), only_output_unique_mappings_(only_output_unique_mappings), Tn5_shift_(Tn5_shift), output_mapping_in_BED_(output_mapping_in_BED), output_mapping_in_TagAlign_(output_mapping_in_TagAlign), output_mapping_in_PAF_(output_mapping_in_PAF), reference_file_path_(reference_file_path), index_file_path_(index_file_path), read_file1_path_(read_file1_path), read_file2_path_(read_file2_path), barcode_file_path_(barcode_file_path), barcode_whitelist_file_path_(barcode_whitelist_file_path), mapping_output_file_path_(mapping_output_file_path) {
     barcode_lookup_table_ = kh_init(k32);
+    barcode_whitelist_lookup_table_ = kh_init(k32_set);
   }
 
   ~Chromap(){
+    if (barcode_whitelist_lookup_table_ != NULL) {
+      kh_destroy(k32_set, barcode_whitelist_lookup_table_);
+    }
     if (barcode_lookup_table_ != NULL) {
       kh_destroy(k32, barcode_lookup_table_);
     }
@@ -112,6 +127,8 @@ class Chromap {
   void SortOutputMappings(uint32_t num_reference_sequences, std::vector<std::vector<MappingRecord> > *mappings);
   void BuildAugmentedTree(uint32_t ref_id);
   uint32_t GetNumOverlappedMappings(uint32_t ref_id, const MappingRecord &mapping);
+  void LoadBarcodeWhitelist();
+  void CorrectBarcodeAt(uint32_t barcode_index, SequenceBatch *barcode_batch);
   void OutputMappingsInVector(uint8_t mapq_threshold, uint32_t num_reference_sequences, const SequenceBatch &reference, const std::vector<std::vector<MappingRecord> > &mappings);
   void OutputMappings(uint32_t num_reference_sequences, const SequenceBatch &reference, const std::vector<std::vector<MappingRecord> > &mappings);
   inline static double GetRealTime() {
@@ -164,8 +181,10 @@ class Chromap {
   std::string read_file1_path_;
   std::string read_file2_path_;
   std::string barcode_file_path_;
+  std::string barcode_whitelist_file_path_;
   std::string mapping_output_file_path_;
   FILE *mapping_output_file_;
+  khash_t(k32_set)* barcode_whitelist_lookup_table_;
   // For identical read dedupe
   int allocated_barcode_lookup_table_size_ = (1 << 10);
   khash_t(k32)* barcode_lookup_table_;

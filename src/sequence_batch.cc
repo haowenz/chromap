@@ -12,7 +12,7 @@ void SequenceBatch::InitializeLoading(const std::string &sequence_file_path) {
   sequence_file_path_ = sequence_file_path;
   sequence_file_ = gzopen(sequence_file_path_.c_str(), "r");
   if (sequence_file_ == NULL) {
-    Chromap<>::ExitWithMessage("Cannot find sequence file!");
+    Chromap<>::ExitWithMessage("Cannot find sequence file" + sequence_file_path);
   }
   sequence_kseq_ = kseq_init(sequence_file_);
 }

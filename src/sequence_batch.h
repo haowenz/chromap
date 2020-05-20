@@ -53,6 +53,9 @@ class SequenceBatch {
   inline uint32_t GetSequenceNameLengthAt(uint32_t sequence_index) const {
     return sequence_batch_[sequence_index]->name.l;
   }
+  inline const char * GetSequenceQualAt(uint32_t sequence_index) const {
+    return sequence_batch_[sequence_index]->qual.s;
+  }
   inline uint32_t GetSequenceIdAt(uint32_t sequence_index) const {
     return sequence_batch_[sequence_index]->id;
   }
@@ -89,6 +92,10 @@ class SequenceBatch {
   uint32_t LoadBatch();
   bool LoadOneSequenceAndSaveAt(uint32_t sequence_index);
   uint32_t LoadAllSequences();
+  inline void CorrectBaseAt(uint32_t sequence_index, uint32_t base_position, char correct_base) {
+    kseq_t *sequence = sequence_batch_[sequence_index];
+    sequence->seq.s[base_position] = correct_base;
+  }
 
   inline static uint8_t CharToUint8(const char c) {
     return char_to_uint8_table_[(uint8_t)c];
@@ -100,6 +107,24 @@ class SequenceBatch {
   inline uint64_t GenerateSeedFromSequenceAt(uint32_t sequence_index, uint32_t start_position, uint32_t seed_length) const {
     const char *sequence = GetSequenceAt(sequence_index);
     uint32_t sequence_length = GetSequenceLengthAt(sequence_index);
+    uint64_t mask = (((uint64_t)1) << (2 * seed_length)) - 1;
+    uint64_t seed = 0;
+    for (uint32_t i = 0; i < seed_length; ++i) {
+      if (start_position + i < sequence_length) {
+        uint8_t current_base = SequenceBatch::CharToUint8(sequence[i + start_position]);
+        if (current_base < 4) { // not an ambiguous base
+          seed = ((seed << 2) | current_base) & mask; // forward k-mer
+        } else {
+          seed = (seed << 2) & mask; // N->A
+        }
+      } else {
+        seed = (seed << 2) & mask; // Pad A
+      }
+    }
+    return seed;
+  }
+
+  inline static uint64_t GenerateSeedFromSequence(const char *sequence, uint32_t sequence_length, uint32_t start_position, uint32_t seed_length) {
     uint64_t mask = (((uint64_t)1) << (2 * seed_length)) - 1;
     uint64_t seed = 0;
     for (uint32_t i = 0; i < seed_length; ++i) {
