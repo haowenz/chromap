@@ -120,12 +120,13 @@ bool Chromap<MappingRecord>::PairedEndReadWithBarcodeIsDuplicate(uint32_t pair_i
 }
 
 template <typename MappingRecord>
-void Chromap<MappingRecord>::CorrectBarcodeAt(uint32_t barcode_index, SequenceBatch *barcode_batch) {
+void Chromap<MappingRecord>::CorrectBarcodeAt(uint32_t barcode_index, SequenceBatch *barcode_batch, uint64_t *num_barcode_in_whitelist, uint64_t *num_corrected_barcode) {
   uint32_t barcode_length = barcode_batch->GetSequenceLengthAt(barcode_index);
   uint32_t barcode_key = barcode_batch->GenerateSeedFromSequenceAt(barcode_index, 0, barcode_length);
   khiter_t barcode_whitelist_lookup_table_iterator = kh_get(k32_set, barcode_whitelist_lookup_table_, barcode_key);
   if (barcode_whitelist_lookup_table_iterator != kh_end(barcode_whitelist_lookup_table_)) {
     // Correct barcode, nothing to do
+    ++(*num_barcode_in_whitelist);
   } else {
     // Need to correct this barcode
     //const char *barcode = barcode_batch->GetSequenceAt(barcode_index);
@@ -158,6 +159,7 @@ void Chromap<MappingRecord>::CorrectBarcodeAt(uint32_t barcode_index, SequenceBa
       // Just correct it
       //std::cerr << "Corrected the barcode from " << barcode << " to ";
       barcode_batch->CorrectBaseAt(barcode_index, corrected_barcodes_with_quals[0].corrected_base_index, corrected_barcodes_with_quals[0].correct_base);
+      ++(*num_corrected_barcode);
       //std::cerr << barcode << "\n";
     } else {
       // Randomly select one of the best corrections
@@ -176,6 +178,7 @@ void Chromap<MappingRecord>::CorrectBarcodeAt(uint32_t barcode_index, SequenceBa
       }
       //std::cerr << "Corrected the barcode from " << barcode << " to ";
       barcode_batch->CorrectBaseAt(barcode_index, corrected_barcodes_with_quals[best_corrected_barcode_index].corrected_base_index, corrected_barcodes_with_quals[best_corrected_barcode_index].correct_base);
+      ++(*num_corrected_barcode);
       //std::cerr << barcode << "\n";
     }
   }
@@ -275,8 +278,10 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
   static uint64_t thread_num_mappings = 0;
   static uint64_t thread_num_mapped_reads = 0; 
   static uint64_t thread_num_uniquely_mapped_reads = 0; 
-#pragma omp threadprivate(thread_num_candidates, thread_num_mappings, thread_num_mapped_reads, thread_num_uniquely_mapped_reads)
-#pragma omp parallel default(none) shared(reference, index, read_batch1, read_batch2, barcode_batch, read_batch1_for_loading, read_batch2_for_loading, barcode_batch_for_loading, std::cerr, num_loaded_pairs_for_loading, num_loaded_pairs, num_reference_sequences, mappings_on_diff_ref_seqs_for_diff_threads, mappings_on_diff_ref_seqs_for_diff_threads_for_saving) num_threads(num_threads_) reduction(+:num_candidates_, num_mappings_, num_mapped_reads_, num_uniquely_mapped_reads_)
+  static uint64_t thread_num_barcode_in_whitelist = 0; 
+  static uint64_t thread_num_corrected_barcode = 0; 
+#pragma omp threadprivate(thread_num_candidates, thread_num_mappings, thread_num_mapped_reads, thread_num_uniquely_mapped_reads, thread_num_barcode_in_whitelist, thread_num_corrected_barcode)
+#pragma omp parallel default(none) shared(reference, index, read_batch1, read_batch2, barcode_batch, read_batch1_for_loading, read_batch2_for_loading, barcode_batch_for_loading, std::cerr, num_loaded_pairs_for_loading, num_loaded_pairs, num_reference_sequences, mappings_on_diff_ref_seqs_for_diff_threads, mappings_on_diff_ref_seqs_for_diff_threads_for_saving) num_threads(num_threads_) reduction(+:num_candidates_, num_mappings_, num_mapped_reads_, num_uniquely_mapped_reads_, num_barcode_in_whitelist_, num_corrected_barcode_)
   {
   std::vector<std::pair<uint64_t, uint64_t> > minimizers1;
   std::vector<std::pair<uint64_t, uint64_t> > minimizers2;
@@ -330,7 +335,7 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
         TrimAdapterForPairedEndRead(pair_index, &read_batch1, &read_batch2);
       }
       if (!barcode_whitelist_file_path_.empty()) {
-        CorrectBarcodeAt(pair_index, &barcode_batch); 
+        CorrectBarcodeAt(pair_index, &barcode_batch, &thread_num_barcode_in_whitelist, &thread_num_corrected_barcode); 
       }
       minimizers1.clear();
       minimizers2.clear();
@@ -408,6 +413,8 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
     std::cerr << "Mapped in " << Chromap<>::GetRealTime() - real_batch_start_time << "s.\n";
   }
   } // end of openmp single
+  num_barcode_in_whitelist_ += thread_num_barcode_in_whitelist;
+  num_corrected_barcode_ += thread_num_corrected_barcode;
   num_candidates_ += thread_num_candidates;
   num_mappings_ += thread_num_mappings;
   num_mapped_reads_ += thread_num_mapped_reads;
@@ -421,6 +428,9 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
   std::cerr << "Mapped all reads in " << Chromap<>::GetRealTime() - real_start_mapping_time << "s.\n";
   OutputMappingStatistics();
   OutputMappingStatistics(num_reference_sequences, mappings_on_diff_ref_seqs_, mappings_on_diff_ref_seqs_);
+  if (!is_bulk_data_) {
+    OutputBarcodeStatistics();
+  }
   if (Tn5_shift_) {
     ApplyTn5ShiftOnPairedEndMapping(num_reference_sequences, &mappings_on_diff_ref_seqs_);
   }
@@ -1475,6 +1485,12 @@ void Chromap<MappingRecord>::BandedTraceback(int min_num_errors, const char *pat
       *mapping_start_position = 2 * error_threshold_ - (1 + i);
     }
   }
+}
+
+template <typename MappingRecord>
+void Chromap<MappingRecord>::OutputBarcodeStatistics() {
+  std::cerr << "Number of barcodes in whitelist: " << num_barcode_in_whitelist_ << ".\n";
+  std::cerr << "Number of corrected barcodes: " << num_corrected_barcode_ << ".\n";
 }
 
 template <typename MappingRecord>
