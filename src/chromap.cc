@@ -1896,7 +1896,6 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
     std::string matrix_output_prefix;
     if (result.count("p")) {
       matrix_output_prefix = result["matrix-output-prefix"].as<std::string>();
-    } else {
       if (is_bulk_data) {
         chromap::Chromap<>::ExitWithMessage("No barcode file specified but asked to output matrix files!");
       }
