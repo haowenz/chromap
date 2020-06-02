@@ -1500,7 +1500,7 @@ int Chromap<MappingRecord>::BandedAlignPatternToText(const char *pattern, const 
   for (int i = 0; i < 2 * error_threshold_; i++) {
     num_errors_at_band_start_position = num_errors_at_band_start_position + ((VP >> i) & (uint32_t) 1);
     num_errors_at_band_start_position = num_errors_at_band_start_position - ((VN >> i) & (uint32_t) 1);
-    if (num_errors_at_band_start_position < min_num_errors) {
+    if (num_errors_at_band_start_position < min_num_errors || (num_errors_at_band_start_position == min_num_errors && i + 1 == error_threshold_)) {
       min_num_errors = num_errors_at_band_start_position;
       *mapping_end_position = band_start_position + 1 + i;
     }
