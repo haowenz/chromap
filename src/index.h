@@ -26,6 +26,9 @@ class Index {
   khash_t(k64) const * GetLookupTable() const {
     return lookup_table_;
   }
+  int GetKmerSize() const {
+    return kmer_size_;
+  }
   int GetWindowSize() const {
     return window_size_;
   }

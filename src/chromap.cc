@@ -301,6 +301,7 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
   uint32_t num_reference_sequences = reference.LoadAllSequences();
   Index index(min_num_seeds_required_for_mapping_, max_seed_frequencies_, index_file_path_);
   index.Load();
+  kmer_size_ = index.GetKmerSize();
   window_size_ = index.GetWindowSize();
   //index.Statistics(num_sequences, reference);
   SequenceBatch read_batch1(read_batch_size_);
@@ -860,6 +861,8 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
   uint32_t num_reference_sequences = reference.LoadAllSequences();
   Index index(min_num_seeds_required_for_mapping_, max_seed_frequencies_, index_file_path_);
   index.Load();
+  kmer_size_ = index.GetKmerSize();
+  window_size_ = index.GetWindowSize();
   //index.Statistics(num_sequences, reference);
   SequenceBatch read_batch(read_batch_size_);
   SequenceBatch read_batch_for_loading(read_batch_size_);
@@ -1643,6 +1646,7 @@ void Chromap<MappingRecord>::LoadBarcodeWhitelist() {
 
 template <typename MappingRecord>
 uint8_t Chromap<MappingRecord>::GetMAPQ(int num_positive_candidates, int num_negative_candidates, uint16_t alignment_length, int min_num_errors, int num_best_mappings, int second_min_num_errors, int num_second_best_mappings) {
+  int mapq_coef = 60;
   //int mapq_coef_length = 50;
   //double mapq_coef_fraction = log(mapq_coef_length);
   double alignment_identity = 1 - (double)min_num_errors / alignment_length;
@@ -1662,7 +1666,7 @@ uint8_t Chromap<MappingRecord>::GetMAPQ(int num_positive_candidates, int num_neg
     if (second_min_num_errors > error_threshold_) {
         second_min_num_errors = 2 * error_threshold_ + 1;
     }
-    mapq = (int)(60 * (1. - (double)min_num_errors / second_min_num_errors) + .499);
+    mapq = (int)(mapq_coef * (1. - (double)min_num_errors / second_min_num_errors) + .499);
     double tmp = alignment_identity * alignment_identity;
     tmp = tmp * tmp;
     tmp = tmp * tmp;
@@ -1692,26 +1696,26 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
   options.add_options("Indexing")
     ("i,build-index", "Build index")
     ("k,kmer", "Kmer length [17]", cxxopts::value<int>(), "INT")
-    ("w,window", "Window size [5]", cxxopts::value<int>(), "INT");
+    ("w,window", "Window size [9]", cxxopts::value<int>(), "INT");
   options.add_options("Mapping")
     ("m,map", "Map reads")
-    ("e,error-threshold", "Max # errors allowed to map a read [3]", cxxopts::value<int>(), "INT")
-    ("A,match-score", "Match score [1]", cxxopts::value<int>(), "INT")
-    ("B,mismatch-penalty", "Mismatch penalty [4]", cxxopts::value<int>(), "INT")
-    ("O,gap-open-penalties", "Gap open penalty [6,6]", cxxopts::value<std::vector<int>>(), "INT[,INT]")
-    ("E,gap-extension-penalties", "Gap extension penalty [1,1]", cxxopts::value<std::vector<int>>(), "INT[,INT]")
+    ("e,error-threshold", "Max # errors allowed to map a read [4]", cxxopts::value<int>(), "INT")
+    //("A,match-score", "Match score [1]", cxxopts::value<int>(), "INT")
+    //("B,mismatch-penalty", "Mismatch penalty [4]", cxxopts::value<int>(), "INT")
+    //("O,gap-open-penalties", "Gap open penalty [6,6]", cxxopts::value<std::vector<int>>(), "INT[,INT]")
+    //("E,gap-extension-penalties", "Gap extension penalty [1,1]", cxxopts::value<std::vector<int>>(), "INT[,INT]")
     ("s,min-num-seeds", "Min # seeds to try to map a read [2]", cxxopts::value<int>(), "INT")
     ("f,max-seed-frequencies", "Max seed frequencies for a seed to be selected [1000,5000]", cxxopts::value<std::vector<int>>(), "INT[,INT]")
-    ("n,max-num-best-mappings", "Only report n best mappings [10]", cxxopts::value<int>(), "INT")
-    ("l,max-insert-size", "Max insert size, only for paired-end read mapping [400]", cxxopts::value<int>(), "INT")
+    //("n,max-num-best-mappings", "Only report n best mappings [1]", cxxopts::value<int>(), "INT")
+    ("l,max-insert-size", "Max insert size, only for paired-end read mapping [1000]", cxxopts::value<int>(), "INT")
     ("q,MAPQ-threshold", "Min MAPQ in range [0, 60] for mappings to be output [30]", cxxopts::value<uint8_t>(), "INT")
     ("min-read-length", "Min read length [30]", cxxopts::value<int>(), "INT")
-    ("multi-mapping-allocation-distance", "Uni-mappings within this distance from any end of multi-mappings are used for allocation [0]", cxxopts::value<int>(), "INT")
-    ("multi-mapping-allocation-seed", "Seed for random number generator in multi-mapping allocation [11]", cxxopts::value<int>(), "INT")
-    ("drop-repetitive-reads", "Drop reads with too many best mappings [500000]", cxxopts::value<int>(), "INT")
+    //("multi-mapping-allocation-distance", "Uni-mappings within this distance from any end of multi-mappings are used for allocation [0]", cxxopts::value<int>(), "INT")
+    //("multi-mapping-allocation-seed", "Seed for random number generator in multi-mapping allocation [11]", cxxopts::value<int>(), "INT")
+    //("drop-repetitive-reads", "Drop reads with too many best mappings [500000]", cxxopts::value<int>(), "INT")
     ("trim-adapters", "Try to trim adapters on 3'")
     ("remove-pcr-duplicates", "Remove PCR duplicates")
-    ("allocate-multi-mappings", "Allocate multi-mappings")
+    //("allocate-multi-mappings", "Allocate multi-mappings")
     ("Tn5-shift", "Perform Tn5 shift")
     ("t,num-threads", "# threads for mapping [1]", cxxopts::value<int>(), "INT");
   options.add_options("Input")
@@ -1725,22 +1729,33 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
     ("o,output", "Output file", cxxopts::value<std::string>(), "FILE")
     ("p,matrix-output-prefix", "Prefix of matrix output files", cxxopts::value<std::string>(), "FILE")
     ("BED", "Output mappings in BED/BEDPE format")
-    ("TagAlign", "Output mappings in TagAlign/PairedTagAlign format")
-    ("PAF", "Output mappings in PAF format");
+    ("TagAlign", "Output mappings in TagAlign/PairedTagAlign format");
+    //("PAF", "Output mappings in PAF format (only for test)");
   options.add_options()
     ("h,help", "Print help");
-
+  options.add_options("Development options")
+    ("A,match-score", "Match score [1]", cxxopts::value<int>(), "INT")
+    ("B,mismatch-penalty", "Mismatch penalty [4]", cxxopts::value<int>(), "INT")
+    ("O,gap-open-penalties", "Gap open penalty [6,6]", cxxopts::value<std::vector<int>>(), "INT[,INT]")
+    ("E,gap-extension-penalties", "Gap extension penalty [1,1]", cxxopts::value<std::vector<int>>(), "INT[,INT]")
+    ("n,max-num-best-mappings", "Only report n best mappings [1]", cxxopts::value<int>(), "INT")
+    ("multi-mapping-allocation-distance", "Uni-mappings within this distance from any end of multi-mappings are used for allocation [0]", cxxopts::value<int>(), "INT")
+    ("multi-mapping-allocation-seed", "Seed for random number generator in multi-mapping allocation [11]", cxxopts::value<int>(), "INT")
+    ("drop-repetitive-reads", "Drop reads with too many best mappings [500000]", cxxopts::value<int>(), "INT")
+    ("allocate-multi-mappings", "Allocate multi-mappings")
+    ("PAF", "Output mappings in PAF format (only for test)");
+    
   auto result = options.parse(argc, argv);
   // Optional parameters
   int kmer_size = 17;
   if (result.count("k")) {
     kmer_size = result["kmer"].as<int>();
   }
-  int window_size = 5;
+  int window_size = 9;
   if (result.count("w")) {
     window_size = result["window"].as<int>();
   }
-  int error_threshold = 3;
+  int error_threshold = 4;
   if (result.count("e")) {
     error_threshold = result["error-threshold"].as<int>();
   }
@@ -1768,11 +1783,11 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
   if (result.count("f")) {
     max_seed_frequencies = result["max-seed-frequencies"].as<std::vector<int>>();
   } 
-  int max_num_best_mappings = 10; 
+  int max_num_best_mappings = 1; 
   if (result.count("n")) {
     max_num_best_mappings = result["max-num-best-mappings"].as<int>();
   } 
-  int max_insert_size = 400;
+  int max_insert_size = 1000;
   if (result.count("l")) {
     max_insert_size = result["max-insert-size"].as<int>();
   } 
