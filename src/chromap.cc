@@ -1819,6 +1819,9 @@ void Chromap<MappingRecord>::BandedTraceback(int min_num_errors, const char *pat
     num_errors_at_band_start_position = num_errors_at_band_start_position - ((VN >> i) & (uint32_t) 1);
     if (num_errors_at_band_start_position == min_num_errors) {
       *mapping_start_position = 2 * error_threshold_ - (1 + i);
+      if (i + 1 == error_threshold_) {
+        return;
+      }
     }
   }
 }
