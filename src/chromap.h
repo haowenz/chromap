@@ -126,7 +126,9 @@ class Chromap {
   // Supportive functions
   void ConstructIndex();
   int BandedAlignPatternToText(const char *pattern, const char *text, const int read_length, int *mapping_end_location);
+  void SIMDBandedAlignPatternToText(const char **patterns, const char *text, int read_length, int16_t *mapping_edit_distances, int16_t *mapping_end_positions);
   void BandedTraceback(int min_num_errors, const char *pattern, const char *text, const int read_length, int *mapping_start_position);
+  void VerifyCandidatesOnOneDirectionUsingSIMD(Direction candidate_direction, const SequenceBatch &read_batch, uint32_t read_index, const SequenceBatch &reference, const std::vector<uint64_t> &candidates, std::vector<std::pair<int, uint64_t> > *mappings, int *min_num_errors, int *num_best_mappings, int *second_min_num_errors, int *num_second_best_mappings);
   void VerifyCandidatesOnOneDirection(Direction candidate_direction, const SequenceBatch &read_batch, uint32_t read_index, const SequenceBatch &reference, const std::vector<uint64_t> &candidates, std::vector<std::pair<int, uint64_t> > *mappings, int *min_num_errors, int *num_best_mappings, int *second_min_num_errors, int *num_second_best_mappings);
   void VerifyCandidates(const SequenceBatch &read_batch, uint32_t read_index, const SequenceBatch &reference, const std::vector<uint64_t> &positive_candidates, const std::vector<uint64_t> &negative_candidates, std::vector<std::pair<int, uint64_t> > *positive_mappings, std::vector<std::pair<int, uint64_t> > *negative_mappings, int *min_num_errors, int *num_best_mappings, int *second_min_num_errors, int *num_second_best_mappings);
   void AllocateMultiMappings(uint32_t num_reference_sequences);

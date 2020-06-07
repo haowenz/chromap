@@ -514,6 +514,8 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
     RemovePCRDuplicate(num_reference_sequences);
     std::cerr << "After removing PCR duplications, ";
     OutputMappingStatistics(num_reference_sequences, deduped_mappings_on_diff_ref_seqs_, deduped_mappings_on_diff_ref_seqs_);
+  } else {
+    SortOutputMappings(num_reference_sequences, &mappings_on_diff_ref_seqs_);
   }
   if (allocate_multi_mappings_) {
     AllocateMultiMappings(num_reference_sequences);
@@ -1004,6 +1006,8 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
     RemovePCRDuplicate(num_reference_sequences);
     std::cerr << "After removing PCR duplications, ";
     OutputMappingStatistics(num_reference_sequences, deduped_mappings_on_diff_ref_seqs_, deduped_mappings_on_diff_ref_seqs_);
+  } else {
+    SortOutputMappings(num_reference_sequences, &mappings_on_diff_ref_seqs_);
   }
   if (allocate_multi_mappings_) {
     AllocateMultiMappings(num_reference_sequences);
@@ -1412,6 +1416,104 @@ void Chromap<MappingRecord>::AllocateMultiMappings(uint32_t num_reference_sequen
 }
 
 template <typename MappingRecord>
+void Chromap<MappingRecord>::VerifyCandidatesOnOneDirectionUsingSIMD(Direction candidate_direction, const SequenceBatch &read_batch, uint32_t read_index, const SequenceBatch &reference, const std::vector<uint64_t> &candidates, std::vector<std::pair<int, uint64_t> > *mappings, int *min_num_errors, int *num_best_mappings, int *second_min_num_errors, int *num_second_best_mappings) {
+  const char *read = read_batch.GetSequenceAt(read_index);
+  uint32_t read_length = read_batch.GetSequenceLengthAt(read_index);
+  const std::string &negative_read = read_batch.GetNegativeSequenceAt(read_index); 
+
+  int NUM_VPU_LANES = 8;
+  size_t num_candidates = candidates.size();
+  uint64_t valid_candidates[NUM_VPU_LANES];
+  const char *valid_candidate_starts[NUM_VPU_LANES];
+  uint32_t valid_candidate_index = 0;
+  size_t candidate_index = 0;
+  int16_t mapping_edit_distances[NUM_VPU_LANES];
+  int16_t mapping_end_positions[NUM_VPU_LANES]; 
+  while (candidate_index < num_candidates) {
+    uint32_t rid = candidates[candidate_index] >> 32;
+    uint32_t position = candidates[candidate_index];
+    if (candidate_direction == kNegative) {
+      position = position - read_length + 1;
+    }
+    if (position < (uint32_t)error_threshold_ || position >= reference.GetSequenceLengthAt(rid) || position + read_length + error_threshold_ >= reference.GetSequenceLengthAt(rid)) {
+      // not a valid candidate
+      ++candidate_index;
+      continue;
+    } else {
+      valid_candidates[valid_candidate_index] = candidates[candidate_index];//reference.GetSequenceAt(rid) + position - error_threshold_;
+      valid_candidate_starts[valid_candidate_index] = reference.GetSequenceAt(rid) + position - error_threshold_;
+      ++valid_candidate_index;
+    }
+    if (valid_candidate_index == (uint32_t)NUM_VPU_LANES) {
+      for (int li = 0; li < NUM_VPU_LANES; ++li) {
+        mapping_end_positions[li] = read_length - 1;
+      }
+      if (candidate_direction == kPositive) {
+        SIMDBandedAlignPatternToText(valid_candidate_starts, read, read_length, mapping_edit_distances, mapping_end_positions);
+      } else {
+        SIMDBandedAlignPatternToText(valid_candidate_starts, negative_read.data(), read_length, mapping_edit_distances, mapping_end_positions);
+      }
+      for (int mi = 0; mi < NUM_VPU_LANES; ++mi) {
+        if (mapping_edit_distances[mi] <= error_threshold_) {
+        if (mapping_edit_distances[mi] < *min_num_errors) {
+          *second_min_num_errors = *min_num_errors;
+          *num_second_best_mappings = *num_best_mappings;
+          *min_num_errors = mapping_edit_distances[mi];
+          *num_best_mappings = 1;
+        } else if (mapping_edit_distances[mi] == *min_num_errors) {
+          (*num_best_mappings)++;
+        } else if (mapping_edit_distances[mi] == *second_min_num_errors) {
+          (*num_second_best_mappings)++;
+        }
+        if (candidate_direction == kPositive) {
+          mappings->emplace_back((uint8_t)mapping_edit_distances[mi], valid_candidates[mi] - error_threshold_ + mapping_end_positions[mi]);
+        } else {
+          mappings->emplace_back((uint8_t)mapping_edit_distances[mi], valid_candidates[mi] - read_length + 1 - error_threshold_ + mapping_end_positions[mi]); 
+        }
+        }
+      }
+      valid_candidate_index = 0;
+    }
+    ++candidate_index;
+  }
+
+  for (uint32_t ci = 0; ci < valid_candidate_index; ++ci) {
+    uint32_t rid = valid_candidates[ci] >> 32;
+    uint32_t position = valid_candidates[ci];
+    if (candidate_direction == kNegative) {
+      position = position - read_length + 1;
+    }
+    if (position < (uint32_t)error_threshold_ || position >= reference.GetSequenceLengthAt(rid) || position + read_length + error_threshold_ >= reference.GetSequenceLengthAt(rid)) {
+      continue;
+    }
+    int mapping_end_position;
+    int num_errors;
+    if (candidate_direction == kPositive) {
+      num_errors = BandedAlignPatternToText(reference.GetSequenceAt(rid) + position - error_threshold_, read, read_length, &mapping_end_position);
+    } else {
+      num_errors = BandedAlignPatternToText(reference.GetSequenceAt(rid) + position - error_threshold_, negative_read.data(), read_length, &mapping_end_position);
+    }
+    if (num_errors <= error_threshold_) {
+      if (num_errors < *min_num_errors) {
+        *second_min_num_errors = *min_num_errors;
+        *num_second_best_mappings = *num_best_mappings;
+        *min_num_errors = num_errors;
+        *num_best_mappings = 1;
+      } else if (num_errors == *min_num_errors) {
+        (*num_best_mappings)++;
+      } else if (num_errors == *second_min_num_errors) {
+        (*num_second_best_mappings)++;
+      }
+      if (candidate_direction == kPositive) {
+        mappings->emplace_back(num_errors, valid_candidates[ci] - error_threshold_ + mapping_end_position);
+      } else {
+        mappings->emplace_back(num_errors, valid_candidates[ci] - read_length + 1 - error_threshold_ + mapping_end_position); 
+      }
+    }
+  }
+}
+
+template <typename MappingRecord>
 void Chromap<MappingRecord>::VerifyCandidatesOnOneDirection(Direction candidate_direction, const SequenceBatch &read_batch, uint32_t read_index, const SequenceBatch &reference, const std::vector<uint64_t> &candidates, std::vector<std::pair<int, uint64_t> > *mappings, int *min_num_errors, int *num_best_mappings, int *second_min_num_errors, int *num_second_best_mappings) {
   const char *read = read_batch.GetSequenceAt(read_index);
   uint32_t read_length = read_batch.GetSequenceLengthAt(read_index);
@@ -1459,8 +1561,17 @@ void Chromap<MappingRecord>::VerifyCandidates(const SequenceBatch &read_batch, u
   *num_best_mappings = 0;
   *second_min_num_errors = error_threshold_ + 1;
   *num_second_best_mappings = 0;
-  VerifyCandidatesOnOneDirection(kPositive, read_batch, read_index, reference, positive_candidates, positive_mappings, min_num_errors, num_best_mappings, second_min_num_errors, num_second_best_mappings);
-  VerifyCandidatesOnOneDirection(kNegative, read_batch, read_index, reference, negative_candidates, negative_mappings, min_num_errors, num_best_mappings, second_min_num_errors, num_second_best_mappings);
+  int NUM_VPU_LANES = 8;
+  if (positive_candidates.size() < (size_t)NUM_VPU_LANES) {
+    VerifyCandidatesOnOneDirection(kPositive, read_batch, read_index, reference, positive_candidates, positive_mappings, min_num_errors, num_best_mappings, second_min_num_errors, num_second_best_mappings);
+  } else {
+    VerifyCandidatesOnOneDirectionUsingSIMD(kPositive, read_batch, read_index, reference, positive_candidates, positive_mappings, min_num_errors, num_best_mappings, second_min_num_errors, num_second_best_mappings);
+  }
+  if (negative_candidates.size() < (size_t)NUM_VPU_LANES) {
+    VerifyCandidatesOnOneDirection(kNegative, read_batch, read_index, reference, negative_candidates, negative_mappings, min_num_errors, num_best_mappings, second_min_num_errors, num_second_best_mappings);
+  } else {
+    VerifyCandidatesOnOneDirectionUsingSIMD(kNegative, read_batch, read_index, reference, negative_candidates, negative_mappings, min_num_errors, num_best_mappings, second_min_num_errors, num_second_best_mappings);
+  }
 }
 
 template <typename MappingRecord>
@@ -1509,6 +1620,150 @@ int Chromap<MappingRecord>::BandedAlignPatternToText(const char *pattern, const 
     }
   }
   return min_num_errors;
+}
+
+template <typename MappingRecord>
+void Chromap<MappingRecord>::SIMDBandedAlignPatternToText(const char **patterns, const char *text, int read_length, int16_t *mapping_edit_distances, int16_t *mapping_end_positions) {
+  int NUM_VPU_LANES = 8;
+  int ALPHABET_SIZE = 5;
+  //uint32_t reference_sequence_index0 = valid_candidates[0] >> 32;
+  //uint32_t reference_sequence_index1 = valid_candidates[1] >> 32;
+  //uint32_t reference_sequence_index2 = valid_candidates[2] >> 32;
+  //uint32_t reference_sequence_index3 = valid_candidates[3] >> 32;
+  //uint32_t reference_sequence_index4 = valid_candidates[4] >> 32;
+  //uint32_t reference_sequence_index5 = valid_candidates[5] >> 32;
+  //uint32_t reference_sequence_index6 = valid_candidates[6] >> 32;
+  //uint32_t reference_sequence_index7 = valid_candidates[7] >> 32;
+  //const char *reference_sequence0 = reference_sequence_batch.GetSequenceAt(reference_sequence_index0) + (uint32_t)valid_candidates[0];
+  //const char *reference_sequence1 = reference_sequence_batch.GetSequenceAt(reference_sequence_index1) + (uint32_t)valid_candidates[1];
+  //const char *reference_sequence2 = reference_sequence_batch.GetSequenceAt(reference_sequence_index2) + (uint32_t)valid_candidates[2];
+  //const char *reference_sequence3 = reference_sequence_batch.GetSequenceAt(reference_sequence_index3) + (uint32_t)valid_candidates[3];
+  //const char *reference_sequence4 = reference_sequence_batch.GetSequenceAt(reference_sequence_index4) + (uint32_t)valid_candidates[4];
+  //const char *reference_sequence5 = reference_sequence_batch.GetSequenceAt(reference_sequence_index5) + (uint32_t)valid_candidates[5];
+  //const char *reference_sequence6 = reference_sequence_batch.GetSequenceAt(reference_sequence_index6) + (uint32_t)valid_candidates[6];
+  //const char *reference_sequence7 = reference_sequence_batch.GetSequenceAt(reference_sequence_index7) + (uint32_t)valid_candidates[7];
+  const char *reference_sequence0 = patterns[0];
+  const char *reference_sequence1 = patterns[1];
+  const char *reference_sequence2 = patterns[2];
+  const char *reference_sequence3 = patterns[3];
+  const char *reference_sequence4 = patterns[4];
+  const char *reference_sequence5 = patterns[5];
+  const char *reference_sequence6 = patterns[6];
+  const char *reference_sequence7 = patterns[7];
+  uint16_t highest_bit_in_band_mask = 1 << (2 * error_threshold_);
+  __m128i highest_bit_in_band_mask_vpu0 = _mm_set_epi16(0, 0, 0, 0, 0, 0, 0, highest_bit_in_band_mask);
+  __m128i highest_bit_in_band_mask_vpu1 = _mm_set_epi16(0, 0, 0, 0, 0, 0, highest_bit_in_band_mask, 0);
+  __m128i highest_bit_in_band_mask_vpu2 = _mm_set_epi16(0, 0, 0, 0, 0, highest_bit_in_band_mask, 0, 0);
+  __m128i highest_bit_in_band_mask_vpu3 = _mm_set_epi16(0, 0, 0, 0, highest_bit_in_band_mask, 0, 0, 0);
+  __m128i highest_bit_in_band_mask_vpu4 = _mm_set_epi16(0, 0, 0, highest_bit_in_band_mask, 0, 0, 0, 0);
+  __m128i highest_bit_in_band_mask_vpu5 = _mm_set_epi16(0, 0, highest_bit_in_band_mask, 0, 0, 0, 0, 0);
+  __m128i highest_bit_in_band_mask_vpu6 = _mm_set_epi16(0, highest_bit_in_band_mask, 0, 0, 0, 0, 0, 0);
+  __m128i highest_bit_in_band_mask_vpu7 = _mm_set_epi16(highest_bit_in_band_mask, 0, 0, 0, 0, 0, 0, 0);
+  // Init Peq
+  __m128i Peq[ALPHABET_SIZE];
+  for (int ai = 0; ai < ALPHABET_SIZE; ai++) {
+    Peq[ai] = _mm_setzero_si128();
+  }
+  for (int i = 0; i < 2 * error_threshold_; i++) {
+    uint8_t base0 = SequenceBatch::CharToUint8(reference_sequence0[i]);
+    uint8_t base1 = SequenceBatch::CharToUint8(reference_sequence1[i]);
+    uint8_t base2 = SequenceBatch::CharToUint8(reference_sequence2[i]);
+    uint8_t base3 = SequenceBatch::CharToUint8(reference_sequence3[i]);
+    uint8_t base4 = SequenceBatch::CharToUint8(reference_sequence4[i]);
+    uint8_t base5 = SequenceBatch::CharToUint8(reference_sequence5[i]);
+    uint8_t base6 = SequenceBatch::CharToUint8(reference_sequence6[i]);
+    uint8_t base7 = SequenceBatch::CharToUint8(reference_sequence7[i]);
+    Peq[base0] = _mm_or_si128(highest_bit_in_band_mask_vpu0, Peq[base0]);
+    Peq[base1] = _mm_or_si128(highest_bit_in_band_mask_vpu1, Peq[base1]);
+    Peq[base2] = _mm_or_si128(highest_bit_in_band_mask_vpu2, Peq[base2]);
+    Peq[base3] = _mm_or_si128(highest_bit_in_band_mask_vpu3, Peq[base3]);
+    Peq[base4] = _mm_or_si128(highest_bit_in_band_mask_vpu4, Peq[base4]);
+    Peq[base5] = _mm_or_si128(highest_bit_in_band_mask_vpu5, Peq[base5]);
+    Peq[base6] = _mm_or_si128(highest_bit_in_band_mask_vpu6, Peq[base6]);
+    Peq[base7] = _mm_or_si128(highest_bit_in_band_mask_vpu7, Peq[base7]);
+    for (int ai = 0; ai < ALPHABET_SIZE; ai++) {
+      Peq[ai] = _mm_srli_epi16(Peq[ai], 1);
+    }
+  }
+
+  uint16_t lowest_bit_in_band_mask = 1;
+  __m128i lowest_bit_in_band_mask_vpu = _mm_set1_epi16(lowest_bit_in_band_mask);
+  __m128i VP = _mm_setzero_si128();
+  __m128i VN =  _mm_setzero_si128();
+  __m128i X = _mm_setzero_si128();
+  __m128i D0 = _mm_setzero_si128();
+  __m128i HN = _mm_setzero_si128();
+  __m128i HP = _mm_setzero_si128();
+  __m128i max_mask_vpu = _mm_set1_epi16(0xffff);
+  __m128i num_errors_at_band_start_position_vpu = _mm_setzero_si128();
+  __m128i early_stop_threshold_vpu = _mm_set1_epi16(error_threshold_ * 3);
+  for (int i = 0; i < read_length; i++) {
+    uint8_t base0 = SequenceBatch::CharToUint8(reference_sequence0[i + 2 * error_threshold_]);
+    uint8_t base1 = SequenceBatch::CharToUint8(reference_sequence1[i + 2 * error_threshold_]);
+    uint8_t base2 = SequenceBatch::CharToUint8(reference_sequence2[i + 2 * error_threshold_]);
+    uint8_t base3 = SequenceBatch::CharToUint8(reference_sequence3[i + 2 * error_threshold_]);
+    uint8_t base4 = SequenceBatch::CharToUint8(reference_sequence4[i + 2 * error_threshold_]);
+    uint8_t base5 = SequenceBatch::CharToUint8(reference_sequence5[i + 2 * error_threshold_]);
+    uint8_t base6 = SequenceBatch::CharToUint8(reference_sequence6[i + 2 * error_threshold_]);
+    uint8_t base7 = SequenceBatch::CharToUint8(reference_sequence7[i + 2 * error_threshold_]);
+    Peq[base0] = _mm_or_si128(highest_bit_in_band_mask_vpu0, Peq[base0]);
+    Peq[base1] = _mm_or_si128(highest_bit_in_band_mask_vpu1, Peq[base1]);
+    Peq[base2] = _mm_or_si128(highest_bit_in_band_mask_vpu2, Peq[base2]);
+    Peq[base3] = _mm_or_si128(highest_bit_in_band_mask_vpu3, Peq[base3]);
+    Peq[base4] = _mm_or_si128(highest_bit_in_band_mask_vpu4, Peq[base4]);
+    Peq[base5] = _mm_or_si128(highest_bit_in_band_mask_vpu5, Peq[base5]);
+    Peq[base6] = _mm_or_si128(highest_bit_in_band_mask_vpu6, Peq[base6]);
+    Peq[base7] = _mm_or_si128(highest_bit_in_band_mask_vpu7, Peq[base7]);
+    X = _mm_or_si128(Peq[SequenceBatch::CharToUint8(text[i])], VN);
+    D0 = _mm_and_si128(X, VP);
+    D0 = _mm_add_epi16(D0, VP);
+    D0 = _mm_xor_si128(D0, VP);
+    D0 = _mm_or_si128(D0, X);
+    HN = _mm_and_si128(VP, D0);
+    HP = _mm_or_si128(VP, D0);
+    HP = _mm_xor_si128(HP, max_mask_vpu);
+    HP = _mm_or_si128(HP, VN);
+    X = _mm_srli_epi16(D0, 1);
+    VN = _mm_and_si128(X, HP);
+    VP = _mm_or_si128(X, HP);
+    VP = _mm_xor_si128(VP, max_mask_vpu);
+    VP = _mm_or_si128(VP, HN);
+    __m128i E = _mm_and_si128(D0, lowest_bit_in_band_mask_vpu);
+    E = _mm_xor_si128(E, lowest_bit_in_band_mask_vpu);
+    num_errors_at_band_start_position_vpu = _mm_add_epi16(num_errors_at_band_start_position_vpu, E);
+    __m128i early_stop = _mm_cmpgt_epi16(num_errors_at_band_start_position_vpu, early_stop_threshold_vpu);
+    int tmp = _mm_movemask_epi8(early_stop);
+    if (tmp == 0xffff) {
+      _mm_store_si128((__m128i *)mapping_edit_distances, num_errors_at_band_start_position_vpu);
+      return;
+    }
+    for (int ai = 0; ai < ALPHABET_SIZE; ai++) {
+      Peq[ai] = _mm_srli_epi16(Peq[ai], 1);
+    }
+  }
+  int band_start_position = read_length - 1;
+  __m128i min_num_errors_vpu = num_errors_at_band_start_position_vpu;
+  for (int i = 0; i < 2 * error_threshold_; i++) {
+    __m128i lowest_bit_in_VP_vpu = _mm_and_si128(VP, lowest_bit_in_band_mask_vpu);
+    __m128i lowest_bit_in_VN_vpu = _mm_and_si128(VN, lowest_bit_in_band_mask_vpu);
+    num_errors_at_band_start_position_vpu = _mm_add_epi16(num_errors_at_band_start_position_vpu, lowest_bit_in_VP_vpu);
+    num_errors_at_band_start_position_vpu = _mm_sub_epi16(num_errors_at_band_start_position_vpu, lowest_bit_in_VN_vpu);
+    __m128i mapping_end_positions_update_mask_vpu = _mm_cmplt_epi16(num_errors_at_band_start_position_vpu, min_num_errors_vpu);
+    __m128i mapping_end_positions_update_mask_vpu1 = _mm_cmpeq_epi16(num_errors_at_band_start_position_vpu, min_num_errors_vpu);
+    int mapping_end_positions_update_mask = _mm_movemask_epi8(mapping_end_positions_update_mask_vpu);
+    int mapping_end_positions_update_mask1 = _mm_movemask_epi8(mapping_end_positions_update_mask_vpu1);
+    for (int li = 0; li < NUM_VPU_LANES; ++li) {
+      if ((mapping_end_positions_update_mask & 1) == 1 || ((mapping_end_positions_update_mask1 & 1) == 1 && i + 1 == error_threshold_)) {
+        mapping_end_positions[li] = band_start_position + 1 + i;
+      }
+      mapping_end_positions_update_mask = mapping_end_positions_update_mask >> 2;
+      mapping_end_positions_update_mask1 = mapping_end_positions_update_mask1 >> 2;
+    }
+    min_num_errors_vpu = _mm_min_epi16(min_num_errors_vpu, num_errors_at_band_start_position_vpu);
+    VP = _mm_srli_epi16(VP, 1);
+    VN = _mm_srli_epi16(VN, 1);
+  }
+  _mm_store_si128((__m128i *)mapping_edit_distances, min_num_errors_vpu);
 }
 
 template <typename MappingRecord>
