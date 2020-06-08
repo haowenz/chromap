@@ -74,6 +74,12 @@ class Chromap {
     barcode_whitelist_lookup_table_ = kh_init(k32_set);
     barcode_histogram_ = kh_init(k32);
     barcode_index_table_ = kh_init(k32);
+    NUM_VPU_LANES_ = 0;
+    if (error_threshold_ < 8) {
+      NUM_VPU_LANES_ = 8;
+    } else if (error_threshold_ < 16) {
+      NUM_VPU_LANES_ = 4;
+    }
   }
 
   ~Chromap(){
@@ -126,7 +132,8 @@ class Chromap {
   // Supportive functions
   void ConstructIndex();
   int BandedAlignPatternToText(const char *pattern, const char *text, const int read_length, int *mapping_end_location);
-  void SIMDBandedAlignPatternToText(const char **patterns, const char *text, int read_length, int16_t *mapping_edit_distances, int16_t *mapping_end_positions);
+  void BandedAlign4PatternsToText(const char **patterns, const char *text, int read_length, int32_t *mapping_edit_distances, int32_t *mapping_end_positions);
+  void BandedAlign8PatternsToText(const char **patterns, const char *text, int read_length, int16_t *mapping_edit_distances, int16_t *mapping_end_positions);
   void BandedTraceback(int min_num_errors, const char *pattern, const char *text, const int read_length, int *mapping_start_position);
   void VerifyCandidatesOnOneDirectionUsingSIMD(Direction candidate_direction, const SequenceBatch &read_batch, uint32_t read_index, const SequenceBatch &reference, const std::vector<uint64_t> &candidates, std::vector<std::pair<int, uint64_t> > *mappings, int *min_num_errors, int *num_best_mappings, int *second_min_num_errors, int *num_second_best_mappings);
   void VerifyCandidatesOnOneDirection(Direction candidate_direction, const SequenceBatch &read_batch, uint32_t read_index, const SequenceBatch &reference, const std::vector<uint64_t> &candidates, std::vector<std::pair<int, uint64_t> > *mappings, int *min_num_errors, int *num_best_mappings, int *second_min_num_errors, int *num_second_best_mappings);
@@ -168,6 +175,7 @@ class Chromap {
   int kmer_size_;
   int window_size_;
   int error_threshold_;
+  int NUM_VPU_LANES_;
   int match_score_;
   int mismatch_penalty_;
   std::vector<int> gap_open_penalties_;

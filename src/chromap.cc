@@ -7,6 +7,7 @@
 #include <math.h>
 #include <omp.h>
 #include <random>
+#include <smmintrin.h>
 #include <sstream>
 
 #include "cxxopts.hpp"
@@ -1421,14 +1422,15 @@ void Chromap<MappingRecord>::VerifyCandidatesOnOneDirectionUsingSIMD(Direction c
   uint32_t read_length = read_batch.GetSequenceLengthAt(read_index);
   const std::string &negative_read = read_batch.GetNegativeSequenceAt(read_index); 
 
-  int NUM_VPU_LANES = 8;
   size_t num_candidates = candidates.size();
-  uint64_t valid_candidates[NUM_VPU_LANES];
-  const char *valid_candidate_starts[NUM_VPU_LANES];
+  uint64_t valid_candidates[NUM_VPU_LANES_];
+  const char *valid_candidate_starts[NUM_VPU_LANES_];
   uint32_t valid_candidate_index = 0;
   size_t candidate_index = 0;
-  int16_t mapping_edit_distances[NUM_VPU_LANES];
-  int16_t mapping_end_positions[NUM_VPU_LANES]; 
+  //int16_t mapping_edit_distances_16[NUM_VPU_LANES_];
+  //int16_t mapping_end_positions_16[NUM_VPU_LANES_]; 
+  //int32_t mapping_edit_distances_32[NUM_VPU_LANES_];
+  //int32_t mapping_end_positions_32[NUM_VPU_LANES_]; 
   while (candidate_index < num_candidates) {
     uint32_t rid = candidates[candidate_index] >> 32;
     uint32_t position = candidates[candidate_index];
@@ -1444,32 +1446,66 @@ void Chromap<MappingRecord>::VerifyCandidatesOnOneDirectionUsingSIMD(Direction c
       valid_candidate_starts[valid_candidate_index] = reference.GetSequenceAt(rid) + position - error_threshold_;
       ++valid_candidate_index;
     }
-    if (valid_candidate_index == (uint32_t)NUM_VPU_LANES) {
-      for (int li = 0; li < NUM_VPU_LANES; ++li) {
-        mapping_end_positions[li] = read_length - 1;
-      }
-      if (candidate_direction == kPositive) {
-        SIMDBandedAlignPatternToText(valid_candidate_starts, read, read_length, mapping_edit_distances, mapping_end_positions);
-      } else {
-        SIMDBandedAlignPatternToText(valid_candidate_starts, negative_read.data(), read_length, mapping_edit_distances, mapping_end_positions);
-      }
-      for (int mi = 0; mi < NUM_VPU_LANES; ++mi) {
-        if (mapping_edit_distances[mi] <= error_threshold_) {
-        if (mapping_edit_distances[mi] < *min_num_errors) {
-          *second_min_num_errors = *min_num_errors;
-          *num_second_best_mappings = *num_best_mappings;
-          *min_num_errors = mapping_edit_distances[mi];
-          *num_best_mappings = 1;
-        } else if (mapping_edit_distances[mi] == *min_num_errors) {
-          (*num_best_mappings)++;
-        } else if (mapping_edit_distances[mi] == *second_min_num_errors) {
-          (*num_second_best_mappings)++;
+    if (valid_candidate_index == (uint32_t)NUM_VPU_LANES_) {
+      if (NUM_VPU_LANES_ == 8) {
+        int16_t mapping_edit_distances[NUM_VPU_LANES_];
+        int16_t mapping_end_positions[NUM_VPU_LANES_]; 
+        for (int li = 0; li < NUM_VPU_LANES_; ++li) {
+          mapping_end_positions[li] = read_length - 1;
         }
         if (candidate_direction == kPositive) {
-          mappings->emplace_back((uint8_t)mapping_edit_distances[mi], valid_candidates[mi] - error_threshold_ + mapping_end_positions[mi]);
+          BandedAlign8PatternsToText(valid_candidate_starts, read, read_length, mapping_edit_distances, mapping_end_positions);
         } else {
-          mappings->emplace_back((uint8_t)mapping_edit_distances[mi], valid_candidates[mi] - read_length + 1 - error_threshold_ + mapping_end_positions[mi]); 
+          BandedAlign8PatternsToText(valid_candidate_starts, negative_read.data(), read_length, mapping_edit_distances, mapping_end_positions);
         }
+        for (int mi = 0; mi < NUM_VPU_LANES_; ++mi) {
+          if (mapping_edit_distances[mi] <= error_threshold_) {
+            if (mapping_edit_distances[mi] < *min_num_errors) {
+              *second_min_num_errors = *min_num_errors;
+              *num_second_best_mappings = *num_best_mappings;
+              *min_num_errors = mapping_edit_distances[mi];
+              *num_best_mappings = 1;
+            } else if (mapping_edit_distances[mi] == *min_num_errors) {
+              (*num_best_mappings)++;
+            } else if (mapping_edit_distances[mi] == *second_min_num_errors) {
+              (*num_second_best_mappings)++;
+            }
+            if (candidate_direction == kPositive) {
+              mappings->emplace_back((uint8_t)mapping_edit_distances[mi], valid_candidates[mi] - error_threshold_ + mapping_end_positions[mi]);
+            } else {
+              mappings->emplace_back((uint8_t)mapping_edit_distances[mi], valid_candidates[mi] - read_length + 1 - error_threshold_ + mapping_end_positions[mi]); 
+            }
+          }
+        }
+      } else if (NUM_VPU_LANES_ == 4) {
+        int32_t mapping_edit_distances[NUM_VPU_LANES_];
+        int32_t mapping_end_positions[NUM_VPU_LANES_]; 
+        for (int li = 0; li < NUM_VPU_LANES_; ++li) {
+          mapping_end_positions[li] = read_length - 1;
+        }
+        if (candidate_direction == kPositive) {
+          BandedAlign4PatternsToText(valid_candidate_starts, read, read_length, mapping_edit_distances, mapping_end_positions);
+        } else {
+          BandedAlign4PatternsToText(valid_candidate_starts, negative_read.data(), read_length, mapping_edit_distances, mapping_end_positions);
+        }
+        for (int mi = 0; mi < NUM_VPU_LANES_; ++mi) {
+          if (mapping_edit_distances[mi] <= error_threshold_) {
+            if (mapping_edit_distances[mi] < *min_num_errors) {
+              *second_min_num_errors = *min_num_errors;
+              *num_second_best_mappings = *num_best_mappings;
+              *min_num_errors = mapping_edit_distances[mi];
+              *num_best_mappings = 1;
+            } else if (mapping_edit_distances[mi] == *min_num_errors) {
+              (*num_best_mappings)++;
+            } else if (mapping_edit_distances[mi] == *second_min_num_errors) {
+              (*num_second_best_mappings)++;
+            }
+            if (candidate_direction == kPositive) {
+              mappings->emplace_back((uint8_t)mapping_edit_distances[mi], valid_candidates[mi] - error_threshold_ + mapping_end_positions[mi]);
+            } else {
+              mappings->emplace_back((uint8_t)mapping_edit_distances[mi], valid_candidates[mi] - read_length + 1 - error_threshold_ + mapping_end_positions[mi]); 
+            }
+          }
         }
       }
       valid_candidate_index = 0;
@@ -1561,13 +1597,12 @@ void Chromap<MappingRecord>::VerifyCandidates(const SequenceBatch &read_batch, u
   *num_best_mappings = 0;
   *second_min_num_errors = error_threshold_ + 1;
   *num_second_best_mappings = 0;
-  int NUM_VPU_LANES = 8;
-  if (positive_candidates.size() < (size_t)NUM_VPU_LANES) {
+  if (positive_candidates.size() < (size_t)NUM_VPU_LANES_) {
     VerifyCandidatesOnOneDirection(kPositive, read_batch, read_index, reference, positive_candidates, positive_mappings, min_num_errors, num_best_mappings, second_min_num_errors, num_second_best_mappings);
   } else {
     VerifyCandidatesOnOneDirectionUsingSIMD(kPositive, read_batch, read_index, reference, positive_candidates, positive_mappings, min_num_errors, num_best_mappings, second_min_num_errors, num_second_best_mappings);
   }
-  if (negative_candidates.size() < (size_t)NUM_VPU_LANES) {
+  if (negative_candidates.size() < (size_t)NUM_VPU_LANES_) {
     VerifyCandidatesOnOneDirection(kNegative, read_batch, read_index, reference, negative_candidates, negative_mappings, min_num_errors, num_best_mappings, second_min_num_errors, num_second_best_mappings);
   } else {
     VerifyCandidatesOnOneDirectionUsingSIMD(kNegative, read_batch, read_index, reference, negative_candidates, negative_mappings, min_num_errors, num_best_mappings, second_min_num_errors, num_second_best_mappings);
@@ -1623,25 +1658,111 @@ int Chromap<MappingRecord>::BandedAlignPatternToText(const char *pattern, const 
 }
 
 template <typename MappingRecord>
-void Chromap<MappingRecord>::SIMDBandedAlignPatternToText(const char **patterns, const char *text, int read_length, int16_t *mapping_edit_distances, int16_t *mapping_end_positions) {
-  int NUM_VPU_LANES = 8;
+void Chromap<MappingRecord>::BandedAlign4PatternsToText(const char **patterns, const char *text, int read_length, int32_t *mapping_edit_distances, int32_t *mapping_end_positions) {
   int ALPHABET_SIZE = 5;
-  //uint32_t reference_sequence_index0 = valid_candidates[0] >> 32;
-  //uint32_t reference_sequence_index1 = valid_candidates[1] >> 32;
-  //uint32_t reference_sequence_index2 = valid_candidates[2] >> 32;
-  //uint32_t reference_sequence_index3 = valid_candidates[3] >> 32;
-  //uint32_t reference_sequence_index4 = valid_candidates[4] >> 32;
-  //uint32_t reference_sequence_index5 = valid_candidates[5] >> 32;
-  //uint32_t reference_sequence_index6 = valid_candidates[6] >> 32;
-  //uint32_t reference_sequence_index7 = valid_candidates[7] >> 32;
-  //const char *reference_sequence0 = reference_sequence_batch.GetSequenceAt(reference_sequence_index0) + (uint32_t)valid_candidates[0];
-  //const char *reference_sequence1 = reference_sequence_batch.GetSequenceAt(reference_sequence_index1) + (uint32_t)valid_candidates[1];
-  //const char *reference_sequence2 = reference_sequence_batch.GetSequenceAt(reference_sequence_index2) + (uint32_t)valid_candidates[2];
-  //const char *reference_sequence3 = reference_sequence_batch.GetSequenceAt(reference_sequence_index3) + (uint32_t)valid_candidates[3];
-  //const char *reference_sequence4 = reference_sequence_batch.GetSequenceAt(reference_sequence_index4) + (uint32_t)valid_candidates[4];
-  //const char *reference_sequence5 = reference_sequence_batch.GetSequenceAt(reference_sequence_index5) + (uint32_t)valid_candidates[5];
-  //const char *reference_sequence6 = reference_sequence_batch.GetSequenceAt(reference_sequence_index6) + (uint32_t)valid_candidates[6];
-  //const char *reference_sequence7 = reference_sequence_batch.GetSequenceAt(reference_sequence_index7) + (uint32_t)valid_candidates[7];
+  const char *reference_sequence0 = patterns[0];
+  const char *reference_sequence1 = patterns[1];
+  const char *reference_sequence2 = patterns[2];
+  const char *reference_sequence3 = patterns[3];
+  uint32_t highest_bit_in_band_mask = 1 << (2 * error_threshold_);
+  __m128i highest_bit_in_band_mask_vpu0 = _mm_set_epi32(0, 0, 0, highest_bit_in_band_mask);
+  __m128i highest_bit_in_band_mask_vpu1 = _mm_set_epi32(0, 0, highest_bit_in_band_mask, 0);
+  __m128i highest_bit_in_band_mask_vpu2 = _mm_set_epi32(0, highest_bit_in_band_mask, 0, 0);
+  __m128i highest_bit_in_band_mask_vpu3 = _mm_set_epi32(highest_bit_in_band_mask, 0, 0, 0);
+  // Init Peq
+  __m128i Peq[ALPHABET_SIZE];
+  for (int ai = 0; ai < ALPHABET_SIZE; ai++) {
+    Peq[ai] = _mm_setzero_si128();
+  }
+  for (int i = 0; i < 2 * error_threshold_; i++) {
+    uint8_t base0 = SequenceBatch::CharToUint8(reference_sequence0[i]);
+    uint8_t base1 = SequenceBatch::CharToUint8(reference_sequence1[i]);
+    uint8_t base2 = SequenceBatch::CharToUint8(reference_sequence2[i]);
+    uint8_t base3 = SequenceBatch::CharToUint8(reference_sequence3[i]);
+    Peq[base0] = _mm_or_si128(highest_bit_in_band_mask_vpu0, Peq[base0]);
+    Peq[base1] = _mm_or_si128(highest_bit_in_band_mask_vpu1, Peq[base1]);
+    Peq[base2] = _mm_or_si128(highest_bit_in_band_mask_vpu2, Peq[base2]);
+    Peq[base3] = _mm_or_si128(highest_bit_in_band_mask_vpu3, Peq[base3]);
+    for (int ai = 0; ai < ALPHABET_SIZE; ai++) {
+      Peq[ai] = _mm_srli_epi32(Peq[ai], 1);
+    }
+  }
+
+  uint32_t lowest_bit_in_band_mask = 1;
+  __m128i lowest_bit_in_band_mask_vpu = _mm_set1_epi32(lowest_bit_in_band_mask);
+  __m128i VP = _mm_setzero_si128();
+  __m128i VN =  _mm_setzero_si128();
+  __m128i X = _mm_setzero_si128();
+  __m128i D0 = _mm_setzero_si128();
+  __m128i HN = _mm_setzero_si128();
+  __m128i HP = _mm_setzero_si128();
+  __m128i max_mask_vpu = _mm_set1_epi32(0xffffffff);
+  __m128i num_errors_at_band_start_position_vpu = _mm_setzero_si128();
+  __m128i early_stop_threshold_vpu = _mm_set1_epi32(error_threshold_ * 3);
+  for (int i = 0; i < read_length; i++) {
+    uint8_t base0 = SequenceBatch::CharToUint8(reference_sequence0[i + 2 * error_threshold_]);
+    uint8_t base1 = SequenceBatch::CharToUint8(reference_sequence1[i + 2 * error_threshold_]);
+    uint8_t base2 = SequenceBatch::CharToUint8(reference_sequence2[i + 2 * error_threshold_]);
+    uint8_t base3 = SequenceBatch::CharToUint8(reference_sequence3[i + 2 * error_threshold_]);
+    Peq[base0] = _mm_or_si128(highest_bit_in_band_mask_vpu0, Peq[base0]);
+    Peq[base1] = _mm_or_si128(highest_bit_in_band_mask_vpu1, Peq[base1]);
+    Peq[base2] = _mm_or_si128(highest_bit_in_band_mask_vpu2, Peq[base2]);
+    Peq[base3] = _mm_or_si128(highest_bit_in_band_mask_vpu3, Peq[base3]);
+    X = _mm_or_si128(Peq[SequenceBatch::CharToUint8(text[i])], VN);
+    D0 = _mm_and_si128(X, VP);
+    D0 = _mm_add_epi32(D0, VP);
+    D0 = _mm_xor_si128(D0, VP);
+    D0 = _mm_or_si128(D0, X);
+    HN = _mm_and_si128(VP, D0);
+    HP = _mm_or_si128(VP, D0);
+    HP = _mm_xor_si128(HP, max_mask_vpu);
+    HP = _mm_or_si128(HP, VN);
+    X = _mm_srli_epi32(D0, 1);
+    VN = _mm_and_si128(X, HP);
+    VP = _mm_or_si128(X, HP);
+    VP = _mm_xor_si128(VP, max_mask_vpu);
+    VP = _mm_or_si128(VP, HN);
+    __m128i E = _mm_and_si128(D0, lowest_bit_in_band_mask_vpu);
+    E = _mm_xor_si128(E, lowest_bit_in_band_mask_vpu);
+    num_errors_at_band_start_position_vpu = _mm_add_epi32(num_errors_at_band_start_position_vpu, E);
+    __m128i early_stop = _mm_cmpgt_epi32(num_errors_at_band_start_position_vpu, early_stop_threshold_vpu);
+    int tmp = _mm_movemask_epi8(early_stop);
+    if (tmp == 0xffff) {
+      _mm_store_si128((__m128i *)mapping_edit_distances, num_errors_at_band_start_position_vpu);
+      return;
+    }
+    for (int ai = 0; ai < ALPHABET_SIZE; ai++) {
+      Peq[ai] = _mm_srli_epi32(Peq[ai], 1);
+    }
+  }
+  int band_start_position = read_length - 1;
+  __m128i min_num_errors_vpu = num_errors_at_band_start_position_vpu;
+  for (int i = 0; i < 2 * error_threshold_; i++) {
+    __m128i lowest_bit_in_VP_vpu = _mm_and_si128(VP, lowest_bit_in_band_mask_vpu);
+    __m128i lowest_bit_in_VN_vpu = _mm_and_si128(VN, lowest_bit_in_band_mask_vpu);
+    num_errors_at_band_start_position_vpu = _mm_add_epi32(num_errors_at_band_start_position_vpu, lowest_bit_in_VP_vpu);
+    num_errors_at_band_start_position_vpu = _mm_sub_epi32(num_errors_at_band_start_position_vpu, lowest_bit_in_VN_vpu);
+    __m128i mapping_end_positions_update_mask_vpu = _mm_cmplt_epi32(num_errors_at_band_start_position_vpu, min_num_errors_vpu);
+    __m128i mapping_end_positions_update_mask_vpu1 = _mm_cmpeq_epi32(num_errors_at_band_start_position_vpu, min_num_errors_vpu);
+    int mapping_end_positions_update_mask = _mm_movemask_epi8(mapping_end_positions_update_mask_vpu);
+    int mapping_end_positions_update_mask1 = _mm_movemask_epi8(mapping_end_positions_update_mask_vpu1);
+    for (int li = 0; li < 4; ++li) {
+      if ((mapping_end_positions_update_mask & 1) == 1 || ((mapping_end_positions_update_mask1 & 1) == 1 && i + 1 == error_threshold_)) {
+        mapping_end_positions[li] = band_start_position + 1 + i;
+      }
+      mapping_end_positions_update_mask = mapping_end_positions_update_mask >> 4;
+      mapping_end_positions_update_mask1 = mapping_end_positions_update_mask1 >> 4;
+    }
+    min_num_errors_vpu = _mm_min_epi32(min_num_errors_vpu, num_errors_at_band_start_position_vpu);
+    VP = _mm_srli_epi32(VP, 1);
+    VN = _mm_srli_epi32(VN, 1);
+  }
+  _mm_store_si128((__m128i *)mapping_edit_distances, min_num_errors_vpu);
+}
+
+template <typename MappingRecord>
+void Chromap<MappingRecord>::BandedAlign8PatternsToText(const char **patterns, const char *text, int read_length, int16_t *mapping_edit_distances, int16_t *mapping_end_positions) {
+  int ALPHABET_SIZE = 5;
   const char *reference_sequence0 = patterns[0];
   const char *reference_sequence1 = patterns[1];
   const char *reference_sequence2 = patterns[2];
@@ -1752,7 +1873,7 @@ void Chromap<MappingRecord>::SIMDBandedAlignPatternToText(const char **patterns,
     __m128i mapping_end_positions_update_mask_vpu1 = _mm_cmpeq_epi16(num_errors_at_band_start_position_vpu, min_num_errors_vpu);
     int mapping_end_positions_update_mask = _mm_movemask_epi8(mapping_end_positions_update_mask_vpu);
     int mapping_end_positions_update_mask1 = _mm_movemask_epi8(mapping_end_positions_update_mask_vpu1);
-    for (int li = 0; li < NUM_VPU_LANES; ++li) {
+    for (int li = 0; li < 8; ++li) {
       if ((mapping_end_positions_update_mask & 1) == 1 || ((mapping_end_positions_update_mask1 & 1) == 1 && i + 1 == error_threshold_)) {
         mapping_end_positions[li] = band_start_position + 1 + i;
       }
