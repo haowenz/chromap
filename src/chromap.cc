@@ -429,9 +429,9 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
         positive_candidates2.clear();
         negative_candidates1.clear();
         negative_candidates2.clear();
-        index.GenerateCandidates(minimizers1, &positive_hits1, &negative_hits1, &positive_candidates1, &negative_candidates1);
+        index.GenerateCandidates(error_threshold_, minimizers1, &positive_hits1, &negative_hits1, &positive_candidates1, &negative_candidates1);
         uint32_t current_num_candidates1 = positive_candidates1.size() + negative_candidates1.size();
-        index.GenerateCandidates(minimizers2, &positive_hits2, &negative_hits2, &positive_candidates2, &negative_candidates2);
+        index.GenerateCandidates(error_threshold_, minimizers2, &positive_hits2, &negative_hits2, &positive_candidates2, &negative_candidates2);
         uint32_t current_num_candidates2 = positive_candidates2.size() + negative_candidates2.size();
         if (current_num_candidates1 > 0 && current_num_candidates2 > 0) {
           positive_candidates1.swap(positive_hits1);
@@ -949,7 +949,7 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
         negative_hits.clear();
         positive_candidates.clear();
         negative_candidates.clear();
-        index.GenerateCandidates(minimizers, &positive_hits, &negative_hits, &positive_candidates, &negative_candidates);
+        index.GenerateCandidates(error_threshold_, minimizers, &positive_hits, &negative_hits, &positive_candidates, &negative_candidates);
         uint32_t current_num_candidates = positive_candidates.size() + negative_candidates.size(); 
         //std::cerr << "Generated candidates!\n";
         if (current_num_candidates > 0) {
