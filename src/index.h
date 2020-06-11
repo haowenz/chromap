@@ -46,7 +46,7 @@ class Index {
   void Load();
   void GenerateCandidatesOnOneDirection(int error_threshold, std::vector<uint64_t> *hits, std::vector<uint64_t> *candidates);
   void GenerateCandidates(int error_threshold, const std::vector<std::pair<uint64_t, uint64_t> > &minimizers, std::vector<uint64_t> *positive_hits, std::vector<uint64_t> *negative_hits, std::vector<uint64_t> *positive_candidates, std::vector<uint64_t> *negative_candidates);
-  void CollectCandiates(int max_seed_frequency, const std::vector<std::pair<uint64_t, uint64_t> > &minimizers, std::vector<uint64_t> *positive_hits, std::vector<uint64_t> *negative_hits);
+  void CollectCandidates(int max_seed_frequency, const std::vector<std::pair<uint64_t, uint64_t> > &minimizers, std::vector<uint64_t> *positive_hits, std::vector<uint64_t> *negative_hits);
   inline static uint64_t Hash64(uint64_t key, const uint64_t mask) {
     key = (~key + (key << 21)) & mask; // key = (key << 21) - key - 1;
     key = key ^ key >> 24;
