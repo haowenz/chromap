@@ -287,7 +287,7 @@ void Index::GenerateCandidatesOnOneDirection(int error_threshold, std::vector<ui
   }
 }
 
-void Index::CollectCandiates(int max_seed_frequency, const std::vector<std::pair<uint64_t, uint64_t> > &minimizers, std::vector<uint64_t> *positive_hits, std::vector<uint64_t> *negative_hits) {
+void Index::CollectCandidates(int max_seed_frequency, const std::vector<std::pair<uint64_t, uint64_t> > &minimizers, std::vector<uint64_t> *positive_hits, std::vector<uint64_t> *negative_hits) {
   uint32_t num_minimizers = minimizers.size();
   positive_hits->reserve(max_seed_frequencies_[0]);
   negative_hits->reserve(max_seed_frequencies_[0]);
@@ -339,7 +339,7 @@ void Index::CollectCandiates(int max_seed_frequency, const std::vector<std::pair
 }
 
 void Index::GenerateCandidates(int error_threshold, const std::vector<std::pair<uint64_t, uint64_t> > &minimizers, std::vector<uint64_t> *positive_hits, std::vector<uint64_t> *negative_hits, std::vector<uint64_t> *positive_candidates, std::vector<uint64_t> *negative_candidates) {
-  CollectCandiates(max_seed_frequencies_[0], minimizers, positive_hits, negative_hits);
+  CollectCandidates(max_seed_frequencies_[0], minimizers, positive_hits, negative_hits);
   // Now I can generate primer chain in candidates
   // Let me use sort for now, but I can use merge later.
   GenerateCandidatesOnOneDirection(error_threshold, positive_hits, positive_candidates);
@@ -347,7 +347,7 @@ void Index::GenerateCandidates(int error_threshold, const std::vector<std::pair<
   if (positive_candidates->size() + negative_candidates->size() == 0) {
     positive_hits->clear();
     negative_hits->clear();
-    CollectCandiates(max_seed_frequencies_[1], minimizers, positive_hits, negative_hits);
+    CollectCandidates(max_seed_frequencies_[1], minimizers, positive_hits, negative_hits);
     GenerateCandidatesOnOneDirection(error_threshold, positive_hits, positive_candidates);
     GenerateCandidatesOnOneDirection(error_threshold, negative_hits, negative_candidates);
     // TODO: if necessary, we can further improve the rescue. But the code below is not thread safe. We can think about this later
