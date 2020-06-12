@@ -165,6 +165,10 @@ class OutputTools {
       }
     } 
   }
+  void OutputPeaks(uint32_t peak_start_position, uint16_t peak_length, uint32_t rid, const SequenceBatch &reference) {
+    const char *sequence_name = reference.GetSequenceNameAt(rid);
+    fprintf(peak_output_file_, "%s\t%u\t%u\n", sequence_name, peak_start_position + 1, peak_start_position + peak_length);
+  }
   void AppendBarcodeOutput(uint32_t barcode_key) {
     fprintf(barcode_output_file_, "%s-1\n", Seed2Sequence(barcode_key, cell_barcode_length_).data());
   }

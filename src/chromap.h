@@ -28,6 +28,12 @@ struct StackCell {
   StackCell(int k_, size_t x_, int w_) : x(x_), k(k_), w(w_) {};
 };
 
+struct Peak {
+  uint32_t start_position;
+  uint16_t length;
+  uint32_t index;
+};
+
 KHASH_MAP_INIT_INT64(k128, uint128_t);
 KHASH_MAP_INIT_INT(k32, uint32_t);
 KHASH_SET_INIT_INT(k32_set);
@@ -150,8 +156,11 @@ class Chromap {
   uint32_t GetNumOverlappedMappings(uint32_t ref_id, const MappingRecord &mapping);
   void LoadBarcodeWhitelist();
   void CorrectBarcodeAt(uint32_t barcode_index, SequenceBatch *barcode_batch, uint64_t *num_barcode_in_whitelist, uint64_t *num_corrected_barcode);
+  uint32_t CallPeaks(uint16_t coverage_threshold, uint32_t num_reference_sequences, const SequenceBatch &reference);
   void OutputFeatureMatrix(uint32_t num_sequences, const SequenceBatch &reference);
   uint32_t Position2PeakIndex(uint32_t bin_size, uint32_t rid, uint32_t position, uint32_t num_sequences, const SequenceBatch &reference);
+  uint32_t GetNumOverlappedPeaks(uint32_t ref_id, const MappingRecord &mapping, std::vector<uint32_t> &overlapped_peak_indices);
+  void BuildAugmentedTreeForPeaks(uint32_t ref_id);
   void OutputMappingsInVector(uint8_t mapq_threshold, uint32_t num_reference_sequences, const SequenceBatch &reference, const std::vector<std::vector<MappingRecord> > &mappings);
   void OutputMappings(uint32_t num_reference_sequences, const SequenceBatch &reference, const std::vector<std::vector<MappingRecord> > &mappings);
   inline static double GetRealTime() {
@@ -220,7 +229,7 @@ class Chromap {
   std::vector<std::vector<MappingRecord> > deduped_mappings_on_diff_ref_seqs_;
   std::vector<std::pair<uint32_t, MappingRecord> > multi_mappings_;
   std::vector<std::vector<MappingRecord> > allocated_mappings_on_diff_ref_seqs_;
-  std::vector<std::vector<uint32_t> > tree_extras_on_diff_ref_seqs_;
+  std::vector<std::vector<uint32_t> > tree_extras_on_diff_ref_seqs_; // max
   std::vector<std::pair<int, uint32_t> > tree_info_on_diff_ref_seqs_; // (max_level, # nodes)
   std::unique_ptr<OutputTools<MappingRecord> > output_tools_;
   // For mapping stats
@@ -235,6 +244,9 @@ class Chromap {
   uint64_t num_corrected_barcode_ = 0;
   khash_t(k32)* barcode_histogram_;
   khash_t(k32)* barcode_index_table_;
+  // For peak calling
+  std::vector<std::vector<uint16_t> > pileup_on_diff_ref_seqs_;
+  std::vector<std::vector<Peak> > peaks_on_diff_ref_seqs_;
 };
 } // namespace chromap
 

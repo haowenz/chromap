@@ -186,15 +186,70 @@ void Chromap<MappingRecord>::CorrectBarcodeAt(uint32_t barcode_index, SequenceBa
 }
 
 template <typename MappingRecord>
+uint32_t Chromap<MappingRecord>::CallPeaks(uint16_t coverage_threshold, uint32_t num_reference_sequences, const SequenceBatch &reference) {
+  return 0;
+}
+ 
+template <>
+uint32_t Chromap<PairedEndMappingWithBarcode>::CallPeaks(uint16_t coverage_threshold, uint32_t num_reference_sequences, const SequenceBatch &reference) {
+  double real_start_time = GetRealTime();
+  std::vector<std::vector<PairedEndMappingWithBarcode> > &mappings = allocate_multi_mappings_ ? allocated_mappings_on_diff_ref_seqs_ : (remove_pcr_duplicates_ ? deduped_mappings_on_diff_ref_seqs_ : mappings_on_diff_ref_seqs_);
+  // Build pileup
+  for (uint32_t ri = 0; ri < num_reference_sequences; ++ri) {
+    pileup_on_diff_ref_seqs_.emplace_back(std::vector<uint16_t>());
+    pileup_on_diff_ref_seqs_[ri].assign(reference.GetSequenceLengthAt(ri), 0);
+    for (size_t mi = 0; mi < mappings[ri].size(); ++mi) {
+      for (uint16_t pi = 0; pi < mappings[ri][mi].fragment_length; ++pi) {
+        ++pileup_on_diff_ref_seqs_[ri][mappings[ri][mi].fragment_start_position + pi];
+      }
+    }
+  }
+  std::cerr << "Built pileup in " << Chromap<>::GetRealTime() - real_start_time << "s.\n";
+  real_start_time = GetRealTime();
+  // Call and save peaks
+  tree_extras_on_diff_ref_seqs_.clear();
+  tree_info_on_diff_ref_seqs_.clear();
+  tree_extras_on_diff_ref_seqs_.reserve(num_reference_sequences);
+  tree_info_on_diff_ref_seqs_.reserve(num_reference_sequences);
+  uint32_t peak_count = 0; 
+  for (uint32_t ri = 0; ri < num_reference_sequences; ++ri) {
+    tree_extras_on_diff_ref_seqs_.emplace_back(std::vector<uint32_t>());
+    tree_extras_on_diff_ref_seqs_[ri].reserve(reference.GetSequenceLengthAt(ri) / 100);
+    peaks_on_diff_ref_seqs_.emplace_back(std::vector<Peak>());
+    uint32_t peak_start_position = 0;
+    uint16_t peak_length = 0;
+    for (size_t pi = 0; pi < reference.GetSequenceLengthAt(ri); ++pi) {
+      if (pileup_on_diff_ref_seqs_[ri][pi] >= coverage_threshold) {
+        if (peak_length == 0) { // start a new peak
+          peak_start_position = pi;
+        }
+        ++peak_length; // extend the peak
+      } else if (peak_length > 0) { // save the previous peak
+        peaks_on_diff_ref_seqs_[ri].emplace_back(Peak{peak_start_position, peak_length, peak_count}); 
+        tree_extras_on_diff_ref_seqs_[ri].emplace_back(0);
+        output_tools_->OutputPeaks(peak_start_position, peak_length, ri, reference);
+        ++peak_count;
+        peak_length = 0;
+      }
+    }
+    BuildAugmentedTreeForPeaks(ri);
+  }
+  std::cerr << "Call peaks and built peak augmented tree in " << Chromap<>::GetRealTime() - real_start_time << "s.\n";
+  // Output feature matrix
+  return peak_count;
+}
+
+template <typename MappingRecord>
 void Chromap<MappingRecord>::OutputFeatureMatrix(uint32_t num_sequences, const SequenceBatch &reference) {
 }
 
 template <>
 void Chromap<PairedEndMappingWithBarcode>::OutputFeatureMatrix(uint32_t num_sequences, const SequenceBatch &reference) {
-  uint32_t bin_size = 5000;
-  output_tools_->InitializeMatrixOutput(matrix_output_prefix_);
-  output_tools_->OutputPeaks(bin_size, num_sequences, reference);
+  //uint32_t bin_size = 5000;
+  //output_tools_->OutputPeaks(bin_size, num_sequences, reference);
+  uint32_t num_peaks = CallPeaks(3, num_sequences, reference);
   std::vector<std::vector<PairedEndMappingWithBarcode> > &mappings = allocate_multi_mappings_ ? allocated_mappings_on_diff_ref_seqs_ : (remove_pcr_duplicates_ ? deduped_mappings_on_diff_ref_seqs_ : mappings_on_diff_ref_seqs_);
+  double real_start_time = GetRealTime();
   // First pass to index barcodes
   uint32_t barcode_index = 0;
   for (uint32_t rid = 0; rid < num_sequences; ++rid) {
@@ -211,41 +266,51 @@ void Chromap<PairedEndMappingWithBarcode>::OutputFeatureMatrix(uint32_t num_sequ
       }
     }
   }
+  std::cerr << "Index and output barcodes in " << Chromap<>::GetRealTime() - real_start_time << "s.\n";
+  real_start_time = GetRealTime();
   // Second pass to generate matrix
   khash_t(kmatrix) *matrix = kh_init(kmatrix);
+  std::vector<uint32_t> overlapped_peak_indices;
   for (uint32_t rid = 0; rid < num_sequences; ++rid) {
     for (uint32_t mi = 0; mi < mappings[rid].size(); ++mi) {
       uint32_t barcode_key = mappings[rid][mi].cell_barcode;
       khiter_t barcode_index_table_iterator = kh_get(k32, barcode_index_table_, barcode_key);
       uint64_t barcode_index = kh_value(barcode_index_table_, barcode_index_table_iterator);
-      uint32_t peak_index = Position2PeakIndex(bin_size, rid, mappings[rid][mi].fragment_start_position, num_sequences, reference);
-      uint64_t entry_index = (barcode_index << 32) | peak_index;
-      khiter_t matrix_iterator = kh_get(kmatrix, matrix, entry_index);
-      if (matrix_iterator == kh_end(matrix)) {
-        int khash_return_code;
-        matrix_iterator = kh_put(kmatrix, matrix, entry_index, &khash_return_code);
-        assert(khash_return_code != -1 && khash_return_code != 0);
-        kh_value(matrix, matrix_iterator) = 1;
-      } else {
-        kh_value(matrix, matrix_iterator) += 1;
+      //uint32_t peak_index = Position2PeakIndex(bin_size, rid, mappings[rid][mi].fragment_start_position, num_sequences, reference);
+      overlapped_peak_indices.clear();
+      GetNumOverlappedPeaks(rid, mappings[rid][mi], overlapped_peak_indices);
+      for (size_t pi = 0; pi < overlapped_peak_indices.size(); ++pi) {
+        //uint64_t entry_index = (barcode_index << 32) | peak_index;
+        uint64_t entry_index = (barcode_index << 32) | overlapped_peak_indices[pi];
+        khiter_t matrix_iterator = kh_get(kmatrix, matrix, entry_index);
+        if (matrix_iterator == kh_end(matrix)) {
+          int khash_return_code;
+          matrix_iterator = kh_put(kmatrix, matrix, entry_index, &khash_return_code);
+          assert(khash_return_code != -1 && khash_return_code != 0);
+          kh_value(matrix, matrix_iterator) = 1;
+        } else {
+          kh_value(matrix, matrix_iterator) += 1;
+        }
       }
     }
   }
+  std::cerr << "Generate feature matrix in " << Chromap<>::GetRealTime() - real_start_time << "s.\n";
   // Output matrix
-  uint32_t num_peaks = 0;
-  for (uint32_t i = 0; i < num_sequences; ++i) {
-    uint32_t ref_seq_length = reference.GetSequenceLengthAt(i);
-    num_peaks += ref_seq_length / bin_size;
-    if (ref_seq_length % bin_size != 0) {
-      ++num_peaks;
-    }
-  }
+  //uint32_t num_peaks = 0;
+  //for (uint32_t i = 0; i < num_sequences; ++i) {
+  //  uint32_t ref_seq_length = reference.GetSequenceLengthAt(i);
+  //  num_peaks += ref_seq_length / bin_size;
+  //  if (ref_seq_length % bin_size != 0) {
+  //    ++num_peaks;
+  //  }
+  //}
+  real_start_time = GetRealTime();
   output_tools_->WriteMatrixOutputHead(num_peaks, kh_size(barcode_index_table_), kh_size(matrix));
   uint64_t key;
   uint32_t value;
   kh_foreach(matrix, key, value, output_tools_->AppendMatrixOutput((uint32_t)key, (uint32_t)(key >> 32), value));
   kh_destroy(kmatrix, matrix);
-  output_tools_->FinalizeMatrixOutput();
+  std::cerr << "Output feature matrix in " << Chromap<>::GetRealTime() - real_start_time << "s.\n";
 }
 
 template <typename MappingRecord>
@@ -258,6 +323,89 @@ uint32_t Chromap<MappingRecord>::Position2PeakIndex(uint32_t bin_size, uint32_t 
   }
   peak_index += position / bin_size;
   return peak_index;
+}
+
+template <typename MappingRecord>
+void Chromap<MappingRecord>::BuildAugmentedTreeForPeaks(uint32_t ref_id) {
+  //std::sort(mappings.begin(), mappings.end(), IntervalLess());
+  int max_level = 0;
+  size_t i, last_i = 0; // last_i points to the rightmost node in the tree
+  uint32_t last = 0; // last is the max value at node last_i
+  int k;
+  std::vector<Peak> &peaks = peaks_on_diff_ref_seqs_[ref_id];
+  std::vector<uint32_t> &extras = tree_extras_on_diff_ref_seqs_[ref_id];
+  if (peaks.size() == 0) {
+    max_level = -1;
+  }
+  for (i = 0; i < peaks.size(); i += 2) { 
+    last_i = i; 
+    //last = mappings[i].max = mappings[i].en; // leaves (i.e. at level 0)
+    last = extras[i] = peaks[i].start_position + peaks[i].length; // leaves (i.e. at level 0)
+  }
+  for (k = 1; 1LL<<k <= (int64_t)peaks.size(); ++k) { // process internal nodes in the bottom-up order
+    size_t x = 1LL<<(k-1);
+    size_t i0 = (x<<1) - 1;
+    size_t step = x<<2; // i0 is the first node
+    for (i = i0; i < peaks.size(); i += step) { // traverse all nodes at level k
+      uint32_t el = extras[i - x];                          // max value of the left child
+      uint32_t er = i + x < peaks.size()? extras[i + x] : last; // of the right child
+      uint32_t e = peaks[i].start_position + peaks[i].length;
+      e = e > el? e : el;
+      e = e > er? e : er;
+      extras[i] = e; // set the max value for node i
+    }
+    last_i = last_i>>k&1? last_i - x : last_i + x; // last_i now points to the parent of the original last_i
+    if (last_i < peaks.size() && extras[last_i] > last) // update last accordingly
+      last = extras[last_i];
+  }
+  max_level = k - 1;
+  tree_info_on_diff_ref_seqs_.emplace_back(max_level, peaks.size());
+}
+
+template <typename MappingRecord>
+uint32_t Chromap<MappingRecord>::GetNumOverlappedPeaks(uint32_t ref_id, const MappingRecord &mapping, std::vector<uint32_t> &overlapped_peak_indices) {
+  int t = 0;
+  StackCell stack[64];
+  //out.clear();
+  overlapped_peak_indices.clear();
+  int num_overlapped_peaks = 0;
+  int max_level = tree_info_on_diff_ref_seqs_[ref_id].first;
+  uint32_t num_tree_nodes = tree_info_on_diff_ref_seqs_[ref_id].second;
+  std::vector<Peak> &peaks = peaks_on_diff_ref_seqs_[ref_id];
+  std::vector<uint32_t> &extras = tree_extras_on_diff_ref_seqs_[ref_id];
+  //uint32_t interval_start = mapping.fragment_start_position; 
+  uint32_t interval_start = mapping.fragment_start_position > (uint32_t)multi_mapping_allocation_distance_ ? mapping.fragment_start_position - multi_mapping_allocation_distance_ : 0;
+  uint32_t interval_end = mapping.fragment_start_position + mapping.fragment_length + (uint32_t)multi_mapping_allocation_distance_;
+  stack[t++] = StackCell(max_level, (1LL<<max_level) - 1, 0); // push the root; this is a top down traversal
+  while (t) { // the following guarantees that numbers in out[] are always sorted
+    StackCell z = stack[--t];
+    if (z.k <= 3) { // we are in a small subtree; traverse every node in this subtree
+      size_t i, i0 = z.x >> z.k << z.k, i1 = i0 + (1LL<<(z.k+1)) - 1;
+      if (i1 >= num_tree_nodes) {
+        i1 = num_tree_nodes;
+      }
+      for (i = i0; i < i1 && peaks[i].start_position < interval_end; ++i) {
+        if (interval_start < peaks[i].start_position + peaks[i].length) { // if overlap, append to out[]
+          //out.push_back(i);
+          overlapped_peak_indices.emplace_back(peaks[i].index);
+          ++num_overlapped_peaks;
+        }
+      }
+    } else if (z.w == 0) { // if left child not processed
+      size_t y = z.x - (1LL<<(z.k-1)); // the left child of z.x; NB: y may be out of range (i.e. y>=a.size())
+      stack[t++] = StackCell(z.k, z.x, 1); // re-add node z.x, but mark the left child having been processed
+      if (y >= num_tree_nodes || extras[y] > interval_start) // push the left child if y is out of range or may overlap with the query
+        stack[t++] = StackCell(z.k - 1, y, 0);
+    } else if (z.x < num_tree_nodes && peaks[z.x].start_position < interval_end) { // need to push the right child
+      if (interval_start < peaks[z.x].start_position + peaks[z.x].length) {
+        //out.push_back(z.x); // test if z.x overlaps the query; if yes, append to out[]
+        overlapped_peak_indices.emplace_back(peaks[z.x].index);
+        ++num_overlapped_peaks;
+      }
+      stack[t++] = StackCell(z.k - 1, z.x + (1LL<<(z.k-1)), 0); // push the right child
+    }
+  }
+  return num_overlapped_peaks;
 }
 
 template <typename MappingRecord>
@@ -529,7 +677,9 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
     OutputMappings(num_reference_sequences, reference, mappings);
   }
   if (!is_bulk_data_ && !matrix_output_prefix_.empty()) {
+    output_tools_->InitializeMatrixOutput(matrix_output_prefix_);
     OutputFeatureMatrix(num_reference_sequences, reference);
+    output_tools_->FinalizeMatrixOutput();
   }
   output_tools_->FinalizeMappingOutput();
   reference.FinalizeLoading();
@@ -1611,6 +1761,19 @@ void Chromap<MappingRecord>::VerifyCandidates(const SequenceBatch &read_batch, u
 
 template <typename MappingRecord>
 int Chromap<MappingRecord>::BandedAlignPatternToText(const char *pattern, const char *text, const int read_length, int *mapping_end_position) {
+  //int error_count = 0;
+  //for (int i = 0; i < read_length; ++i) {
+  //  if (pattern[i + error_threshold_] != text[i]) {
+  //    ++error_count;
+  //    if (error_count > 1) {
+  //      break;
+  //    }
+  //  } 
+  //}
+  //if (error_count <= 1) {
+  //  *mapping_end_position = read_length - 1 + error_threshold_;
+  //  return error_count;
+  //}
   uint32_t Peq[5] = {0, 0, 0, 0, 0};
   for (int i = 0; i < 2 * error_threshold_; i++) {
     uint8_t base = SequenceBatch::CharToUint8(pattern[i]);
