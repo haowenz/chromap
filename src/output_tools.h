@@ -175,8 +175,8 @@ class OutputTools {
   void WriteMatrixOutputHead(uint64_t num_peaks, uint64_t num_barcodes, uint64_t num_lines) {
     fprintf(matrix_output_file_, "%lu\t%lu\t%lu\n", num_peaks, num_barcodes, num_lines);
   }
-  void AppendMatrixOutput(uint64_t peak_index, uint64_t barcode_index, uint64_t num_mappings) {
-    fprintf(matrix_output_file_, "%lu\t%lu\t%lu\n", peak_index, barcode_index, num_mappings);
+  void AppendMatrixOutput(uint32_t peak_index, uint32_t barcode_index, uint32_t num_mappings) {
+    fprintf(matrix_output_file_, "%u\t%u\t%u\n", peak_index, barcode_index, num_mappings);
   }
   inline void FinalizeMatrixOutput() {
     fclose(matrix_output_file_);
