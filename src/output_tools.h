@@ -24,6 +24,7 @@ struct PAFMapping {
   uint32_t fragment_start_position;
   uint16_t fragment_length;
   uint8_t mapq : 6, direction : 1, is_unique : 1;
+  uint8_t num_dups;
   bool operator<(const PAFMapping& m) const {
     return std::tie(fragment_start_position, fragment_length, mapq, direction, is_unique, read_id, read_length) < std::tie(m.fragment_start_position, m.fragment_length, m.mapq, m.direction, m.is_unique, m.read_id, m.read_length);
   }
@@ -43,6 +44,7 @@ struct PairedPAFMapping {
   uint16_t positive_alignment_length;
   uint16_t negative_alignment_length;
   uint8_t mapq : 6, direction : 1, is_unique : 1;
+  uint8_t num_dups;
   //uint8_t mapq; // least significant bit saves the direction of mapping
   bool operator<(const PairedPAFMapping& m) const {
     return std::tie(fragment_start_position, fragment_length, mapq, direction, is_unique, read_id, positive_alignment_length, negative_alignment_length) < std::tie(m.fragment_start_position, m.fragment_length, m.mapq, m.direction, m.is_unique, m.read_id, m.positive_alignment_length, m.negative_alignment_length);
@@ -58,6 +60,7 @@ struct MappingWithBarcode {
   uint32_t fragment_start_position;
   uint16_t fragment_length;
   uint8_t mapq : 6, direction : 1, is_unique : 1;
+  uint8_t num_dups;
   //uint8_t mapq;
   bool operator<(const MappingWithBarcode& m) const {
     return std::tie(cell_barcode, fragment_start_position, fragment_length, mapq, direction, is_unique, read_id) < std::tie(m.cell_barcode, m.fragment_start_position, m.fragment_length, m.mapq, m.direction, m.is_unique, m.read_id);
@@ -73,6 +76,7 @@ struct MappingWithoutBarcode {
   uint16_t fragment_length;
   //uint8_t mapq;
   uint8_t mapq : 6, direction : 1, is_unique : 1;
+  uint8_t num_dups;
   bool operator<(const MappingWithoutBarcode& m) const {
     return std::tie(fragment_start_position, fragment_length, mapq, direction, is_unique, read_id) < std::tie(m.fragment_start_position, m.fragment_length, m.mapq, m.direction, m.is_unique, m.read_id);
   }
@@ -87,6 +91,7 @@ struct PairedEndMappingWithBarcode {
   uint32_t fragment_start_position;
   uint16_t fragment_length;
   uint8_t mapq : 6, direction : 1, is_unique : 1;
+  uint8_t num_dups;
   //uint8_t mapq;
   uint16_t positive_alignment_length;
   uint16_t negative_alignment_length;
@@ -103,6 +108,7 @@ struct PairedEndMappingWithoutBarcode {
   uint32_t fragment_start_position;
   uint16_t fragment_length;
   uint8_t mapq : 6, direction : 1, is_unique : 1;
+  uint8_t num_dups;
   //uint8_t mapq;
   uint16_t positive_alignment_length;
   uint16_t negative_alignment_length;
@@ -231,7 +237,7 @@ class BEDPEOutputTools<PairedEndMappingWithBarcode> : public OutputTools<PairedE
     std::string strand = (mapping.direction & 1) == 1 ? "+" : "-";
     const char *reference_sequence_name = reference.GetSequenceNameAt(rid);
     uint32_t mapping_end_position = mapping.fragment_start_position + mapping.fragment_length;
-    this->AppendMappingOutput(std::string(reference_sequence_name) + "\t" + std::to_string(mapping.fragment_start_position) + "\t" + std::to_string(mapping_end_position) + "\t" + Seed2Sequence(mapping.cell_barcode, cell_barcode_length_) + "\n");
+    this->AppendMappingOutput(std::string(reference_sequence_name) + "\t" + std::to_string(mapping.fragment_start_position) + "\t" + std::to_string(mapping_end_position) + "\t" + Seed2Sequence(mapping.cell_barcode, cell_barcode_length_) + "\t" + std::to_string(mapping.num_dups) + "\n");
   }
 };
 
