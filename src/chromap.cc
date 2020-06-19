@@ -319,6 +319,10 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
   SequenceBatch read_batch1_for_loading(read_batch_size_);
   SequenceBatch read_batch2_for_loading(read_batch_size_);
   SequenceBatch barcode_batch_for_loading(read_batch_size_);
+  mm_cache mm_to_candidates_cache(1000000) ;
+  mm_to_candidates_cache.SetKmerLength(kmer_size_) ;
+  struct _mm_history *mm_history1 = new struct _mm_history[read_batch_size_];
+  struct _mm_history *mm_history2 = new struct _mm_history[read_batch_size_];
   read_batch1_for_loading.InitializeLoading(read_file1_path_);
   read_batch2_for_loading.InitializeLoading(read_file2_path_);
   if (!is_bulk_data_) {
@@ -366,7 +370,7 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
   static uint64_t thread_num_barcode_in_whitelist = 0; 
   static uint64_t thread_num_corrected_barcode = 0; 
 #pragma omp threadprivate(thread_num_candidates, thread_num_mappings, thread_num_mapped_reads, thread_num_uniquely_mapped_reads, thread_num_barcode_in_whitelist, thread_num_corrected_barcode)
-#pragma omp parallel default(none) shared(reference, index, read_batch1, read_batch2, barcode_batch, read_batch1_for_loading, read_batch2_for_loading, barcode_batch_for_loading, std::cerr, num_loaded_pairs_for_loading, num_loaded_pairs, num_reference_sequences, mappings_on_diff_ref_seqs_for_diff_threads, mappings_on_diff_ref_seqs_for_diff_threads_for_saving) num_threads(num_threads_) reduction(+:num_candidates_, num_mappings_, num_mapped_reads_, num_uniquely_mapped_reads_, num_barcode_in_whitelist_, num_corrected_barcode_)
+#pragma omp parallel default(none) shared(reference, index, read_batch1, read_batch2, barcode_batch, read_batch1_for_loading, read_batch2_for_loading, barcode_batch_for_loading, std::cerr, num_loaded_pairs_for_loading, num_loaded_pairs, num_reference_sequences, mappings_on_diff_ref_seqs_for_diff_threads, mappings_on_diff_ref_seqs_for_diff_threads_for_saving, mm_to_candidates_cache, mm_history1, mm_history2) num_threads(num_threads_) reduction(+:num_candidates_, num_mappings_, num_mapped_reads_, num_uniquely_mapped_reads_, num_barcode_in_whitelist_, num_corrected_barcode_)
   {
   std::vector<std::pair<uint64_t, uint64_t> > minimizers1;
   std::vector<std::pair<uint64_t, uint64_t> > minimizers2;
@@ -437,10 +441,22 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
         positive_candidates2.clear();
         negative_candidates1.clear();
         negative_candidates2.clear();
-        index.GenerateCandidates(error_threshold_, minimizers1, &positive_hits1, &negative_hits1, &positive_candidates1, &negative_candidates1);
+	if (mm_to_candidates_cache.Query(minimizers1, positive_candidates1, negative_candidates1, 
+		read_batch1.GetSequenceLengthAt(pair_index) ) == -1)
+		index.GenerateCandidates(error_threshold_, minimizers1, &positive_hits1, &negative_hits1, &positive_candidates1, &negative_candidates1);
         uint32_t current_num_candidates1 = positive_candidates1.size() + negative_candidates1.size();
-        index.GenerateCandidates(error_threshold_, minimizers2, &positive_hits2, &negative_hits2, &positive_candidates2, &negative_candidates2);
+	if (mm_to_candidates_cache.Query(minimizers2, positive_candidates2, negative_candidates2, 
+		read_batch2.GetSequenceLengthAt(pair_index) ) == -1)
+        	index.GenerateCandidates(error_threshold_, minimizers2, &positive_hits2, &negative_hits2, &positive_candidates2, &negative_candidates2);
         uint32_t current_num_candidates2 = positive_candidates2.size() + negative_candidates2.size();
+	
+	mm_history1[pair_index].minimizers = minimizers1 ;
+	mm_history1[pair_index].positive_candidates = positive_candidates1 ;
+	mm_history1[pair_index].negative_candidates = negative_candidates1 ;
+	mm_history2[pair_index].minimizers = minimizers2 ;
+	mm_history2[pair_index].positive_candidates = positive_candidates2 ;
+	mm_history2[pair_index].negative_candidates = negative_candidates2 ;
+
         if (current_num_candidates1 > 0 && current_num_candidates2 > 0) {
           /*positive_candidates1.swap(positive_hits1);
           negative_candidates1.swap(negative_hits1);
@@ -490,6 +506,13 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
         }
       }
     }
+    for (uint32_t pair_index = 0; pair_index < num_loaded_pairs; ++pair_index) {
+    	mm_to_candidates_cache.Update(mm_history1[pair_index].minimizers, mm_history1[pair_index].positive_candidates,
+				mm_history1[pair_index].negative_candidates) ;
+    	mm_to_candidates_cache.Update(mm_history2[pair_index].minimizers, mm_history2[pair_index].positive_candidates,
+				mm_history2[pair_index].negative_candidates) ;
+    }
+
 #pragma omp taskwait
     num_loaded_pairs = num_loaded_pairs_for_loading;
     read_batch1_for_loading.SwapSequenceBatch(read_batch1);
@@ -510,6 +533,8 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
   num_mapped_reads_ += thread_num_mapped_reads;
   num_uniquely_mapped_reads_ += thread_num_uniquely_mapped_reads;
   } // end of openmp parallel region
+  delete[] mm_history1 ;
+  delete[] mm_history2 ;
   read_batch1_for_loading.FinalizeLoading();
   read_batch2_for_loading.FinalizeLoading();
   if (!is_bulk_data_) {
@@ -885,6 +910,7 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
   SequenceBatch barcode_batch(read_batch_size_);
   SequenceBatch barcode_batch_for_loading(read_batch_size_);
   mm_cache mm_to_candidates_cache(1000000) ;
+  mm_to_candidates_cache.SetKmerLength(kmer_size_) ;
   struct _mm_history *mm_history = new struct _mm_history[read_batch_size_];
   read_batch_for_loading.InitializeLoading(read_file1_path_);
   if (!is_bulk_data_) {
