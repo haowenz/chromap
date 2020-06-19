@@ -511,6 +511,14 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
 				mm_history1[pair_index].negative_candidates) ;
     	mm_to_candidates_cache.Update(mm_history2[pair_index].minimizers, mm_history2[pair_index].positive_candidates,
 				mm_history2[pair_index].negative_candidates) ;
+	if (mm_history1[pair_index].positive_candidates.size() < mm_history1[pair_index].positive_candidates.capacity() / 2)
+		std::vector<struct _candidate>().swap(mm_history1[pair_index].positive_candidates) ;
+	if (mm_history1[pair_index].negative_candidates.size() < mm_history1[pair_index].negative_candidates.capacity() / 2)
+		std::vector<struct _candidate>().swap(mm_history1[pair_index].negative_candidates) ;
+	if (mm_history2[pair_index].positive_candidates.size() < mm_history2[pair_index].positive_candidates.capacity() / 2)
+		std::vector<struct _candidate>().swap(mm_history2[pair_index].positive_candidates) ;
+	if (mm_history2[pair_index].negative_candidates.size() < mm_history2[pair_index].negative_candidates.capacity() / 2)
+		std::vector<struct _candidate>().swap(mm_history2[pair_index].negative_candidates) ;
     }
 
 #pragma omp taskwait
@@ -1037,7 +1045,12 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
     for (uint32_t read_index = 0; read_index < num_loaded_reads; ++read_index) {
     	mm_to_candidates_cache.Update(mm_history[read_index].minimizers, mm_history[read_index].positive_candidates,
 				mm_history[read_index].negative_candidates) ;
+	if (mm_history[read_index].positive_candidates.size() < mm_history[read_index].positive_candidates.capacity() / 2)
+		std::vector<struct _candidate>().swap(mm_history[read_index].positive_candidates) ;
+	if (mm_history[read_index].negative_candidates.size() < mm_history[read_index].negative_candidates.capacity() / 2)
+		std::vector<struct _candidate>().swap(mm_history[read_index].negative_candidates) ;
     }
+    std::cerr<<"cache memusage: " << mm_to_candidates_cache.GetMemoryBytes() <<"\n" ;
 #pragma omp taskwait
     num_loaded_reads = num_loaded_reads_for_loading;
     read_batch_for_loading.SwapSequenceBatch(read_batch);

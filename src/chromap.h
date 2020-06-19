@@ -195,7 +195,7 @@ class Chromap {
   bool output_mapping_in_BED_;
   bool output_mapping_in_TagAlign_;
   bool output_mapping_in_PAF_;
-  uint32_t read_batch_size_ = 100000; // default batch size, # reads for single-end reads, # read pairs for paired-end reads
+  uint32_t read_batch_size_ = 1000000; // default batch size, # reads for single-end reads, # read pairs for paired-end reads
   std::string reference_file_path_;
   std::string index_file_path_;
   std::string read_file1_path_;

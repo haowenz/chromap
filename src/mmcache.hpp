@@ -152,12 +152,15 @@ public:
 		else
 			--cache[hidx].weight ;
 		// Renew the cache
-		if (cache[hidx].weight <= 0)
+		if (cache[hidx].weight < 0)
 		{
 			cache[hidx].weight = 1 ;
 			cache[hidx].minimizers.resize(msize) ;
 			if (msize == 0)
+			{
+				cache[hidx].offsets.resize(0) ;
 				return ;
+			}
 
 			cache[hidx].offsets.resize(msize - 1) ;
 			for (i = 0 ; i < msize ; ++i)
@@ -181,7 +184,18 @@ public:
 		}
 	}
 	
-		
+	int GetMemoryBytes()
+	{
+		int i, ret = 0 ;
+		for (i = 0 ; i < cache_size ; ++i)
+		{
+			ret += sizeof(cache[i]) + cache[i].minimizers.capacity() * sizeof(uint64_t) 
+				+ cache[i].offsets.capacity() * sizeof(int)
+				+ cache[i].positive_candidates.capacity() * sizeof(struct _candidate) 
+				+ cache[i].negative_candidates.capacity() * sizeof(struct _candidate) ;
+		}
+		return ret ;
+	}
 } ;
 
 } 
