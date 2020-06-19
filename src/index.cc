@@ -7,6 +7,7 @@
 #include "chromap.h"
 
 namespace chromap {
+
 void Index::Statistics(uint32_t num_sequences, const SequenceBatch &reference) {
   double real_start_time = Chromap<>::GetRealTime();
   int n = 0, n1 = 0;
@@ -261,7 +262,7 @@ void Index::Load() {
   std::cerr << "Loaded index successfully in "<< Chromap<>::GetRealTime() - real_start_time << "s.\n";
 }
 
-void Index::GenerateCandidatesOnOneDirection(int error_threshold, std::vector<uint64_t> *hits, std::vector<uint64_t> *candidates) {
+void Index::GenerateCandidatesOnOneDirection(int error_threshold, std::vector<uint64_t> *hits, std::vector<struct _candidate> *candidates) {
   hits->emplace_back(UINT64_MAX);
   if (hits->size() > 0) {
     std::sort(hits->begin(), hits->end());
@@ -274,8 +275,11 @@ void Index::GenerateCandidatesOnOneDirection(int error_threshold, std::vector<ui
       uint32_t current_reference_position = (*hits)[pi];
       if (current_reference_id != previous_reference_id || current_reference_position > previous_reference_position + error_threshold) {
         if (count >= min_num_seeds_required_for_mapping_) {
-          candidates->push_back(previous_hit);
-        }
+	  struct _candidate nc ;
+	  nc.refPos = previous_hit ;
+	  nc.mmCnt = count ;
+          candidates->push_back(nc);
+	}
         count = 1;
       } else {
         ++count;
@@ -338,16 +342,19 @@ void Index::CollectCandidates(int max_seed_frequency, const std::vector<std::pai
   }
 }
 
-void Index::GenerateCandidates(int error_threshold, const std::vector<std::pair<uint64_t, uint64_t> > &minimizers, std::vector<uint64_t> *positive_hits, std::vector<uint64_t> *negative_hits, std::vector<uint64_t> *positive_candidates, std::vector<uint64_t> *negative_candidates) {
+void Index::GenerateCandidates(int error_threshold, const std::vector<std::pair<uint64_t, uint64_t> > &minimizers, std::vector<uint64_t> *positive_hits, std::vector<uint64_t> *negative_hits, std::vector<struct _candidate> *positive_candidates, std::vector<struct _candidate> *negative_candidates) {
   CollectCandidates(max_seed_frequencies_[0], minimizers, positive_hits, negative_hits);
   // Now I can generate primer chain in candidates
   // Let me use sort for now, but I can use merge later.
+  //printf("p+n: %d\n", positive_hits->size() + negative_hits->size()) ;
   GenerateCandidatesOnOneDirection(error_threshold, positive_hits, positive_candidates);
   GenerateCandidatesOnOneDirection(error_threshold, negative_hits, negative_candidates);
   if (positive_candidates->size() + negative_candidates->size() == 0) {
     positive_hits->clear();
     negative_hits->clear();
+    //printf("second round\n") ;
     CollectCandidates(max_seed_frequencies_[1], minimizers, positive_hits, negative_hits);
+    //printf("p+n2: %d\n", positive_hits->size() + negative_hits->size()) ;
     GenerateCandidatesOnOneDirection(error_threshold, positive_hits, positive_candidates);
     GenerateCandidatesOnOneDirection(error_threshold, negative_hits, negative_candidates);
     // TODO: if necessary, we can further improve the rescue. But the code below is not thread safe. We can think about this later
@@ -358,5 +365,13 @@ void Index::GenerateCandidates(int error_threshold, const std::vector<std::pair<
 //      GenerateCandidatesOnOneDirection(negative_hits, negative_candidates);
 //    }
   }
+  uint32_t i ;
+  uint32_t size = positive_candidates->size() ;
+  for (i = 0 ; i < size ; ++i)
+  	(*positive_candidates)[i].direction = kPositive ;
+  size = negative_candidates->size() ;
+  for (i = 0 ; i < size ; ++i)
+  	(*negative_candidates)[i].direction = kNegative ;
+  //printf("p+n_candidates: %d\n", positive_candidates->size() + negative_candidates->size()) ;
 }
 } // namespace chromap

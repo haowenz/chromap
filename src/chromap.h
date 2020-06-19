@@ -42,10 +42,6 @@ struct BarcodeWithQual {
   }
 };
 
-enum Direction {
-  kPositive,
-  kNegative,
-};
 
 #define SortMappingWithoutBarcode(m) (((((m).fragment_start_position<<16)|(m).fragment_length)<<8)|(m).mapq)
 //#define SortMappingWithoutBarcode(m) (m)
@@ -110,8 +106,8 @@ class Chromap {
   uint32_t LoadPairedEndReadsWithBarcodes(SequenceBatch *read_batch1, SequenceBatch *read_batch2, SequenceBatch *barcode_batch);
   void TrimAdapterForPairedEndRead(uint32_t pair_index, SequenceBatch *read_batch1, SequenceBatch *read_batch2);
   bool PairedEndReadWithBarcodeIsDuplicate(uint32_t pair_index, const SequenceBatch &barcode_batch, const SequenceBatch &read_batch1, const SequenceBatch &read_batch2);
-  void ReduceCandidatesForPairedEndReadOnOneDirection(const std::vector<uint64_t> &candidates1, const std::vector<uint64_t> &candidates2, std::vector<uint64_t> *filtered_candidates1, std::vector<uint64_t> *filtered_candidates2);
-  void ReduceCandidatesForPairedEndRead(const std::vector<uint64_t> &positive_candidates1, const std::vector<uint64_t> &negative_candidates1, const std::vector<uint64_t> &positive_candidates2, const std::vector<uint64_t> &negative_candidates2, std::vector<uint64_t> *filtered_positive_candidates1, std::vector<uint64_t> *filtered_negative_candidates1, std::vector<uint64_t> *filtered_positive_candidates2, std::vector<uint64_t> *filtered_negative_candidates2);
+  void ReduceCandidatesForPairedEndReadOnOneDirection(const std::vector<struct _candidate> &candidates1, const std::vector<struct _candidate> &candidates2, std::vector<struct _candidate> *filtered_candidates1, std::vector<struct _candidate> *filtered_candidates2);
+  void ReduceCandidatesForPairedEndRead(const std::vector<struct _candidate> &positive_candidates1, const std::vector<struct _candidate> &negative_candidates1, const std::vector<struct _candidate> &positive_candidates2, const std::vector<struct _candidate> &negative_candidates2, std::vector<struct _candidate> *filtered_positive_candidates1, std::vector<struct _candidate> *filtered_negative_candidates1, std::vector<struct _candidate> *filtered_positive_candidates2, std::vector<struct _candidate> *filtered_negative_candidates2);
   void GenerateBestMappingsForPairedEndReadOnOneDirection(Direction first_read_direction, uint32_t pair_index, int num_candidates1, int min_num_errors1, int num_best_mappings1, int second_min_num_errors1, int num_second_best_mappings1, const SequenceBatch &read_batch1, const std::vector<std::pair<int, uint64_t> > &mappings1, int num_candidates2, int min_num_errors2, int num_best_mappings2, int second_min_num_errors2, int num_second_best_mappings2, const SequenceBatch &read_batch2, const SequenceBatch &reference, const std::vector<std::pair<int, uint64_t> > &mappings2, std::vector<std::pair<uint32_t, uint32_t> > *best_mappings, int *min_sum_errors, int *num_best_mappings, int *second_min_sum_errors, int *num_second_best_mappings);
   void RecalibrateBestMappingsForPairedEndReadOnOneDirection(Direction first_read_direction, uint32_t pair_index, int min_sum_errors, int second_min_sum_errors, int min_num_errors1, int num_best_mappings1, int second_min_num_errors1, int num_second_best_mappings1, const SequenceBatch &read_batch1, const std::vector<std::pair<int, uint64_t> > &mappings1, int min_num_errors2, int num_best_mappings2, int second_min_num_errors2, int num_second_best_mappings2, const SequenceBatch &read_batch2, const SequenceBatch &reference, const std::vector<std::pair<int, uint64_t> > &mappings2, const std::vector<std::pair<uint32_t, uint32_t> > &edit_best_mappings, std::vector<std::pair<uint32_t, uint32_t> > *best_mappings, int *best_alignment_score, int *num_best_mappings, int *second_best_alignment_score, int *num_second_best_mappings);
   void ProcessBestMappingsForPairedEndReadOnOneDirection(Direction first_read_direction, uint32_t pair_index, uint8_t mapq, int num_candidates1, int min_num_errors1, int num_best_mappings1, int second_min_num_errors1, int num_second_best_mappings1, const SequenceBatch &read_batch1, const std::vector<std::pair<int, uint64_t> > &mappings1, int num_candidates2, int min_num_errors2, int num_best_mappings2, int second_min_num_errors2, int num_second_best_mappings2, const SequenceBatch &read_batch2, const SequenceBatch &reference, const SequenceBatch &barcode_batch, const std::vector<int> &best_mapping_indices, const std::vector<std::pair<int, uint64_t> > &mappings2, const std::vector<std::pair<uint32_t, uint32_t> > &best_mappings, int min_sum_errors, int num_best_mappings, int second_min_sum_errors, int num_second_best_mappings, int *best_mapping_index, int *num_best_mappings_reported, std::vector<std::vector<MappingRecord> > *mappings_on_diff_ref_seqs);
@@ -135,9 +131,9 @@ class Chromap {
   void BandedAlign4PatternsToText(const char **patterns, const char *text, int read_length, int32_t *mapping_edit_distances, int32_t *mapping_end_positions);
   void BandedAlign8PatternsToText(const char **patterns, const char *text, int read_length, int16_t *mapping_edit_distances, int16_t *mapping_end_positions);
   void BandedTraceback(int min_num_errors, const char *pattern, const char *text, const int read_length, int *mapping_start_position);
-  void VerifyCandidatesOnOneDirectionUsingSIMD(Direction candidate_direction, const SequenceBatch &read_batch, uint32_t read_index, const SequenceBatch &reference, const std::vector<uint64_t> &candidates, std::vector<std::pair<int, uint64_t> > *mappings, int *min_num_errors, int *num_best_mappings, int *second_min_num_errors, int *num_second_best_mappings);
-  void VerifyCandidatesOnOneDirection(Direction candidate_direction, const SequenceBatch &read_batch, uint32_t read_index, const SequenceBatch &reference, const std::vector<uint64_t> &candidates, std::vector<std::pair<int, uint64_t> > *mappings, int *min_num_errors, int *num_best_mappings, int *second_min_num_errors, int *num_second_best_mappings);
-  void VerifyCandidates(const SequenceBatch &read_batch, uint32_t read_index, const SequenceBatch &reference, const std::vector<uint64_t> &positive_candidates, const std::vector<uint64_t> &negative_candidates, std::vector<std::pair<int, uint64_t> > *positive_mappings, std::vector<std::pair<int, uint64_t> > *negative_mappings, int *min_num_errors, int *num_best_mappings, int *second_min_num_errors, int *num_second_best_mappings);
+  void VerifyCandidatesOnOneDirectionUsingSIMD(Direction candidate_direction, const SequenceBatch &read_batch, uint32_t read_index, const SequenceBatch &reference, const std::vector<struct _candidate> &candidates, std::vector<std::pair<int, uint64_t> > *mappings, int *min_num_errors, int *num_best_mappings, int *second_min_num_errors, int *num_second_best_mappings);
+  void VerifyCandidatesOnOneDirection(Direction candidate_direction, const SequenceBatch &read_batch, uint32_t read_index, const SequenceBatch &reference, const std::vector<struct _candidate> &candidates, std::vector<std::pair<int, uint64_t> > *mappings, int *min_num_errors, int *num_best_mappings, int *second_min_num_errors, int *num_second_best_mappings);
+  void VerifyCandidates(const SequenceBatch &read_batch, uint32_t read_index, const SequenceBatch &reference, const std::vector<std::pair<uint64_t, uint64_t> > &minimizers, const std::vector<struct _candidate> &positive_candidates, const std::vector<struct _candidate> &negative_candidates, std::vector<std::pair<int, uint64_t> > *positive_mappings, std::vector<std::pair<int, uint64_t> > *negative_mappings, int *min_num_errors, int *num_best_mappings, int *second_min_num_errors, int *num_second_best_mappings);
   void AllocateMultiMappings(uint32_t num_reference_sequences);
   void RemovePCRDuplicate(uint32_t num_reference_sequences);
   void MoveMappingsInBuffersToMappingContainer(uint32_t num_reference_sequences, std::vector<std::vector<std::vector<MappingRecord> > > *mappings_on_diff_ref_seqs_for_diff_threads_for_saving);
@@ -199,7 +195,7 @@ class Chromap {
   bool output_mapping_in_BED_;
   bool output_mapping_in_TagAlign_;
   bool output_mapping_in_PAF_;
-  uint32_t read_batch_size_ = 1000000; // default batch size, # reads for single-end reads, # read pairs for paired-end reads
+  uint32_t read_batch_size_ = 100000; // default batch size, # reads for single-end reads, # read pairs for paired-end reads
   std::string reference_file_path_;
   std::string index_file_path_;
   std::string read_file1_path_;
