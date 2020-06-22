@@ -319,7 +319,7 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
   SequenceBatch read_batch1_for_loading(read_batch_size_);
   SequenceBatch read_batch2_for_loading(read_batch_size_);
   SequenceBatch barcode_batch_for_loading(read_batch_size_);
-  mm_cache mm_to_candidates_cache(1000000) ;
+  mm_cache mm_to_candidates_cache(1000003) ;
   mm_to_candidates_cache.SetKmerLength(kmer_size_) ;
   struct _mm_history *mm_history1 = new struct _mm_history[read_batch_size_];
   struct _mm_history *mm_history2 = new struct _mm_history[read_batch_size_];
@@ -917,7 +917,7 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
   SequenceBatch read_batch_for_loading(read_batch_size_);
   SequenceBatch barcode_batch(read_batch_size_);
   SequenceBatch barcode_batch_for_loading(read_batch_size_);
-  mm_cache mm_to_candidates_cache(1000000) ;
+  mm_cache mm_to_candidates_cache(1000003) ;
   mm_to_candidates_cache.SetKmerLength(kmer_size_) ;
   struct _mm_history *mm_history = new struct _mm_history[read_batch_size_];
   read_batch_for_loading.InitializeLoading(read_file1_path_);
