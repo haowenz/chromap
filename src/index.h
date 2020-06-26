@@ -21,7 +21,14 @@ class Index {
     lookup_table_ = kh_init(k64);
   }
   ~Index(){
+    if (lookup_table_ != NULL) {
+      kh_destroy(k64, lookup_table_);
+    }
+  }
+  void Destroy() {
     kh_destroy(k64, lookup_table_);
+    lookup_table_ = NULL;
+    std::vector<uint64_t>().swap(occurrence_table_); 
   }
   khash_t(k64) const * GetLookupTable() const {
     return lookup_table_;

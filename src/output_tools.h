@@ -121,10 +121,104 @@ struct PairedEndMappingWithoutBarcode {
 };
 
 template <typename MappingRecord>
+struct TempMappingFileHandle {
+  std::string file_path;
+  FILE *file;
+  bool all_loaded;
+  uint32_t num_mappings;
+  uint32_t block_size;
+  uint32_t current_rid;
+  uint32_t current_mapping_index;
+  uint32_t num_mappings_on_current_rid;
+  uint32_t num_loaded_mappings_on_current_rid;
+  std::vector<MappingRecord> mappings; // this vector only keep mappings on the same ref seq
+  inline void InitializeTempMappingLoading(uint32_t num_reference_sequences) {
+    file = fopen(file_path.c_str(), "rb");
+    assert(file != NULL);
+    all_loaded = false;
+    current_rid = 0;
+    fread(&num_mappings_on_current_rid, sizeof(size_t), 1, file);
+    mappings.resize(block_size);
+    num_loaded_mappings_on_current_rid = 0;
+    std::cerr << "Block size: " << block_size << ", initialize temp file " << file_path << "\n";
+  }
+  inline void FinalizeTempMappingLoading() {
+    fclose(file);
+  }
+  inline void LoadTempMappingBlock(uint32_t num_reference_sequences) {
+    num_mappings = 0;
+    while (num_mappings == 0) {
+      // Only keep mappings on one ref seq, which means # mappings in buffer can be less than block size
+      // Two cases: current ref seq has remainings or not
+      if (num_loaded_mappings_on_current_rid < num_mappings_on_current_rid) {
+        // Check if # remains larger than block size
+        uint32_t num_mappings_to_load_on_current_rid = num_mappings_on_current_rid - num_loaded_mappings_on_current_rid;
+        if (num_mappings_to_load_on_current_rid > block_size) {
+          num_mappings_to_load_on_current_rid = block_size;
+        }
+        //std::cerr << num_mappings_to_load_on_current_rid << " " << num_loaded_mappings_on_current_rid << " " << num_mappings_on_current_rid << "\n";
+        //std::cerr << mappings.size() << "\n";
+        fread(mappings.data(), sizeof(MappingRecord), num_mappings_to_load_on_current_rid, file);
+        //std::cerr << "Load mappings\n";
+        num_loaded_mappings_on_current_rid += num_mappings_to_load_on_current_rid;
+        num_mappings = num_mappings_to_load_on_current_rid;
+      } else {
+        // Move to next rid
+        ++current_rid;
+        if (current_rid < num_reference_sequences) {
+          //std::cerr << "Load size\n";
+          fread(&num_mappings_on_current_rid, sizeof(size_t), 1, file);
+          //std::cerr << "Load size " << num_mappings_on_current_rid << "\n";
+          num_loaded_mappings_on_current_rid = 0;
+        } else {
+          all_loaded = true;
+          break;
+        }
+      }
+    }
+    current_mapping_index = 0;
+  }
+  inline void Next(uint32_t num_reference_sequences) {
+    ++current_mapping_index;
+    if (current_mapping_index >= num_mappings) {
+      LoadTempMappingBlock(num_reference_sequences);
+    }
+  }
+};
+
+template <typename MappingRecord>
 class OutputTools {
  public:
   OutputTools() {}
   virtual ~OutputTools() {}
+  inline void OutputTempMapping(const std::string &temp_mapping_output_file_path, uint32_t num_reference_sequences, const std::vector<std::vector<MappingRecord> > &mappings) {
+    FILE *temp_mapping_output_file = fopen(temp_mapping_output_file_path.c_str(), "wb");
+    assert(temp_mapping_output_file != NULL);
+    for (size_t ri = 0; ri < num_reference_sequences; ++ri) {
+      // make sure mappings[ri] exists even if its size is 0
+      size_t num_mappings = mappings[ri].size();
+      fwrite(&num_mappings, sizeof(size_t), 1, temp_mapping_output_file);
+      if (mappings[ri].size() > 0) {
+        fwrite(mappings[ri].data(), sizeof(MappingRecord), mappings[ri].size(), temp_mapping_output_file);
+      }
+    }
+    fclose(temp_mapping_output_file);
+  }
+  inline void LoadBinaryTempMapping(const std::string &temp_mapping_file_path, uint32_t num_reference_sequences, std::vector<std::vector<MappingRecord> > &mappings) {
+    FILE *temp_mapping_file = fopen(temp_mapping_file_path.c_str(), "rb");
+    assert(temp_mapping_file != NULL);
+    for (size_t ri = 0; ri < num_reference_sequences; ++ri) {
+      size_t num_mappings = 0;
+      fread(&num_mappings, sizeof(size_t), 1, temp_mapping_file);
+      if (num_mappings > 0) {
+        mappings.emplace_back(std::vector<MappingRecord>(num_mappings));
+        fread(&(mappings[ri].data()), sizeof(MappingRecord), num_mappings, temp_mapping_file);
+      } else {
+        mappings.emplace_back(std::vector<MappingRecord>());
+      }
+    }
+    fclose(temp_mapping_file);
+  }
   inline void InitializeMappingOutput(const std::string &mapping_output_file_path) {
     mapping_output_file_path_ = mapping_output_file_path;
     mapping_output_file_ = fopen(mapping_output_file_path_.c_str(), "w");
