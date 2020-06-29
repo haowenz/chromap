@@ -1336,7 +1336,6 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
 	if (mm_history[read_index].negative_candidates.size() < mm_history[read_index].negative_candidates.capacity() / 2)
 		std::vector<struct _candidate>().swap(mm_history[read_index].negative_candidates) ;
     }
-    std::cerr<<"cache memusage: " << mm_to_candidates_cache.GetMemoryBytes() <<"\n" ;
 #pragma omp taskwait
     num_loaded_reads = num_loaded_reads_for_loading;
     read_batch_for_loading.SwapSequenceBatch(read_batch);
