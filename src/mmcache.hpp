@@ -3,6 +3,7 @@
 
 #include "index.h"
 
+#define FINGER_PRINT_SIZE 103
 
 namespace chromap {
 
@@ -12,8 +13,11 @@ struct _mm_cache_entry
 	std::vector<int> offsets ; // the distance to the next minimizer
 	std::vector<struct _candidate> positive_candidates ;
 	std::vector<struct _candidate> negative_candidates ;
-
+	
 	int weight ;
+
+	unsigned short finger_print_cnt[FINGER_PRINT_SIZE] ;
+	int finger_print_cnt_sum ;
 } ;
 
 class mm_cache
@@ -22,6 +26,7 @@ private:
 	int cache_size ;
 	struct _mm_cache_entry *cache ;
 	int kmer_length ;
+	int update_limit ;
 	
 	// 0: not match. -1: opposite order. 1: same order
 	int IsMinimizersMatchCache(const std::vector<std::pair<uint64_t, uint64_t> > &minimizers, const struct _mm_cache_entry &cache)
@@ -77,6 +82,7 @@ public:
 		cache = new struct _mm_cache_entry[size] ;
 		cache_size = size ;
 		memset(cache, 0, sizeof(cache[0]) * size) ;
+		update_limit = 10 ;
 	}
 	~mm_cache()
 	{
@@ -97,7 +103,7 @@ public:
 		int msize = minimizers.size() ;
 		uint64_t h = 0 ;
 		for (i = 0 ; i < msize; ++i)
-			h ^= (minimizers[i].first >> 8) ;	
+			h += (minimizers[i].first) ;	
 		int hidx = h % cache_size ;
 		int direction = IsMinimizersMatchCache(minimizers, cache[hidx]) ;
 		if (direction == 1)
@@ -141,18 +147,33 @@ public:
 		int i ;
 		int msize = minimizers.size() ;
 
-		uint64_t h = 0 ;
+		uint64_t h = 0 ; // for hash
+		uint64_t f = 0 ; // for finger printing
 		for (i = 0 ; i < msize; ++i)
-			h ^= (minimizers[i].first >> 8) ;	
+		{
+			h += (minimizers[i].first) ;	
+			f ^= (minimizers[i].first) ;
+		}
 		int hidx = h % cache_size ;
+		int finger_print = f % FINGER_PRINT_SIZE ; 
+		
+		++cache[hidx].finger_print_cnt[finger_print] ;
+		++cache[hidx].finger_print_cnt_sum ;
+
+		if (cache[hidx].finger_print_cnt_sum < 10 
+			|| (int)cache[hidx].finger_print_cnt[finger_print] * 5 < cache[hidx].finger_print_cnt_sum)
+		{
+			return ;
+		}
 
 		int direction = IsMinimizersMatchCache(minimizers, cache[hidx]) ;
 		if (direction != 0)
 			++cache[hidx].weight ;
 		else
 			--cache[hidx].weight ;
+
 		// Renew the cache
-		if (cache[hidx].weight < 0)
+		if (cache[hidx].weight < 0 ) 
 		{
 			cache[hidx].weight = 1 ;
 			cache[hidx].minimizers.resize(msize) ;
@@ -169,6 +190,8 @@ public:
 			{
 				cache[hidx].offsets[i] = ((int)minimizers[i + 1].second>>1) - ((int)minimizers[i].second>>1) ;
 			}
+			std::vector<struct _candidate>().swap(cache[hidx].positive_candidates) ;
+			std::vector<struct _candidate>().swap(cache[hidx].negative_candidates) ;
 			cache[hidx].positive_candidates = pos_candidates ;
 			cache[hidx].negative_candidates = neg_candidates ;
 
@@ -184,9 +207,15 @@ public:
 		}
 	}
 	
-	int GetMemoryBytes()
+	void DirectUpdateWeight(int idx, int weight)
 	{
-		int i, ret = 0 ;
+		cache[idx].weight += weight ;
+	}
+
+	uint64_t GetMemoryBytes()
+	{
+		int i ;
+		uint64_t ret = 0 ;
 		for (i = 0 ; i < cache_size ; ++i)
 		{
 			ret += sizeof(cache[i]) + cache[i].minimizers.capacity() * sizeof(uint64_t) 
@@ -196,8 +225,13 @@ public:
 		}
 		return ret ;
 	}
-} ;
 
+	void PrintStats()
+	{
+		for (int i = 0 ; i < cache_size ; ++i)
+			printf("%d %d\n", cache[i].weight, cache[i].finger_print_cnt_sum) ;
+	}
+} ;
 } 
 
 #endif
