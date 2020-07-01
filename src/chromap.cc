@@ -2024,14 +2024,31 @@ void Chromap<MappingRecord>::VerifyCandidates(const SequenceBatch &read_batch, u
       *num_best_mappings = 1 ;
       *num_second_best_mappings = 0 ;
       *min_num_errors = 0 ;
+
+      uint32_t rid = 0 ; 
+      uint32_t position = 0 ; 
+      uint32_t read_length = read_batch.GetSequenceLengthAt(read_index);
       if (candidate_direction == kPositive) {
-        uint32_t read_length = read_batch.GetSequenceLengthAt(read_index);
-        positive_mappings->emplace_back(0, positive_candidates[ci].refPos + read_length - 1);
-      } else {
-        negative_mappings->emplace_back(0, negative_candidates[ci].refPos); 
+        rid = positive_candidates[ci].refPos >> 32 ;
+        position = positive_candidates[ci].refPos ;
       }
-      //printf("Saved %d\n", positive_candidates.size() + negative_candidates.size() ) ;
-      return ;
+      else {
+        rid = negative_candidates[ci].refPos >> 32 ;
+        position = (uint32_t)negative_candidates[ci].refPos - read_length + 1 ;
+      }
+      bool flag = true ;
+      if (position < (uint32_t)error_threshold_ || position >= reference.GetSequenceLengthAt(rid) || position + read_length + error_threshold_ >= reference.GetSequenceLengthAt(rid)) {
+      	flag = false ;
+      }
+      if (flag) {
+        if (candidate_direction == kPositive) {
+          positive_mappings->emplace_back(0, positive_candidates[ci].refPos + read_length - 1);
+        } else {
+          negative_mappings->emplace_back(0, negative_candidates[ci].refPos); 
+        }
+	//printf("Saved %d\n", positive_candidates.size() + negative_candidates.size() ) ;
+	return ;
+      }
   }
   //printf("Notsaved %d\n", positive_candidates.size() + negative_candidates.size()) ;
 
