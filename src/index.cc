@@ -262,7 +262,7 @@ void Index::Load() {
   std::cerr << "Loaded index successfully in "<< Chromap<>::GetRealTime() - real_start_time << "s.\n";
 }
 
-void Index::GenerateCandidatesOnOneDirection(int error_threshold, std::vector<uint64_t> *hits, std::vector<struct _candidate> *candidates) {
+void Index::GenerateCandidatesOnOneDirection(int error_threshold, std::vector<uint64_t> *hits, std::vector<Candidate> *candidates) {
   hits->emplace_back(UINT64_MAX);
   if (hits->size() > 0) {
     std::sort(hits->begin(), hits->end());
@@ -275,11 +275,11 @@ void Index::GenerateCandidatesOnOneDirection(int error_threshold, std::vector<ui
       uint32_t current_reference_position = (*hits)[pi];
       if (current_reference_id != previous_reference_id || current_reference_position > previous_reference_position + error_threshold) {
         if (count >= min_num_seeds_required_for_mapping_) {
-	  struct _candidate nc ;
-	  nc.refPos = previous_hit ;
-	  nc.mmCnt = count ;
+          Candidate nc;
+          nc.position = previous_hit;
+          nc.count = count;
           candidates->push_back(nc);
-	}
+        }
         count = 1;
       } else {
         ++count;
@@ -342,7 +342,7 @@ void Index::CollectCandidates(int max_seed_frequency, const std::vector<std::pai
   }
 }
 
-void Index::GenerateCandidates(int error_threshold, const std::vector<std::pair<uint64_t, uint64_t> > &minimizers, std::vector<uint64_t> *positive_hits, std::vector<uint64_t> *negative_hits, std::vector<struct _candidate> *positive_candidates, std::vector<struct _candidate> *negative_candidates) {
+void Index::GenerateCandidates(int error_threshold, const std::vector<std::pair<uint64_t, uint64_t> > &minimizers, std::vector<uint64_t> *positive_hits, std::vector<uint64_t> *negative_hits, std::vector<Candidate> *positive_candidates, std::vector<Candidate> *negative_candidates) {
   CollectCandidates(max_seed_frequencies_[0], minimizers, positive_hits, negative_hits);
   // Now I can generate primer chain in candidates
   // Let me use sort for now, but I can use merge later.
@@ -365,13 +365,13 @@ void Index::GenerateCandidates(int error_threshold, const std::vector<std::pair<
 //      GenerateCandidatesOnOneDirection(negative_hits, negative_candidates);
 //    }
   }
-  uint32_t i ;
-  uint32_t size = positive_candidates->size() ;
-  for (i = 0 ; i < size ; ++i)
-  	(*positive_candidates)[i].direction = kPositive ;
-  size = negative_candidates->size() ;
-  for (i = 0 ; i < size ; ++i)
-  	(*negative_candidates)[i].direction = kNegative ;
+  //uint32_t i ;
+  //uint32_t size = positive_candidates->size() ;
+  //for (i = 0 ; i < size ; ++i)
+  //	(*positive_candidates)[i].direction = kPositive ;
+  //size = negative_candidates->size() ;
+  //for (i = 0 ; i < size ; ++i)
+  //	(*negative_candidates)[i].direction = kNegative ;
   //printf("p+n_candidates: %d\n", positive_candidates->size() + negative_candidates->size()) ;
 }
 } // namespace chromap

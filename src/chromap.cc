@@ -15,14 +15,12 @@
 #include "mmcache.hpp"
 
 namespace chromap {
-struct _mm_history
-{
-	bool skip ;
-
-	std::vector<std::pair<uint64_t, uint64_t> > minimizers ;
-	std::vector<struct _candidate> positive_candidates ;
-	std::vector<struct _candidate> negative_candidates ;
-} ;
+struct _mm_history {
+	bool skip;
+	std::vector<std::pair<uint64_t, uint64_t> > minimizers;
+	std::vector<Candidate> positive_candidates;
+	std::vector<Candidate> negative_candidates;
+};
 
 template <typename MappingRecord>
 void Chromap<MappingRecord>::TrimAdapterForPairedEndRead(uint32_t pair_index, SequenceBatch *read_batch1, SequenceBatch *read_batch2) {
@@ -556,14 +554,22 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
   positive_hits2.reserve(max_seed_frequencies_[0]);
   negative_hits1.reserve(max_seed_frequencies_[0]);
   negative_hits2.reserve(max_seed_frequencies_[0]);
-  std::vector<struct _candidate> positive_candidates1;
-  std::vector<struct _candidate> positive_candidates2;
-  std::vector<struct _candidate> negative_candidates1;
-  std::vector<struct _candidate> negative_candidates2;
+  std::vector<Candidate> positive_candidates1;
+  std::vector<Candidate> positive_candidates2;
+  std::vector<Candidate> negative_candidates1;
+  std::vector<Candidate> negative_candidates2;
   positive_candidates1.reserve(max_seed_frequencies_[0]);
   positive_candidates2.reserve(max_seed_frequencies_[0]);
   negative_candidates1.reserve(max_seed_frequencies_[0]);
   negative_candidates2.reserve(max_seed_frequencies_[0]);
+  std::vector<Candidate> positive_candidates1_buffer;
+  std::vector<Candidate> positive_candidates2_buffer;
+  std::vector<Candidate> negative_candidates1_buffer;
+  std::vector<Candidate> negative_candidates2_buffer;
+  positive_candidates1_buffer.reserve(max_seed_frequencies_[0]);
+  positive_candidates2_buffer.reserve(max_seed_frequencies_[0]);
+  negative_candidates1_buffer.reserve(max_seed_frequencies_[0]);
+  negative_candidates2_buffer.reserve(max_seed_frequencies_[0]);
   std::vector<std::pair<int, uint64_t> > positive_mappings1;
   std::vector<std::pair<int, uint64_t> > positive_mappings2;
   std::vector<std::pair<int, uint64_t> > negative_mappings1;
@@ -615,40 +621,38 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
         positive_candidates2.clear();
         negative_candidates1.clear();
         negative_candidates2.clear();
-	if (mm_to_candidates_cache.Query(minimizers1, positive_candidates1, negative_candidates1, 
-		read_batch1.GetSequenceLengthAt(pair_index) ) == -1)
-		index.GenerateCandidates(error_threshold_, minimizers1, &positive_hits1, &negative_hits1, &positive_candidates1, &negative_candidates1);
+        //if (mm_to_candidates_cache.Query(minimizers1, positive_candidates1, negative_candidates1, 
+        //      read_batch1.GetSequenceLengthAt(pair_index) ) == -1)
+        index.GenerateCandidates(error_threshold_, minimizers1, &positive_hits1, &negative_hits1, &positive_candidates1, &negative_candidates1);
         uint32_t current_num_candidates1 = positive_candidates1.size() + negative_candidates1.size();
-	if (mm_to_candidates_cache.Query(minimizers2, positive_candidates2, negative_candidates2, 
-		read_batch2.GetSequenceLengthAt(pair_index) ) == -1)
-        	index.GenerateCandidates(error_threshold_, minimizers2, &positive_hits2, &negative_hits2, &positive_candidates2, &negative_candidates2);
+        //if (mm_to_candidates_cache.Query(minimizers2, positive_candidates2, negative_candidates2, 
+        //      read_batch2.GetSequenceLengthAt(pair_index) ) == -1)
+        index.GenerateCandidates(error_threshold_, minimizers2, &positive_hits2, &negative_hits2, &positive_candidates2, &negative_candidates2);
         uint32_t current_num_candidates2 = positive_candidates2.size() + negative_candidates2.size();
 	  
-	if (pair_index <  num_loaded_pairs / num_threads_ || num_reads_ < 2 * 5000000 )
-	{
-		mm_history1[pair_index].minimizers = minimizers1 ;
-		mm_history1[pair_index].positive_candidates = positive_candidates1 ;
-		mm_history1[pair_index].negative_candidates = negative_candidates1 ;
-		mm_history2[pair_index].minimizers = minimizers2 ;
-		mm_history2[pair_index].positive_candidates = positive_candidates2 ;
-		mm_history2[pair_index].negative_candidates = negative_candidates2 ;
-	}
+        if (pair_index < num_loaded_pairs / num_threads_ || num_reads_ < 2 * 5000000) {
+          mm_history1[pair_index].minimizers = minimizers1;
+          mm_history1[pair_index].positive_candidates = positive_candidates1;
+          mm_history1[pair_index].negative_candidates = negative_candidates1;
+          mm_history2[pair_index].minimizers = minimizers2;
+          mm_history2[pair_index].positive_candidates = positive_candidates2;
+          mm_history2[pair_index].negative_candidates = negative_candidates2;
+        }
 
         if (current_num_candidates1 > 0 && current_num_candidates2 > 0) {
-          /*positive_candidates1.swap(positive_hits1);
-          negative_candidates1.swap(negative_hits1);
-          positive_candidates2.swap(positive_hits2);
-          negative_candidates2.swap(negative_hits2);*/
-	  std::vector<struct _candidate> raw_pos1(positive_candidates1) ;
-	  std::vector<struct _candidate> raw_neg1(negative_candidates1) ;
-	  std::vector<struct _candidate> raw_pos2(positive_candidates2) ;
-	  std::vector<struct _candidate> raw_neg2(negative_candidates2) ;
-	  
+          positive_candidates1.swap(positive_candidates1_buffer);
+          negative_candidates1.swap(negative_candidates1_buffer);
+          positive_candidates2.swap(positive_candidates2_buffer);
+          negative_candidates2.swap(negative_candidates2_buffer);
+          //std::vector<struct _candidate> raw_pos1(positive_candidates1) ;
+          //std::vector<struct _candidate> raw_neg1(negative_candidates1) ;
+          //std::vector<struct _candidate> raw_pos2(positive_candidates2) ;
+          //std::vector<struct _candidate> raw_neg2(negative_candidates2) ;
           positive_candidates1.clear();
           positive_candidates2.clear();
           negative_candidates1.clear();
           negative_candidates2.clear();
-          ReduceCandidatesForPairedEndRead(raw_pos1, raw_neg1, raw_pos2, raw_neg2, &positive_candidates1, &negative_candidates1, &positive_candidates2, &negative_candidates2);
+          ReduceCandidatesForPairedEndRead(positive_candidates1_buffer, negative_candidates1_buffer, positive_candidates2_buffer, negative_candidates2_buffer, &positive_candidates1, &negative_candidates1, &positive_candidates2, &negative_candidates2);
           thread_num_candidates += positive_candidates1.size() + positive_candidates2.size() + negative_candidates1.size() + negative_candidates2.size();
           positive_mappings1.clear();
           positive_mappings2.clear();
@@ -684,22 +688,19 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
       }
     }
     for (uint32_t pair_index = 0; pair_index < num_loaded_pairs; ++pair_index) {
-    	if ( num_reads_ >= 2 * 5000000 && pair_index >= num_loaded_pairs / num_threads_)
-		break ;
-    	mm_to_candidates_cache.Update(mm_history1[pair_index].minimizers, mm_history1[pair_index].positive_candidates,
-				mm_history1[pair_index].negative_candidates) ;
-    	mm_to_candidates_cache.Update(mm_history2[pair_index].minimizers, mm_history2[pair_index].positive_candidates,
-				mm_history2[pair_index].negative_candidates) ;
-	if (mm_history1[pair_index].positive_candidates.size() < mm_history1[pair_index].positive_candidates.capacity() / 2)
-		std::vector<struct _candidate>().swap(mm_history1[pair_index].positive_candidates) ;
-	if (mm_history1[pair_index].negative_candidates.size() < mm_history1[pair_index].negative_candidates.capacity() / 2)
-		std::vector<struct _candidate>().swap(mm_history1[pair_index].negative_candidates) ;
-	if (mm_history2[pair_index].positive_candidates.size() < mm_history2[pair_index].positive_candidates.capacity() / 2)
-		std::vector<struct _candidate>().swap(mm_history2[pair_index].positive_candidates) ;
-	if (mm_history2[pair_index].negative_candidates.size() < mm_history2[pair_index].negative_candidates.capacity() / 2)
-		std::vector<struct _candidate>().swap(mm_history2[pair_index].negative_candidates) ;
+      if ( num_reads_ >= 2 * 5000000 && pair_index >= num_loaded_pairs / num_threads_)
+        break;
+      mm_to_candidates_cache.Update(mm_history1[pair_index].minimizers, mm_history1[pair_index].positive_candidates, mm_history1[pair_index].negative_candidates);
+      mm_to_candidates_cache.Update(mm_history2[pair_index].minimizers, mm_history2[pair_index].positive_candidates, mm_history2[pair_index].negative_candidates);
+      if (mm_history1[pair_index].positive_candidates.size() < mm_history1[pair_index].positive_candidates.capacity() / 2)
+        std::vector<Candidate>().swap(mm_history1[pair_index].positive_candidates);
+      if (mm_history1[pair_index].negative_candidates.size() < mm_history1[pair_index].negative_candidates.capacity() / 2)
+        std::vector<Candidate>().swap(mm_history1[pair_index].negative_candidates);
+      if (mm_history2[pair_index].positive_candidates.size() < mm_history2[pair_index].positive_candidates.capacity() / 2)
+        std::vector<Candidate>().swap(mm_history2[pair_index].positive_candidates);
+      if (mm_history2[pair_index].negative_candidates.size() < mm_history2[pair_index].negative_candidates.capacity() / 2)
+        std::vector<Candidate>().swap(mm_history2[pair_index].negative_candidates);
     }
-
 #pragma omp taskwait
     num_loaded_pairs = num_loaded_pairs_for_loading;
     read_batch1_for_loading.SwapSequenceBatch(read_batch1);
@@ -898,22 +899,22 @@ void Chromap<MappingRecord>::OutputMappings(uint32_t num_reference_sequences, co
 }
 
 template <typename MappingRecord>
-void Chromap<MappingRecord>::ReduceCandidatesForPairedEndReadOnOneDirection(const std::vector<struct _candidate> &candidates1, const std::vector<struct _candidate> &candidates2, std::vector<struct _candidate> *filtered_candidates1, std::vector<struct _candidate> *filtered_candidates2) {
+void Chromap<MappingRecord>::ReduceCandidatesForPairedEndReadOnOneDirection(const std::vector<Candidate> &candidates1, const std::vector<Candidate> &candidates2, std::vector<Candidate> *filtered_candidates1, std::vector<Candidate> *filtered_candidates2) {
   uint32_t i1 = 0;
   uint32_t i2 = 0;
   uint32_t mapping_positions_distance = max_insert_size_;
   uint32_t previous_end_i2 = i2;
   while (i1 < candidates1.size() && i2 < candidates2.size()) {
-    if (candidates1[i1].refPos > candidates2[i2].refPos + mapping_positions_distance) {
+    if (candidates1[i1].position > candidates2[i2].position + mapping_positions_distance) {
       ++i2;
-    } else if (candidates2[i2].refPos > candidates1[i1].refPos + mapping_positions_distance) {
+    } else if (candidates2[i2].position > candidates1[i1].position + mapping_positions_distance) {
       ++i1;
     } else {
       // ok, find a pair, we store current ni2 somewhere and keep looking until we go out of the range, 
       // then we go back and then move to next pi1 and keep doing the similar thing. 
       filtered_candidates1->emplace_back(candidates1[i1]);
       uint32_t current_i2 = i2;
-      while (current_i2 < candidates2.size() && candidates2[current_i2].refPos <= candidates1[i1].refPos + mapping_positions_distance) {
+      while (current_i2 < candidates2.size() && candidates2[current_i2].position <= candidates1[i1].position + mapping_positions_distance) {
         if (current_i2 >= previous_end_i2) {
           filtered_candidates2->emplace_back(candidates2[current_i2]);
         }
@@ -926,7 +927,7 @@ void Chromap<MappingRecord>::ReduceCandidatesForPairedEndReadOnOneDirection(cons
 }
 
 template <typename MappingRecord>
-void Chromap<MappingRecord>::ReduceCandidatesForPairedEndRead(const std::vector<struct _candidate> &positive_candidates1, const std::vector<struct _candidate> &negative_candidates1, const std::vector<struct _candidate> &positive_candidates2, const std::vector<struct _candidate> &negative_candidates2, std::vector<struct _candidate> *filtered_positive_candidates1, std::vector<struct _candidate> *filtered_negative_candidates1, std::vector<struct _candidate> *filtered_positive_candidates2, std::vector<struct _candidate> *filtered_negative_candidates2) {
+void Chromap<MappingRecord>::ReduceCandidatesForPairedEndRead(const std::vector<Candidate> &positive_candidates1, const std::vector<Candidate> &negative_candidates1, const std::vector<Candidate> &positive_candidates2, const std::vector<Candidate> &negative_candidates2, std::vector<Candidate> *filtered_positive_candidates1, std::vector<Candidate> *filtered_negative_candidates1, std::vector<Candidate> *filtered_positive_candidates2, std::vector<Candidate> *filtered_negative_candidates2) {
   ReduceCandidatesForPairedEndReadOnOneDirection(positive_candidates1, negative_candidates2, filtered_positive_candidates1, filtered_negative_candidates2);
   ReduceCandidatesForPairedEndReadOnOneDirection(negative_candidates1, positive_candidates2, filtered_negative_candidates1, filtered_positive_candidates2);
 }
@@ -1210,8 +1211,8 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
   SequenceBatch read_batch_for_loading(read_batch_size_);
   SequenceBatch barcode_batch(read_batch_size_);
   SequenceBatch barcode_batch_for_loading(read_batch_size_);
-  mm_cache mm_to_candidates_cache(2000007) ;
-  mm_to_candidates_cache.SetKmerLength(kmer_size_) ;
+  mm_cache mm_to_candidates_cache(2000007);
+  mm_to_candidates_cache.SetKmerLength(kmer_size_);
   struct _mm_history *mm_history = new struct _mm_history[read_batch_size_];
   read_batch_for_loading.InitializeLoading(read_file1_path_);
   if (!is_bulk_data_) {
@@ -1260,8 +1261,8 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
   std::vector<uint64_t> negative_hits;
   positive_hits.reserve(max_seed_frequencies_[0]);
   negative_hits.reserve(max_seed_frequencies_[0]);
-  std::vector<struct _candidate> positive_candidates;
-  std::vector<struct _candidate> negative_candidates;
+  std::vector<Candidate> positive_candidates;
+  std::vector<Candidate> negative_candidates;
   positive_candidates.reserve(max_seed_frequencies_[0]);
   negative_candidates.reserve(max_seed_frequencies_[0]);
   std::vector<std::pair<int, uint64_t> > positive_mappings;
@@ -1291,15 +1292,12 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
         negative_hits.clear();
         positive_candidates.clear();
         negative_candidates.clear();
-	if ( mm_to_candidates_cache.Query(minimizers, positive_candidates, negative_candidates, 
-		read_batch.GetSequenceLengthAt(read_index) ) == -1)
-	{
-		index.GenerateCandidates(error_threshold_, minimizers, &positive_hits, &negative_hits, 
-					&positive_candidates, &negative_candidates);
-		//printf("%d %d %d\n", minimizers.size(), positive_hits.size() + negative_hits.size(), 
-		//	positive_candidates.size() + negative_candidates.size()) ;
-		//if (positive_hits.size() + negative_hits.size() > minimizers.size() * 100)
-	}
+        if ( mm_to_candidates_cache.Query(minimizers, positive_candidates, negative_candidates, read_batch.GetSequenceLengthAt(read_index) ) == -1) {
+          index.GenerateCandidates(error_threshold_, minimizers, &positive_hits, &negative_hits, &positive_candidates, &negative_candidates);
+          //printf("%d %d %d\n", minimizers.size(), positive_hits.size() + negative_hits.size(), 
+          //	positive_candidates.size() + negative_candidates.size()) ;
+          //if (positive_hits.size() + negative_hits.size() > minimizers.size() * 100)
+        }
 	/*else
 	{
 		printf("successful cache load.%s\n", read_batch.GetSequenceNameAt(read_index)) ;
@@ -1312,13 +1310,12 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
 	{
 		printf("LI_DEBUG -: %d\n", int(negative_candidates[i].refPos)) ;
 	}*/
-	if (read_index <  num_loaded_reads / num_threads_ || num_reads_ < 5000000 )
-	{
-		mm_history[read_index].minimizers = minimizers ;
-		mm_history[read_index].positive_candidates = positive_candidates ;
-		mm_history[read_index].negative_candidates = negative_candidates ;
-	}
-	uint32_t current_num_candidates = positive_candidates.size() + negative_candidates.size(); 
+        if (read_index <  num_loaded_reads / num_threads_ || num_reads_ < 5000000) {
+          mm_history[read_index].minimizers = minimizers;
+          mm_history[read_index].positive_candidates = positive_candidates;
+          mm_history[read_index].negative_candidates = negative_candidates;
+        }
+        uint32_t current_num_candidates = positive_candidates.size() + negative_candidates.size(); 
         //std::cerr << "Generated candidates!\n";
         if (current_num_candidates > 0) {
           thread_num_candidates += current_num_candidates;
@@ -1343,14 +1340,13 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
       }
     }
     for (uint32_t read_index = 0; read_index < num_loaded_reads ; ++read_index) {
-    	if ( num_reads_ >= 5000000 && read_index >= num_loaded_reads / num_threads_)
-		break ;
-    	mm_to_candidates_cache.Update(mm_history[read_index].minimizers, mm_history[read_index].positive_candidates,
-				mm_history[read_index].negative_candidates) ;
-	if (mm_history[read_index].positive_candidates.size() < mm_history[read_index].positive_candidates.capacity() / 2)
-		std::vector<struct _candidate>().swap(mm_history[read_index].positive_candidates) ;
-	if (mm_history[read_index].negative_candidates.size() < mm_history[read_index].negative_candidates.capacity() / 2)
-		std::vector<struct _candidate>().swap(mm_history[read_index].negative_candidates) ;
+      if ( num_reads_ >= 5000000 && read_index >= num_loaded_reads / num_threads_)
+        break;
+      mm_to_candidates_cache.Update(mm_history[read_index].minimizers, mm_history[read_index].positive_candidates, mm_history[read_index].negative_candidates);
+      if (mm_history[read_index].positive_candidates.size() < mm_history[read_index].positive_candidates.capacity() / 2)
+        std::vector<Candidate>().swap(mm_history[read_index].positive_candidates);
+      if (mm_history[read_index].negative_candidates.size() < mm_history[read_index].negative_candidates.capacity() / 2)
+        std::vector<Candidate>().swap(mm_history[read_index].negative_candidates);
     }
     //std::cerr<<"cache memusage: " << mm_to_candidates_cache.GetMemoryBytes() <<"\n" ;
 #pragma omp taskwait
@@ -1372,7 +1368,7 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
     num_uniquely_mapped_reads_ += thread_num_uniquely_mapped_reads;
   } // end of updating shared mapping stats
   } // end of openmp parallel region
-  delete[] mm_history ;
+  //delete[] mm_history ;
   read_batch_for_loading.FinalizeLoading();
   if (!is_bulk_data_) {
     barcode_batch_for_loading.FinalizeLoading();
@@ -1807,13 +1803,13 @@ void Chromap<MappingRecord>::AllocateMultiMappings(uint32_t num_reference_sequen
 }
 
 template <typename MappingRecord>
-void Chromap<MappingRecord>::VerifyCandidatesOnOneDirectionUsingSIMD(Direction candidate_direction, const SequenceBatch &read_batch, uint32_t read_index, const SequenceBatch &reference, const std::vector<struct _candidate> &candidates, std::vector<std::pair<int, uint64_t> > *mappings, int *min_num_errors, int *num_best_mappings, int *second_min_num_errors, int *num_second_best_mappings) {
+void Chromap<MappingRecord>::VerifyCandidatesOnOneDirectionUsingSIMD(Direction candidate_direction, const SequenceBatch &read_batch, uint32_t read_index, const SequenceBatch &reference, const std::vector<Candidate> &candidates, std::vector<std::pair<int, uint64_t> > *mappings, int *min_num_errors, int *num_best_mappings, int *second_min_num_errors, int *num_second_best_mappings) {
   const char *read = read_batch.GetSequenceAt(read_index);
   uint32_t read_length = read_batch.GetSequenceLengthAt(read_index);
   const std::string &negative_read = read_batch.GetNegativeSequenceAt(read_index); 
 
   size_t num_candidates = candidates.size();
-  struct _candidate valid_candidates[NUM_VPU_LANES_];
+  Candidate valid_candidates[NUM_VPU_LANES_];
   const char *valid_candidate_starts[NUM_VPU_LANES_];
   uint32_t valid_candidate_index = 0;
   size_t candidate_index = 0;
@@ -1823,10 +1819,10 @@ void Chromap<MappingRecord>::VerifyCandidatesOnOneDirectionUsingSIMD(Direction c
   //int32_t mapping_edit_distances_32[NUM_VPU_LANES_];
   //int32_t mapping_end_positions_32[NUM_VPU_LANES_]; 
   while (candidate_index < num_candidates) {
-    if (candidates[candidate_index].mmCnt < mmCntThreshold)
+    if (candidates[candidate_index].count < mmCntThreshold)
     	break ;
-    uint32_t rid = candidates[candidate_index].refPos >> 32;
-    uint32_t position = candidates[candidate_index].refPos ;
+    uint32_t rid = candidates[candidate_index].position >> 32;
+    uint32_t position = candidates[candidate_index].position;
     if (candidate_direction == kNegative) {
       position = position - read_length + 1;
     }
@@ -1864,9 +1860,9 @@ void Chromap<MappingRecord>::VerifyCandidatesOnOneDirectionUsingSIMD(Direction c
               (*num_second_best_mappings)++;
             }
             if (candidate_direction == kPositive) {
-              mappings->emplace_back((uint8_t)mapping_edit_distances[mi], valid_candidates[mi].refPos - error_threshold_ + mapping_end_positions[mi]);
+              mappings->emplace_back((uint8_t)mapping_edit_distances[mi], valid_candidates[mi].position - error_threshold_ + mapping_end_positions[mi]);
             } else {
-              mappings->emplace_back((uint8_t)mapping_edit_distances[mi], valid_candidates[mi].refPos - read_length + 1 - error_threshold_ + mapping_end_positions[mi]); 
+              mappings->emplace_back((uint8_t)mapping_edit_distances[mi], valid_candidates[mi].position - read_length + 1 - error_threshold_ + mapping_end_positions[mi]); 
             }
           }
         }
@@ -1894,28 +1890,27 @@ void Chromap<MappingRecord>::VerifyCandidatesOnOneDirectionUsingSIMD(Direction c
               (*num_second_best_mappings)++;
             }
             if (candidate_direction == kPositive) {
-              mappings->emplace_back((uint8_t)mapping_edit_distances[mi], valid_candidates[mi].refPos - error_threshold_ + mapping_end_positions[mi]);
+              mappings->emplace_back((uint8_t)mapping_edit_distances[mi], valid_candidates[mi].position - error_threshold_ + mapping_end_positions[mi]);
             } else {
-              mappings->emplace_back((uint8_t)mapping_edit_distances[mi], valid_candidates[mi].refPos - read_length + 1 - error_threshold_ + mapping_end_positions[mi]); 
+              mappings->emplace_back((uint8_t)mapping_edit_distances[mi], valid_candidates[mi].position - read_length + 1 - error_threshold_ + mapping_end_positions[mi]); 
             }
           } else {
-	  	mmCntThreshold = valid_candidates[mi].mmCnt ;
-	  }
+            mmCntThreshold = valid_candidates[mi].count ;
+          }
         }
       }
       valid_candidate_index = 0;
 
       // Check whether we should stop early. Assuming the candidates are sorted 
-      if ( GetMAPQ( 0, 0, read_length + error_threshold_, *min_num_errors, *num_best_mappings, 
-      	*second_min_num_errors, *second_min_num_errors ) < 30 )
-      	break ;
+      if (GetMAPQ(0, 0, read_length + error_threshold_, *min_num_errors, *num_best_mappings, *second_min_num_errors, *second_min_num_errors ) < 30)
+      	break;
     }
     ++candidate_index;
   }
 
   for (uint32_t ci = 0; ci < valid_candidate_index; ++ci) {
-    uint32_t rid = valid_candidates[ci].refPos >> 32;
-    uint32_t position = valid_candidates[ci].refPos ;
+    uint32_t rid = valid_candidates[ci].position >> 32;
+    uint32_t position = valid_candidates[ci].position ;
     if (candidate_direction == kNegative) {
       position = position - read_length + 1;
     }
@@ -1941,23 +1936,23 @@ void Chromap<MappingRecord>::VerifyCandidatesOnOneDirectionUsingSIMD(Direction c
         (*num_second_best_mappings)++;
       }
       if (candidate_direction == kPositive) {
-        mappings->emplace_back(num_errors, valid_candidates[ci].refPos - error_threshold_ + mapping_end_position);
+        mappings->emplace_back(num_errors, valid_candidates[ci].position - error_threshold_ + mapping_end_position);
       } else {
-        mappings->emplace_back(num_errors, valid_candidates[ci].refPos - read_length + 1 - error_threshold_ + mapping_end_position); 
+        mappings->emplace_back(num_errors, valid_candidates[ci].position - read_length + 1 - error_threshold_ + mapping_end_position); 
       }
     }
   }
 }
 
 template <typename MappingRecord>
-void Chromap<MappingRecord>::VerifyCandidatesOnOneDirection(Direction candidate_direction, const SequenceBatch &read_batch, uint32_t read_index, const SequenceBatch &reference, const std::vector<struct _candidate> &candidates, std::vector<std::pair<int, uint64_t> > *mappings, int *min_num_errors, int *num_best_mappings, int *second_min_num_errors, int *num_second_best_mappings) {
+void Chromap<MappingRecord>::VerifyCandidatesOnOneDirection(Direction candidate_direction, const SequenceBatch &read_batch, uint32_t read_index, const SequenceBatch &reference, const std::vector<Candidate> &candidates, std::vector<std::pair<int, uint64_t> > *mappings, int *min_num_errors, int *num_best_mappings, int *second_min_num_errors, int *num_second_best_mappings) {
   const char *read = read_batch.GetSequenceAt(read_index);
   uint32_t read_length = read_batch.GetSequenceLengthAt(read_index);
   const std::string &negative_read = read_batch.GetNegativeSequenceAt(read_index); 
 
   for (uint32_t ci = 0; ci < candidates.size(); ++ci) {
-    uint32_t rid = candidates[ci].refPos >> 32;
-    uint32_t position = candidates[ci].refPos ;
+    uint32_t rid = candidates[ci].position >> 32;
+    uint32_t position = candidates[ci].position ;
     if (candidate_direction == kNegative) {
       position = position - read_length + 1;
     }
@@ -1983,72 +1978,72 @@ void Chromap<MappingRecord>::VerifyCandidatesOnOneDirection(Direction candidate_
         (*num_second_best_mappings)++;
       }
       if (candidate_direction == kPositive) {
-        mappings->emplace_back(num_errors, candidates[ci].refPos - error_threshold_ + mapping_end_position);
+        mappings->emplace_back(num_errors, candidates[ci].position - error_threshold_ + mapping_end_position);
       } else {
-        mappings->emplace_back(num_errors, candidates[ci].refPos - read_length + 1 - error_threshold_ + mapping_end_position); 
+        mappings->emplace_back(num_errors, candidates[ci].position - read_length + 1 - error_threshold_ + mapping_end_position); 
       }
     }
   }
 }
 
 template <typename MappingRecord>
-void Chromap<MappingRecord>::VerifyCandidates(const SequenceBatch &read_batch, uint32_t read_index, const SequenceBatch &reference, const std::vector<std::pair<uint64_t, uint64_t> > &minimizers, const std::vector<struct _candidate> &positive_candidates, const std::vector<struct _candidate> &negative_candidates, std::vector<std::pair<int, uint64_t> > *positive_mappings, std::vector<std::pair<int, uint64_t> > *negative_mappings, int *min_num_errors, int *num_best_mappings, int *second_min_num_errors, int *num_second_best_mappings) {
+void Chromap<MappingRecord>::VerifyCandidates(const SequenceBatch &read_batch, uint32_t read_index, const SequenceBatch &reference, const std::vector<std::pair<uint64_t, uint64_t> > &minimizers, const std::vector<Candidate> &positive_candidates, const std::vector<Candidate> &negative_candidates, std::vector<std::pair<int, uint64_t> > *positive_mappings, std::vector<std::pair<int, uint64_t> > *negative_mappings, int *min_num_errors, int *num_best_mappings, int *second_min_num_errors, int *num_second_best_mappings) {
   *min_num_errors = error_threshold_ + 1;
   *num_best_mappings = 0;
   *second_min_num_errors = error_threshold_ + 1;
   *num_second_best_mappings = 0;
   
   // Directly obtain the mapping in ideal case.
-  uint32_t i ;
-  int maxCnt = 0 ;
-  int maxTag = 0 ;
+  uint32_t i;
+  int maxCnt = 0;
+  int maxTag = 0;
   //printf("LI_DEBUG: %u %u\n", positive_candidates.size() + negative_candidates.size(), minimizers.size()) ;
-  for ( i = 0 ; i < positive_candidates.size() ; ++i ) {
-  	//printf("+ %u %u\n", i, positive_candidates[i].mmCnt) ;
-  	if (positive_candidates[i].mmCnt == minimizers.size()) {
-		maxTag = i << 1 ;
-		++maxCnt ;
-	}
+  for (i = 0; i < positive_candidates.size(); ++i) {
+    //printf("+ %u %u\n", i, positive_candidates[i].mmCnt) ;
+    if (positive_candidates[i].count == minimizers.size()) {
+      maxTag = i << 1;
+      ++maxCnt;
+    }
   }
-  for ( i = 0 ; i < negative_candidates.size() ; ++i ) {
-  	//printf("- %u %u\n", i, negative_candidates[i].mmCnt) ;
-  	if (negative_candidates[i].mmCnt == minimizers.size()) {
-		maxTag = (i << 1)|1 ;
-		++maxCnt ;
-	}
+  for (i = 0; i < negative_candidates.size(); ++i) {
+    //printf("- %u %u\n", i, negative_candidates[i].mmCnt) ;
+    if (negative_candidates[i].count == minimizers.size()) {
+      maxTag = (i << 1)|1;
+      ++maxCnt;
+    }
   }
   
   if (maxCnt == 1) {
-      Direction candidate_direction = (maxTag & 1) ? kNegative : kPositive ;
-      uint32_t ci = maxTag >> 1 ;
-      *num_best_mappings = 1 ;
-      *num_second_best_mappings = 0 ;
-      *min_num_errors = 0 ;
+    Direction candidate_direction = (maxTag & 1) ? kNegative : kPositive;
+    uint32_t ci = maxTag >> 1 ;
+    *num_best_mappings = 1 ;
+    *num_second_best_mappings = 0 ;
+    *min_num_errors = 0 ;
 
-      uint32_t rid = 0 ; 
-      uint32_t position = 0 ; 
-      uint32_t read_length = read_batch.GetSequenceLengthAt(read_index);
+    uint32_t rid = 0 ; 
+    uint32_t position = 0 ; 
+    uint32_t read_length = read_batch.GetSequenceLengthAt(read_index);
+    if (candidate_direction == kPositive) {
+      rid = positive_candidates[ci].position >> 32;
+      position = positive_candidates[ci].position;
+    }
+    else {
+      rid = negative_candidates[ci].position >> 32;
+      position = (uint32_t)negative_candidates[ci].position - read_length + 1 ;
+    }
+    bool flag = true ;
+    if (position < (uint32_t)error_threshold_ || position >= reference.GetSequenceLengthAt(rid) || position + read_length + error_threshold_ >= reference.GetSequenceLengthAt(rid)) {
+      flag = false ;
+    }
+    if (flag) {
       if (candidate_direction == kPositive) {
-        rid = positive_candidates[ci].refPos >> 32 ;
-        position = positive_candidates[ci].refPos ;
+        positive_mappings->emplace_back(0, positive_candidates[ci].position + read_length - 1);
+      } else {
+        negative_mappings->emplace_back(0, negative_candidates[ci].position); 
       }
-      else {
-        rid = negative_candidates[ci].refPos >> 32 ;
-        position = (uint32_t)negative_candidates[ci].refPos - read_length + 1 ;
-      }
-      bool flag = true ;
-      if (position < (uint32_t)error_threshold_ || position >= reference.GetSequenceLengthAt(rid) || position + read_length + error_threshold_ >= reference.GetSequenceLengthAt(rid)) {
-      	flag = false ;
-      }
-      if (flag) {
-        if (candidate_direction == kPositive) {
-          positive_mappings->emplace_back(0, positive_candidates[ci].refPos + read_length - 1);
-        } else {
-          negative_mappings->emplace_back(0, negative_candidates[ci].refPos); 
-        }
-	//printf("Saved %d\n", positive_candidates.size() + negative_candidates.size() ) ;
-	return ;
-      }
+      //printf("Saved %d\n", positive_candidates.size() + negative_candidates.size() ) ;
+      return ;
+    }
   }
   //printf("Notsaved %d\n", positive_candidates.size() + negative_candidates.size()) ;
 
@@ -2056,14 +2051,14 @@ void Chromap<MappingRecord>::VerifyCandidates(const SequenceBatch &read_batch, u
   if (positive_candidates.size() < (size_t)NUM_VPU_LANES_) {
     VerifyCandidatesOnOneDirection(kPositive, read_batch, read_index, reference, positive_candidates, positive_mappings, min_num_errors, num_best_mappings, second_min_num_errors, num_second_best_mappings);
   } else {
-    std::vector<struct _candidate> sorted_candidates(positive_candidates) ; 
+    std::vector<Candidate> sorted_candidates(positive_candidates) ; 
     std::sort(sorted_candidates.begin(), sorted_candidates.end()) ;
     VerifyCandidatesOnOneDirectionUsingSIMD(kPositive, read_batch, read_index, reference, sorted_candidates, positive_mappings, min_num_errors, num_best_mappings, second_min_num_errors, num_second_best_mappings);
   }
   if (negative_candidates.size() < (size_t)NUM_VPU_LANES_) {
     VerifyCandidatesOnOneDirection(kNegative, read_batch, read_index, reference, negative_candidates, negative_mappings, min_num_errors, num_best_mappings, second_min_num_errors, num_second_best_mappings);
   } else {
-    std::vector<struct _candidate> sorted_candidates(negative_candidates) ; 
+    std::vector<Candidate> sorted_candidates(negative_candidates) ; 
     std::sort(sorted_candidates.begin(), sorted_candidates.end()) ;
     VerifyCandidatesOnOneDirectionUsingSIMD(kNegative, read_batch, read_index, reference, sorted_candidates, negative_mappings, min_num_errors, num_best_mappings, second_min_num_errors, num_second_best_mappings);
   }
