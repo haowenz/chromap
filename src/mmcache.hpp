@@ -103,8 +103,7 @@ class mm_cache {
       for (i = 0; i < size; ++i)
         neg_candidates[i].position += shift;
       return hidx;
-    }
-    else if (direction == -1) {// The "read" is on the other direction of the cached "read"
+    } else if (direction == -1) {// The "read" is on the other direction of the cached "read"
       int size = cache[hidx].negative_candidates.size();
       // Start position of the last minimizer shoud equal the first minimizer's end position in rc "read".
       int shift = read_len - ((int)minimizers[msize - 1].second>>1) - 1 + kmer_length - 1; 
