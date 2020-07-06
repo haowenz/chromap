@@ -157,7 +157,7 @@ void Chromap<MappingRecord>::CorrectBarcodeAt(uint32_t barcode_index, SequenceBa
         barcode_whitelist_lookup_table_iterator = kh_get(k32_set, barcode_whitelist_lookup_table_, corrected_barcode_key);
         if (barcode_whitelist_lookup_table_iterator != kh_end(barcode_whitelist_lookup_table_)) {
           // find one possible corrected barcode
-          corrected_barcodes_with_quals.emplace_back(BarcodeWithQual{barcode_length - 1 - i, SequenceBatch::Uint8ToChar(base_to_change), barcode_qual[i]});
+          corrected_barcodes_with_quals.emplace_back(BarcodeWithQual{barcode_length - 1 - i, SequenceBatch::Uint8ToChar(base_to_change), barcode_qual[barcode_length - 1 - i]});
         }
       }
     }
