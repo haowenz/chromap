@@ -291,10 +291,11 @@ void Index::GenerateCandidatesOnOneDirection(int error_threshold, std::vector<ui
   }
 }
 
-void Index::CollectCandidates(int max_seed_frequency, const std::vector<std::pair<uint64_t, uint64_t> > &minimizers, std::vector<uint64_t> *positive_hits, std::vector<uint64_t> *negative_hits) {
+void Index::CollectCandidates(int max_seed_frequency, const std::vector<std::pair<uint64_t, uint64_t> > &minimizers, uint32_t *repetitive_seed_length, std::vector<uint64_t> *positive_hits, std::vector<uint64_t> *negative_hits) {
   uint32_t num_minimizers = minimizers.size();
   positive_hits->reserve(max_seed_frequencies_[0]);
   negative_hits->reserve(max_seed_frequencies_[0]);
+  uint32_t previous_repetitive_seed_position = std::numeric_limits<uint32_t>::max();
   for (uint32_t mi = 0; mi < num_minimizers; ++mi) {
     khiter_t khash_iterator = kh_get(k64, lookup_table_, minimizers[mi].first << 1);
     if (khash_iterator == kh_end(lookup_table_)) {
@@ -337,13 +338,24 @@ void Index::CollectCandidates(int max_seed_frequency, const std::vector<std::pai
             negative_hits->push_back(candidate);
           }
         } 
+      } else {
+        if (previous_repetitive_seed_position > read_position) { // first minimizer
+          *repetitive_seed_length += kmer_size_;
+        } else {
+          if (read_position < previous_repetitive_seed_position + kmer_size_) {
+            *repetitive_seed_length += previous_repetitive_seed_position + kmer_size_ - read_position;
+          } else {
+            *repetitive_seed_length += kmer_size_;
+          }
+        }
+        previous_repetitive_seed_position = read_position;
       }
     }
   }
 }
 
-void Index::GenerateCandidates(int error_threshold, const std::vector<std::pair<uint64_t, uint64_t> > &minimizers, std::vector<uint64_t> *positive_hits, std::vector<uint64_t> *negative_hits, std::vector<Candidate> *positive_candidates, std::vector<Candidate> *negative_candidates) {
-  CollectCandidates(max_seed_frequencies_[0], minimizers, positive_hits, negative_hits);
+void Index::GenerateCandidates(int error_threshold, const std::vector<std::pair<uint64_t, uint64_t> > &minimizers, uint32_t *repetitive_seed_length, std::vector<uint64_t> *positive_hits, std::vector<uint64_t> *negative_hits, std::vector<Candidate> *positive_candidates, std::vector<Candidate> *negative_candidates) {
+  CollectCandidates(max_seed_frequencies_[0], minimizers, repetitive_seed_length, positive_hits, negative_hits);
   // Now I can generate primer chain in candidates
   // Let me use sort for now, but I can use merge later.
   //printf("p+n: %d\n", positive_hits->size() + negative_hits->size()) ;
@@ -353,7 +365,8 @@ void Index::GenerateCandidates(int error_threshold, const std::vector<std::pair<
     positive_hits->clear();
     negative_hits->clear();
     //printf("second round\n") ;
-    CollectCandidates(max_seed_frequencies_[1], minimizers, positive_hits, negative_hits);
+    *repetitive_seed_length = 0;
+    CollectCandidates(max_seed_frequencies_[1], minimizers, repetitive_seed_length, positive_hits, negative_hits);
     //printf("p+n2: %d\n", positive_hits->size() + negative_hits->size()) ;
     GenerateCandidatesOnOneDirection(error_threshold, positive_hits, positive_candidates);
     GenerateCandidatesOnOneDirection(error_threshold, negative_hits, negative_candidates);
