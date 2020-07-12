@@ -20,7 +20,6 @@ struct _mm_history {
 	std::vector<std::pair<uint64_t, uint64_t> > minimizers;
 	std::vector<Candidate> positive_candidates;
 	std::vector<Candidate> negative_candidates;
-        uint32_t repetitive_seed_length;
 };
 
 template <typename MappingRecord>
@@ -490,7 +489,7 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
   SequenceBatch read_batch1_for_loading(read_batch_size_);
   SequenceBatch read_batch2_for_loading(read_batch_size_);
   SequenceBatch barcode_batch_for_loading(read_batch_size_);
-  mm_cache mm_to_candidates_cache(2000003);
+  mm_cache mm_to_candidates_cache(1000003);
   mm_to_candidates_cache.SetKmerLength(kmer_size_);
   struct _mm_history *mm_history1 = new struct _mm_history[read_batch_size_];
   struct _mm_history *mm_history2 = new struct _mm_history[read_batch_size_];
@@ -1223,18 +1222,6 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
   SequenceBatch read_batch_for_loading(read_batch_size_);
   SequenceBatch barcode_batch(read_batch_size_);
   SequenceBatch barcode_batch_for_loading(read_batch_size_);
-  mm_cache mm_to_candidates_cache(2000003);
-  mm_to_candidates_cache.SetKmerLength(kmer_size_);
-  struct _mm_history *mm_history = new struct _mm_history[read_batch_size_];
-  read_batch_for_loading.InitializeLoading(read_file1_path_);
-  if (!is_bulk_data_) {
-    barcode_batch_for_loading.InitializeLoading(barcode_file_path_);
-  }
-  double real_start_mapping_time = Chromap<>::GetRealTime();
-  uint32_t num_loaded_reads_for_loading = 0;
-  uint32_t num_loaded_reads = LoadSingleEndReadsWithBarcodes(&read_batch_for_loading, &barcode_batch_for_loading);
-  read_batch_for_loading.SwapSequenceBatch(read_batch);
-  barcode_batch_for_loading.SwapSequenceBatch(barcode_batch);
   mappings_on_diff_ref_seqs_.reserve(num_reference_sequences);
   deduped_mappings_on_diff_ref_seqs_.reserve(num_reference_sequences);
   for (uint32_t i = 0; i < num_reference_sequences; ++i) {

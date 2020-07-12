@@ -14,7 +14,6 @@ struct _mm_cache_entry {
   int weight;
   unsigned short finger_print_cnt[FINGER_PRINT_SIZE];
   int finger_print_cnt_sum;
-  uint32_t repetitive_seed_length;
 };
 
 class mm_cache {
@@ -85,7 +84,7 @@ class mm_cache {
   }
 
   // Return the hash entry index. -1 if failed.
-  int Query(const std::vector<std::pair<uint64_t, uint64_t> > &minimizers, std::vector<Candidate> &pos_candidates, std::vector<Candidate> &neg_candidates, uint32_t &repetitive_seed_length, uint32_t read_len) {
+  int Query(const std::vector<std::pair<uint64_t, uint64_t> > &minimizers, std::vector<Candidate> &pos_candidates, std::vector<Candidate> &neg_candidates, uint32_t read_len) {
     int i;
     int msize = minimizers.size();
     uint64_t h = 0;
@@ -96,7 +95,6 @@ class mm_cache {
     if (direction == 1) {
       pos_candidates = cache[hidx].positive_candidates;
       neg_candidates = cache[hidx].negative_candidates;
-      repetitive_seed_length = cache[hidx].repetitive_seed_length;
       int size = pos_candidates.size();
       int shift = (int)minimizers[0].second >> 1;
       for (i = 0; i < size; ++i)
@@ -118,14 +116,13 @@ class mm_cache {
       neg_candidates = cache[hidx].positive_candidates;
       for (i = 0; i < size; ++i)
         neg_candidates[i].position = cache[hidx].positive_candidates[i].position - shift + read_len - 1;
-      repetitive_seed_length = cache[hidx].repetitive_seed_length;
       return hidx;
     } else {
       return -1;
     }
   }
 
-  void Update(const std::vector<std::pair<uint64_t, uint64_t> > &minimizers, std::vector<Candidate> &pos_candidates, std::vector<Candidate> &neg_candidates, uint32_t repetitive_seed_length) {
+  void Update(const std::vector<std::pair<uint64_t, uint64_t> > &minimizers, std::vector<Candidate> &pos_candidates, std::vector<Candidate> &neg_candidates) {
     int i;
     int msize = minimizers.size();
 
@@ -170,7 +167,6 @@ class mm_cache {
       std::vector<Candidate>().swap(cache[hidx].negative_candidates);
       cache[hidx].positive_candidates = pos_candidates;
       cache[hidx].negative_candidates = neg_candidates;
-      cache[hidx].repetitive_seed_length = repetitive_seed_length;
 
       // adjust the candidate position.
       int size = cache[hidx].positive_candidates.size();
