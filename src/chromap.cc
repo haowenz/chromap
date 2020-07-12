@@ -493,37 +493,11 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
   mm_to_candidates_cache.SetKmerLength(kmer_size_);
   struct _mm_history *mm_history1 = new struct _mm_history[read_batch_size_];
   struct _mm_history *mm_history2 = new struct _mm_history[read_batch_size_];
-  read_batch1_for_loading.InitializeLoading(read_file1_path_);
-  read_batch2_for_loading.InitializeLoading(read_file2_path_);
-  if (!is_bulk_data_) {
-    barcode_batch_for_loading.InitializeLoading(barcode_file_path_);
-    if (!barcode_whitelist_file_path_.empty()) {
-      LoadBarcodeWhitelist();
-    }
-  }
-  double real_start_mapping_time = Chromap<>::GetRealTime();
-  uint32_t num_loaded_pairs_for_loading = 0;
-  uint32_t num_loaded_pairs = LoadPairedEndReadsWithBarcodes(&read_batch1_for_loading, &read_batch2_for_loading, &barcode_batch_for_loading);
-  read_batch1_for_loading.SwapSequenceBatch(read_batch1);
-  read_batch2_for_loading.SwapSequenceBatch(read_batch2);
-  barcode_batch_for_loading.SwapSequenceBatch(barcode_batch);
   mappings_on_diff_ref_seqs_.reserve(num_reference_sequences);
   deduped_mappings_on_diff_ref_seqs_.reserve(num_reference_sequences);
   for (uint32_t i = 0; i < num_reference_sequences; ++i) {
     mappings_on_diff_ref_seqs_.emplace_back(std::vector<MappingRecord>());
     deduped_mappings_on_diff_ref_seqs_.emplace_back(std::vector<MappingRecord>());
-  }
-  std::vector<std::vector<std::vector<MappingRecord> > > mappings_on_diff_ref_seqs_for_diff_threads;
-  std::vector<std::vector<std::vector<MappingRecord> > > mappings_on_diff_ref_seqs_for_diff_threads_for_saving;
-  mappings_on_diff_ref_seqs_for_diff_threads.reserve(num_threads_);
-  mappings_on_diff_ref_seqs_for_diff_threads_for_saving.reserve(num_threads_);
-  for (int ti = 0; ti < num_threads_; ++ti) {
-    mappings_on_diff_ref_seqs_for_diff_threads.emplace_back(std::vector<std::vector<MappingRecord> >(num_reference_sequences));
-    mappings_on_diff_ref_seqs_for_diff_threads_for_saving.emplace_back(std::vector<std::vector<MappingRecord> >(num_reference_sequences));
-    for (uint32_t i = 0; i < num_reference_sequences; ++i) {
-      mappings_on_diff_ref_seqs_for_diff_threads[ti][i].reserve((num_loaded_pairs + num_loaded_pairs / 1000 * max_num_best_mappings_) / num_threads_ / num_reference_sequences);
-      mappings_on_diff_ref_seqs_for_diff_threads_for_saving[ti][i].reserve((num_loaded_pairs + num_loaded_pairs / 1000 * max_num_best_mappings_) / num_threads_ / num_reference_sequences);
-    }
   }
   if (output_mapping_in_BED_) {
     output_tools_ = std::unique_ptr<BEDPEOutputTools<MappingRecord> >(new BEDPEOutputTools<MappingRecord>);
@@ -535,6 +509,11 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
   output_tools_->InitializeMappingOutput(mapping_output_file_path_);
   uint32_t num_mappings_in_mem = 0;
   uint64_t max_num_mappings_in_mem = 1 * ((uint64_t)1 << 30) / sizeof(MappingRecord);
+  if (!is_bulk_data_) {
+    if (!barcode_whitelist_file_path_.empty()) {
+      LoadBarcodeWhitelist();
+    }
+  }
   static uint64_t thread_num_candidates = 0;
   static uint64_t thread_num_mappings = 0;
   static uint64_t thread_num_mapped_reads = 0; 
@@ -542,206 +521,241 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
   static uint64_t thread_num_barcode_in_whitelist = 0; 
   static uint64_t thread_num_corrected_barcode = 0; 
 #pragma omp threadprivate(thread_num_candidates, thread_num_mappings, thread_num_mapped_reads, thread_num_uniquely_mapped_reads, thread_num_barcode_in_whitelist, thread_num_corrected_barcode)
-#pragma omp parallel default(none) shared(reference, index, read_batch1, read_batch2, barcode_batch, read_batch1_for_loading, read_batch2_for_loading, barcode_batch_for_loading, std::cerr, num_loaded_pairs_for_loading, num_loaded_pairs, num_reference_sequences, mappings_on_diff_ref_seqs_for_diff_threads, mappings_on_diff_ref_seqs_for_diff_threads_for_saving, num_mappings_in_mem, max_num_mappings_in_mem, temp_mapping_file_handles_, mm_to_candidates_cache, mm_history1, mm_history2) num_threads(num_threads_) reduction(+:num_candidates_, num_mappings_, num_mapped_reads_, num_uniquely_mapped_reads_, num_barcode_in_whitelist_, num_corrected_barcode_)
-  {
-  std::vector<std::pair<uint64_t, uint64_t> > minimizers1;
-  std::vector<std::pair<uint64_t, uint64_t> > minimizers2;
-  std::vector<uint64_t> positive_hits1;
-  std::vector<uint64_t> positive_hits2;
-  std::vector<uint64_t> negative_hits1;
-  std::vector<uint64_t> negative_hits2;
-  positive_hits1.reserve(max_seed_frequencies_[0]);
-  positive_hits2.reserve(max_seed_frequencies_[0]);
-  negative_hits1.reserve(max_seed_frequencies_[0]);
-  negative_hits2.reserve(max_seed_frequencies_[0]);
-  std::vector<Candidate> positive_candidates1;
-  std::vector<Candidate> positive_candidates2;
-  std::vector<Candidate> negative_candidates1;
-  std::vector<Candidate> negative_candidates2;
-  positive_candidates1.reserve(max_seed_frequencies_[0]);
-  positive_candidates2.reserve(max_seed_frequencies_[0]);
-  negative_candidates1.reserve(max_seed_frequencies_[0]);
-  negative_candidates2.reserve(max_seed_frequencies_[0]);
-  std::vector<Candidate> positive_candidates1_buffer;
-  std::vector<Candidate> positive_candidates2_buffer;
-  std::vector<Candidate> negative_candidates1_buffer;
-  std::vector<Candidate> negative_candidates2_buffer;
-  positive_candidates1_buffer.reserve(max_seed_frequencies_[0]);
-  positive_candidates2_buffer.reserve(max_seed_frequencies_[0]);
-  negative_candidates1_buffer.reserve(max_seed_frequencies_[0]);
-  negative_candidates2_buffer.reserve(max_seed_frequencies_[0]);
-  std::vector<std::pair<int, uint64_t> > positive_mappings1;
-  std::vector<std::pair<int, uint64_t> > positive_mappings2;
-  std::vector<std::pair<int, uint64_t> > negative_mappings1;
-  std::vector<std::pair<int, uint64_t> > negative_mappings2;
-  positive_mappings1.reserve(max_seed_frequencies_[0]);
-  positive_mappings2.reserve(max_seed_frequencies_[0]);
-  negative_mappings1.reserve(max_seed_frequencies_[0]);
-  negative_mappings2.reserve(max_seed_frequencies_[0]);
-  std::vector<std::pair<uint32_t, uint32_t> > F1R2_best_mappings;
-  std::vector<std::pair<uint32_t, uint32_t> > F2R1_best_mappings;
-  F1R2_best_mappings.reserve(max_seed_frequencies_[0]);
-  F2R1_best_mappings.reserve(max_seed_frequencies_[0]);
-  // we will use reservoir sampling 
-  std::vector<int> best_mapping_indices(max_num_best_mappings_);
-  std::mt19937 generator(11);
-#pragma omp single
-  {
-  while (num_loaded_pairs > 0) {
-    double real_batch_start_time = Chromap<>::GetRealTime();
-    num_reads_ += num_loaded_pairs;
-    num_reads_ += num_loaded_pairs;
-#pragma omp task
-    {
-    num_loaded_pairs_for_loading = LoadPairedEndReadsWithBarcodes(&read_batch1_for_loading, &read_batch2_for_loading, &barcode_batch_for_loading);
-    } // end of openmp loading task
-    int grain_size = 10000;
-#pragma omp taskloop grainsize(grain_size) //num_tasks(num_threads_* 50)
-    for (uint32_t pair_index = 0; pair_index < num_loaded_pairs; ++pair_index) {
-      read_batch1.PrepareNegativeSequenceAt(pair_index);
-      read_batch2.PrepareNegativeSequenceAt(pair_index);
-      if (trim_adapters_) {
-        TrimAdapterForPairedEndRead(pair_index, &read_batch1, &read_batch2);
-      }
-      if (!barcode_whitelist_file_path_.empty()) {
-        CorrectBarcodeAt(pair_index, &barcode_batch, &thread_num_barcode_in_whitelist, &thread_num_corrected_barcode); 
-      }
-      minimizers1.clear();
-      minimizers2.clear();
-      minimizers1.reserve(read_batch1.GetSequenceLengthAt(pair_index) / window_size_ * 2);
-      minimizers2.reserve(read_batch2.GetSequenceLengthAt(pair_index) / window_size_ * 2);
-      index.GenerateMinimizerSketch(read_batch1, pair_index, &minimizers1);
-      index.GenerateMinimizerSketch(read_batch2, pair_index, &minimizers2);
-      if (minimizers1.size() != 0 && minimizers2.size() != 0) {
-        positive_hits1.clear();
-        positive_hits2.clear();
-        negative_hits1.clear();
-        negative_hits2.clear();
-        positive_candidates1.clear();
-        positive_candidates2.clear();
-        negative_candidates1.clear();
-        negative_candidates2.clear();
-        positive_candidates1_buffer.clear();
-        positive_candidates2_buffer.clear();
-        negative_candidates1_buffer.clear();
-        negative_candidates2_buffer.clear();
-        uint32_t repetitive_seed_length1 = 0;
-        uint32_t repetitive_seed_length2 = 0;
-        if (mm_to_candidates_cache.Query(minimizers1, positive_candidates1, negative_candidates1, read_batch1.GetSequenceLengthAt(pair_index)) == -1)
-          index.GenerateCandidates(error_threshold_, minimizers1, &repetitive_seed_length1, &positive_hits1, &negative_hits1, &positive_candidates1, &negative_candidates1);
-        uint32_t current_num_candidates1 = positive_candidates1.size() + negative_candidates1.size();
-        if (mm_to_candidates_cache.Query(minimizers2, positive_candidates2, negative_candidates2, read_batch2.GetSequenceLengthAt(pair_index)) == -1)
-          index.GenerateCandidates(error_threshold_, minimizers2, &repetitive_seed_length2, &positive_hits2, &negative_hits2, &positive_candidates2, &negative_candidates2);
-        uint32_t current_num_candidates2 = positive_candidates2.size() + negative_candidates2.size();
-        if (pair_index < num_loaded_pairs / num_threads_ || num_reads_ < 2 * 5000000) {
-          mm_history1[pair_index].minimizers = minimizers1;
-          mm_history1[pair_index].positive_candidates = positive_candidates1;
-          mm_history1[pair_index].negative_candidates = negative_candidates1;
-          mm_history2[pair_index].minimizers = minimizers2;
-          mm_history2[pair_index].positive_candidates = positive_candidates2;
-          mm_history2[pair_index].negative_candidates = negative_candidates2;
-        }
-        if (current_num_candidates1 > 0 && current_num_candidates2 > 0) {
-          positive_candidates1.swap(positive_candidates1_buffer);
-          negative_candidates1.swap(negative_candidates1_buffer);
-          positive_candidates2.swap(positive_candidates2_buffer);
-          negative_candidates2.swap(negative_candidates2_buffer);
-          positive_candidates1.clear();
-          positive_candidates2.clear();
-          negative_candidates1.clear();
-          negative_candidates2.clear();
-          ReduceCandidatesForPairedEndRead(positive_candidates1_buffer, negative_candidates1_buffer, positive_candidates2_buffer, negative_candidates2_buffer, &positive_candidates1, &negative_candidates1, &positive_candidates2, &negative_candidates2);
-          thread_num_candidates += positive_candidates1.size() + positive_candidates2.size() + negative_candidates1.size() + negative_candidates2.size();
-          positive_mappings1.clear();
-          positive_mappings2.clear();
-          negative_mappings1.clear();
-          negative_mappings2.clear();
-          int min_num_errors1, second_min_num_errors1;
-          int num_best_mappings1, num_second_best_mappings1;
-          int min_num_errors2, second_min_num_errors2;
-          int num_best_mappings2, num_second_best_mappings2;
-          VerifyCandidates(read_batch1, pair_index, reference, minimizers1, positive_candidates1, negative_candidates1, &positive_mappings1, &negative_mappings1, &min_num_errors1, &num_best_mappings1, &second_min_num_errors1, &num_second_best_mappings1);
-          uint32_t current_num_mappings1 = positive_mappings1.size() + negative_mappings1.size();
-          VerifyCandidates(read_batch2, pair_index, reference, minimizers2, positive_candidates2, negative_candidates2, &positive_mappings2, &negative_mappings2, &min_num_errors2, &num_best_mappings2, &second_min_num_errors2, &num_second_best_mappings2);
-          uint32_t current_num_mappings2 = positive_mappings2.size() + negative_mappings2.size();
-          if (current_num_mappings1 > 0 && current_num_mappings2 > 0) {
-            int min_sum_errors, second_min_sum_errors;
-            int num_best_mappings, num_second_best_mappings;
-            F1R2_best_mappings.clear();
-            F2R1_best_mappings.clear();
-            std::vector<std::vector<MappingRecord> > &mappings_on_diff_ref_seqs = mappings_on_diff_ref_seqs_for_diff_threads[omp_get_thread_num()];
-            std::sort(positive_mappings1.begin(), positive_mappings1.end(), [](const std::pair<int,uint64_t> &a, const std::pair<int,uint64_t> &b) { return a.second < b.second; });
-            std::sort(positive_mappings2.begin(), positive_mappings2.end(), [](const std::pair<int,uint64_t> &a, const std::pair<int,uint64_t> &b) { return a.second < b.second; });
-            std::sort(negative_mappings1.begin(), negative_mappings1.end(), [](const std::pair<int,uint64_t> &a, const std::pair<int,uint64_t> &b) { return a.second < b.second; });
-            std::sort(negative_mappings2.begin(), negative_mappings2.end(), [](const std::pair<int,uint64_t> &a, const std::pair<int,uint64_t> &b) { return a.second < b.second; });
-            GenerateBestMappingsForPairedEndRead(pair_index, positive_candidates1.size(), negative_candidates1.size(), repetitive_seed_length1, min_num_errors1, num_best_mappings1, second_min_num_errors1, num_second_best_mappings1, read_batch1, positive_mappings1, negative_mappings1, positive_candidates2.size(), negative_candidates2.size(), repetitive_seed_length2, min_num_errors2, num_best_mappings2, second_min_num_errors2, num_second_best_mappings2, read_batch2, reference, barcode_batch, positive_mappings2, negative_mappings2, &best_mapping_indices, &generator, &F1R2_best_mappings, &F2R1_best_mappings, &min_sum_errors, &num_best_mappings, &second_min_sum_errors, &num_second_best_mappings, &mappings_on_diff_ref_seqs);
-            if (num_best_mappings == 1) {
-              ++thread_num_uniquely_mapped_reads;
-              ++thread_num_uniquely_mapped_reads;
-            }
-            thread_num_mappings += std::min(num_best_mappings, max_num_best_mappings_);
-            thread_num_mappings += std::min(num_best_mappings, max_num_best_mappings_);
-            if (num_best_mappings > 0) {
-              ++thread_num_mapped_reads;
-              ++thread_num_mapped_reads;
-            }
-          }
-        }
-      }
+  double real_start_mapping_time = Chromap<>::GetRealTime();
+  for (size_t read_file_index = 0; read_file_index < read_file1_paths_.size(); ++read_file_index) {
+    read_batch1_for_loading.InitializeLoading(read_file1_paths_[read_file_index]);
+    read_batch2_for_loading.InitializeLoading(read_file2_paths_[read_file_index]);
+    if (!is_bulk_data_) {
+      barcode_batch_for_loading.InitializeLoading(barcode_file_paths_[read_file_index]);
     }
-    for (uint32_t pair_index = 0; pair_index < num_loaded_pairs; ++pair_index) {
-      if ( num_reads_ >= 2 * 5000000 && pair_index >= num_loaded_pairs / num_threads_)
-        break;
-      mm_to_candidates_cache.Update(mm_history1[pair_index].minimizers, mm_history1[pair_index].positive_candidates, mm_history1[pair_index].negative_candidates);
-      mm_to_candidates_cache.Update(mm_history2[pair_index].minimizers, mm_history2[pair_index].positive_candidates, mm_history2[pair_index].negative_candidates);
-      if (mm_history1[pair_index].positive_candidates.size() < mm_history1[pair_index].positive_candidates.capacity() / 2)
-        std::vector<Candidate>().swap(mm_history1[pair_index].positive_candidates);
-      if (mm_history1[pair_index].negative_candidates.size() < mm_history1[pair_index].negative_candidates.capacity() / 2)
-        std::vector<Candidate>().swap(mm_history1[pair_index].negative_candidates);
-      if (mm_history2[pair_index].positive_candidates.size() < mm_history2[pair_index].positive_candidates.capacity() / 2)
-        std::vector<Candidate>().swap(mm_history2[pair_index].positive_candidates);
-      if (mm_history2[pair_index].negative_candidates.size() < mm_history2[pair_index].negative_candidates.capacity() / 2)
-        std::vector<Candidate>().swap(mm_history2[pair_index].negative_candidates);
-    }
-#pragma omp taskwait
-    num_loaded_pairs = num_loaded_pairs_for_loading;
+    uint32_t num_loaded_pairs_for_loading = 0;
+    uint32_t num_loaded_pairs = LoadPairedEndReadsWithBarcodes(&read_batch1_for_loading, &read_batch2_for_loading, &barcode_batch_for_loading);
     read_batch1_for_loading.SwapSequenceBatch(read_batch1);
     read_batch2_for_loading.SwapSequenceBatch(read_batch2);
     barcode_batch_for_loading.SwapSequenceBatch(barcode_batch);
-    mappings_on_diff_ref_seqs_for_diff_threads.swap(mappings_on_diff_ref_seqs_for_diff_threads_for_saving);
-#pragma omp task
-    {
-    num_mappings_in_mem += MoveMappingsInBuffersToMappingContainer(num_reference_sequences, &mappings_on_diff_ref_seqs_for_diff_threads_for_saving);
-    if (low_memory_mode_ && num_mappings_in_mem > max_num_mappings_in_mem) {
-      TempMappingFileHandle<MappingRecord> temp_mapping_file_handle;
-      temp_mapping_file_handle.file_path = mapping_output_file_path_ + ".temp" + std::to_string(temp_mapping_file_handles_.size());
-      temp_mapping_file_handles_.emplace_back(temp_mapping_file_handle);
-      SortOutputMappings(num_reference_sequences, &mappings_on_diff_ref_seqs_);
-      output_tools_-> OutputTempMapping(temp_mapping_file_handle.file_path, num_reference_sequences, mappings_on_diff_ref_seqs_);
-      num_mappings_in_mem = 0;
+    std::vector<std::vector<std::vector<MappingRecord> > > mappings_on_diff_ref_seqs_for_diff_threads;
+    std::vector<std::vector<std::vector<MappingRecord> > > mappings_on_diff_ref_seqs_for_diff_threads_for_saving;
+    mappings_on_diff_ref_seqs_for_diff_threads.reserve(num_threads_);
+    mappings_on_diff_ref_seqs_for_diff_threads_for_saving.reserve(num_threads_);
+    for (int ti = 0; ti < num_threads_; ++ti) {
+      mappings_on_diff_ref_seqs_for_diff_threads.emplace_back(std::vector<std::vector<MappingRecord> >(num_reference_sequences));
+      mappings_on_diff_ref_seqs_for_diff_threads_for_saving.emplace_back(std::vector<std::vector<MappingRecord> >(num_reference_sequences));
       for (uint32_t i = 0; i < num_reference_sequences; ++i) {
-        mappings_on_diff_ref_seqs_[i].clear();
+        mappings_on_diff_ref_seqs_for_diff_threads[ti][i].reserve((num_loaded_pairs + num_loaded_pairs / 1000 * max_num_best_mappings_) / num_threads_ / num_reference_sequences);
+        mappings_on_diff_ref_seqs_for_diff_threads_for_saving[ti][i].reserve((num_loaded_pairs + num_loaded_pairs / 1000 * max_num_best_mappings_) / num_threads_ / num_reference_sequences);
       }
     }
+#pragma omp parallel default(none) shared(reference, index, read_batch1, read_batch2, barcode_batch, read_batch1_for_loading, read_batch2_for_loading, barcode_batch_for_loading, std::cerr, num_loaded_pairs_for_loading, num_loaded_pairs, num_reference_sequences, mappings_on_diff_ref_seqs_for_diff_threads, mappings_on_diff_ref_seqs_for_diff_threads_for_saving, num_mappings_in_mem, max_num_mappings_in_mem, temp_mapping_file_handles_, mm_to_candidates_cache, mm_history1, mm_history2) num_threads(num_threads_) reduction(+:num_candidates_, num_mappings_, num_mapped_reads_, num_uniquely_mapped_reads_, num_barcode_in_whitelist_, num_corrected_barcode_)
+    {
+      thread_num_candidates = 0;
+      thread_num_mappings = 0;
+      thread_num_mapped_reads = 0;
+      thread_num_uniquely_mapped_reads = 0;
+      thread_num_barcode_in_whitelist = 0;
+      thread_num_corrected_barcode = 0;
+      std::vector<std::pair<uint64_t, uint64_t> > minimizers1;
+      std::vector<std::pair<uint64_t, uint64_t> > minimizers2;
+      std::vector<uint64_t> positive_hits1;
+      std::vector<uint64_t> positive_hits2;
+      std::vector<uint64_t> negative_hits1;
+      std::vector<uint64_t> negative_hits2;
+      positive_hits1.reserve(max_seed_frequencies_[0]);
+      positive_hits2.reserve(max_seed_frequencies_[0]);
+      negative_hits1.reserve(max_seed_frequencies_[0]);
+      negative_hits2.reserve(max_seed_frequencies_[0]);
+      std::vector<Candidate> positive_candidates1;
+      std::vector<Candidate> positive_candidates2;
+      std::vector<Candidate> negative_candidates1;
+      std::vector<Candidate> negative_candidates2;
+      positive_candidates1.reserve(max_seed_frequencies_[0]);
+      positive_candidates2.reserve(max_seed_frequencies_[0]);
+      negative_candidates1.reserve(max_seed_frequencies_[0]);
+      negative_candidates2.reserve(max_seed_frequencies_[0]);
+      std::vector<Candidate> positive_candidates1_buffer;
+      std::vector<Candidate> positive_candidates2_buffer;
+      std::vector<Candidate> negative_candidates1_buffer;
+      std::vector<Candidate> negative_candidates2_buffer;
+      positive_candidates1_buffer.reserve(max_seed_frequencies_[0]);
+      positive_candidates2_buffer.reserve(max_seed_frequencies_[0]);
+      negative_candidates1_buffer.reserve(max_seed_frequencies_[0]);
+      negative_candidates2_buffer.reserve(max_seed_frequencies_[0]);
+      std::vector<std::pair<int, uint64_t> > positive_mappings1;
+      std::vector<std::pair<int, uint64_t> > positive_mappings2;
+      std::vector<std::pair<int, uint64_t> > negative_mappings1;
+      std::vector<std::pair<int, uint64_t> > negative_mappings2;
+      positive_mappings1.reserve(max_seed_frequencies_[0]);
+      positive_mappings2.reserve(max_seed_frequencies_[0]);
+      negative_mappings1.reserve(max_seed_frequencies_[0]);
+      negative_mappings2.reserve(max_seed_frequencies_[0]);
+      std::vector<std::pair<uint32_t, uint32_t> > F1R2_best_mappings;
+      std::vector<std::pair<uint32_t, uint32_t> > F2R1_best_mappings;
+      F1R2_best_mappings.reserve(max_seed_frequencies_[0]);
+      F2R1_best_mappings.reserve(max_seed_frequencies_[0]);
+      // we will use reservoir sampling 
+      std::vector<int> best_mapping_indices(max_num_best_mappings_);
+      std::mt19937 generator(11);
+#pragma omp single
+      {
+        while (num_loaded_pairs > 0) {
+          double real_batch_start_time = Chromap<>::GetRealTime();
+          num_reads_ += num_loaded_pairs;
+          num_reads_ += num_loaded_pairs;
+#pragma omp task
+          {
+            num_loaded_pairs_for_loading = LoadPairedEndReadsWithBarcodes(&read_batch1_for_loading, &read_batch2_for_loading, &barcode_batch_for_loading);
+          } // end of openmp loading task
+          int grain_size = 10000;
+#pragma omp taskloop grainsize(grain_size) //num_tasks(num_threads_* 50)
+          for (uint32_t pair_index = 0; pair_index < num_loaded_pairs; ++pair_index) {
+            read_batch1.PrepareNegativeSequenceAt(pair_index);
+            read_batch2.PrepareNegativeSequenceAt(pair_index);
+            if (trim_adapters_) {
+              TrimAdapterForPairedEndRead(pair_index, &read_batch1, &read_batch2);
+            }
+            if (!barcode_whitelist_file_path_.empty()) {
+              CorrectBarcodeAt(pair_index, &barcode_batch, &thread_num_barcode_in_whitelist, &thread_num_corrected_barcode); 
+            }
+            minimizers1.clear();
+            minimizers2.clear();
+            minimizers1.reserve(read_batch1.GetSequenceLengthAt(pair_index) / window_size_ * 2);
+            minimizers2.reserve(read_batch2.GetSequenceLengthAt(pair_index) / window_size_ * 2);
+            index.GenerateMinimizerSketch(read_batch1, pair_index, &minimizers1);
+            index.GenerateMinimizerSketch(read_batch2, pair_index, &minimizers2);
+            if (minimizers1.size() != 0 && minimizers2.size() != 0) {
+              positive_hits1.clear();
+              positive_hits2.clear();
+              negative_hits1.clear();
+              negative_hits2.clear();
+              positive_candidates1.clear();
+              positive_candidates2.clear();
+              negative_candidates1.clear();
+              negative_candidates2.clear();
+              positive_candidates1_buffer.clear();
+              positive_candidates2_buffer.clear();
+              negative_candidates1_buffer.clear();
+              negative_candidates2_buffer.clear();
+              uint32_t repetitive_seed_length1 = 0;
+              uint32_t repetitive_seed_length2 = 0;
+              if (mm_to_candidates_cache.Query(minimizers1, positive_candidates1, negative_candidates1, read_batch1.GetSequenceLengthAt(pair_index)) == -1)
+                index.GenerateCandidates(error_threshold_, minimizers1, &repetitive_seed_length1, &positive_hits1, &negative_hits1, &positive_candidates1, &negative_candidates1);
+              uint32_t current_num_candidates1 = positive_candidates1.size() + negative_candidates1.size();
+              if (mm_to_candidates_cache.Query(minimizers2, positive_candidates2, negative_candidates2, read_batch2.GetSequenceLengthAt(pair_index)) == -1)
+                index.GenerateCandidates(error_threshold_, minimizers2, &repetitive_seed_length2, &positive_hits2, &negative_hits2, &positive_candidates2, &negative_candidates2);
+              uint32_t current_num_candidates2 = positive_candidates2.size() + negative_candidates2.size();
+              if (pair_index < num_loaded_pairs / num_threads_ || num_reads_ < 2 * 5000000) {
+                mm_history1[pair_index].minimizers = minimizers1;
+                mm_history1[pair_index].positive_candidates = positive_candidates1;
+                mm_history1[pair_index].negative_candidates = negative_candidates1;
+                mm_history2[pair_index].minimizers = minimizers2;
+                mm_history2[pair_index].positive_candidates = positive_candidates2;
+                mm_history2[pair_index].negative_candidates = negative_candidates2;
+              }
+              if (current_num_candidates1 > 0 && current_num_candidates2 > 0) {
+                positive_candidates1.swap(positive_candidates1_buffer);
+                negative_candidates1.swap(negative_candidates1_buffer);
+                positive_candidates2.swap(positive_candidates2_buffer);
+                negative_candidates2.swap(negative_candidates2_buffer);
+                positive_candidates1.clear();
+                positive_candidates2.clear();
+                negative_candidates1.clear();
+                negative_candidates2.clear();
+                ReduceCandidatesForPairedEndRead(positive_candidates1_buffer, negative_candidates1_buffer, positive_candidates2_buffer, negative_candidates2_buffer, &positive_candidates1, &negative_candidates1, &positive_candidates2, &negative_candidates2);
+                thread_num_candidates += positive_candidates1.size() + positive_candidates2.size() + negative_candidates1.size() + negative_candidates2.size();
+                positive_mappings1.clear();
+                positive_mappings2.clear();
+                negative_mappings1.clear();
+                negative_mappings2.clear();
+                int min_num_errors1, second_min_num_errors1;
+                int num_best_mappings1, num_second_best_mappings1;
+                int min_num_errors2, second_min_num_errors2;
+                int num_best_mappings2, num_second_best_mappings2;
+                //std::sort(positive_candidates1.begin(), positive_candidates1.end());
+                //std::sort(negative_candidates1.begin(), negative_candidates1.end());
+                VerifyCandidates(read_batch1, pair_index, reference, minimizers1, positive_candidates1, negative_candidates1, &positive_mappings1, &negative_mappings1, &min_num_errors1, &num_best_mappings1, &second_min_num_errors1, &num_second_best_mappings1);
+                uint32_t current_num_mappings1 = positive_mappings1.size() + negative_mappings1.size();
+                //std::sort(positive_candidates2.begin(), positive_candidates2.end());
+                //std::sort(negative_candidates2.begin(), negative_candidates2.end());
+                VerifyCandidates(read_batch2, pair_index, reference, minimizers2, positive_candidates2, negative_candidates2, &positive_mappings2, &negative_mappings2, &min_num_errors2, &num_best_mappings2, &second_min_num_errors2, &num_second_best_mappings2);
+                uint32_t current_num_mappings2 = positive_mappings2.size() + negative_mappings2.size();
+                if (current_num_mappings1 > 0 && current_num_mappings2 > 0) {
+                  int min_sum_errors, second_min_sum_errors;
+                  int num_best_mappings, num_second_best_mappings;
+                  F1R2_best_mappings.clear();
+                  F2R1_best_mappings.clear();
+                  std::vector<std::vector<MappingRecord> > &mappings_on_diff_ref_seqs = mappings_on_diff_ref_seqs_for_diff_threads[omp_get_thread_num()];
+                  std::sort(positive_mappings1.begin(), positive_mappings1.end(), [](const std::pair<int,uint64_t> &a, const std::pair<int,uint64_t> &b) { return a.second < b.second; });
+                  std::sort(positive_mappings2.begin(), positive_mappings2.end(), [](const std::pair<int,uint64_t> &a, const std::pair<int,uint64_t> &b) { return a.second < b.second; });
+                  std::sort(negative_mappings1.begin(), negative_mappings1.end(), [](const std::pair<int,uint64_t> &a, const std::pair<int,uint64_t> &b) { return a.second < b.second; });
+                  std::sort(negative_mappings2.begin(), negative_mappings2.end(), [](const std::pair<int,uint64_t> &a, const std::pair<int,uint64_t> &b) { return a.second < b.second; });
+                  GenerateBestMappingsForPairedEndRead(pair_index, positive_candidates1.size(), negative_candidates1.size(), repetitive_seed_length1, min_num_errors1, num_best_mappings1, second_min_num_errors1, num_second_best_mappings1, read_batch1, positive_mappings1, negative_mappings1, positive_candidates2.size(), negative_candidates2.size(), repetitive_seed_length2, min_num_errors2, num_best_mappings2, second_min_num_errors2, num_second_best_mappings2, read_batch2, reference, barcode_batch, positive_mappings2, negative_mappings2, &best_mapping_indices, &generator, &F1R2_best_mappings, &F2R1_best_mappings, &min_sum_errors, &num_best_mappings, &second_min_sum_errors, &num_second_best_mappings, &mappings_on_diff_ref_seqs);
+                  if (num_best_mappings == 1) {
+                    ++thread_num_uniquely_mapped_reads;
+                    ++thread_num_uniquely_mapped_reads;
+                  }
+                  thread_num_mappings += std::min(num_best_mappings, max_num_best_mappings_);
+                  thread_num_mappings += std::min(num_best_mappings, max_num_best_mappings_);
+                  if (num_best_mappings > 0) {
+                    ++thread_num_mapped_reads;
+                    ++thread_num_mapped_reads;
+                  }
+                }
+              }
+            }
+          }
+          for (uint32_t pair_index = 0; pair_index < num_loaded_pairs; ++pair_index) {
+            if (num_reads_ >= 2 * 5000000 && pair_index >= num_loaded_pairs / num_threads_)
+              break;
+            mm_to_candidates_cache.Update(mm_history1[pair_index].minimizers, mm_history1[pair_index].positive_candidates, mm_history1[pair_index].negative_candidates);
+            mm_to_candidates_cache.Update(mm_history2[pair_index].minimizers, mm_history2[pair_index].positive_candidates, mm_history2[pair_index].negative_candidates);
+            if (mm_history1[pair_index].positive_candidates.size() < mm_history1[pair_index].positive_candidates.capacity() / 2)
+              std::vector<Candidate>().swap(mm_history1[pair_index].positive_candidates);
+            if (mm_history1[pair_index].negative_candidates.size() < mm_history1[pair_index].negative_candidates.capacity() / 2)
+              std::vector<Candidate>().swap(mm_history1[pair_index].negative_candidates);
+            if (mm_history2[pair_index].positive_candidates.size() < mm_history2[pair_index].positive_candidates.capacity() / 2)
+              std::vector<Candidate>().swap(mm_history2[pair_index].positive_candidates);
+            if (mm_history2[pair_index].negative_candidates.size() < mm_history2[pair_index].negative_candidates.capacity() / 2)
+              std::vector<Candidate>().swap(mm_history2[pair_index].negative_candidates);
+          }
+#pragma omp taskwait
+          num_loaded_pairs = num_loaded_pairs_for_loading;
+          read_batch1_for_loading.SwapSequenceBatch(read_batch1);
+          read_batch2_for_loading.SwapSequenceBatch(read_batch2);
+          barcode_batch_for_loading.SwapSequenceBatch(barcode_batch);
+          mappings_on_diff_ref_seqs_for_diff_threads.swap(mappings_on_diff_ref_seqs_for_diff_threads_for_saving);
+#pragma omp task
+          {
+            num_mappings_in_mem += MoveMappingsInBuffersToMappingContainer(num_reference_sequences, &mappings_on_diff_ref_seqs_for_diff_threads_for_saving);
+            if (low_memory_mode_ && num_mappings_in_mem > max_num_mappings_in_mem) {
+              TempMappingFileHandle<MappingRecord> temp_mapping_file_handle;
+              temp_mapping_file_handle.file_path = mapping_output_file_path_ + ".temp" + std::to_string(temp_mapping_file_handles_.size());
+              temp_mapping_file_handles_.emplace_back(temp_mapping_file_handle);
+              SortOutputMappings(num_reference_sequences, &mappings_on_diff_ref_seqs_);
+              output_tools_-> OutputTempMapping(temp_mapping_file_handle.file_path, num_reference_sequences, mappings_on_diff_ref_seqs_);
+              num_mappings_in_mem = 0;
+              for (uint32_t i = 0; i < num_reference_sequences; ++i) {
+                mappings_on_diff_ref_seqs_[i].clear();
+              }
+            }
+          }
+          std::cerr << "Mapped in " << Chromap<>::GetRealTime() - real_batch_start_time << "s.\n";
+        }
+      } // end of openmp single
+      num_barcode_in_whitelist_ += thread_num_barcode_in_whitelist;
+      num_corrected_barcode_ += thread_num_corrected_barcode;
+      num_candidates_ += thread_num_candidates;
+      num_mappings_ += thread_num_mappings;
+      num_mapped_reads_ += thread_num_mapped_reads;
+      num_uniquely_mapped_reads_ += thread_num_uniquely_mapped_reads;
+    } // end of openmp parallel region
+    read_batch1_for_loading.FinalizeLoading();
+    read_batch2_for_loading.FinalizeLoading();
+    if (!is_bulk_data_) {
+      barcode_batch_for_loading.FinalizeLoading();
     }
-    std::cerr << "Mapped in " << Chromap<>::GetRealTime() - real_batch_start_time << "s.\n";
-  }
-  } // end of openmp single
-  num_barcode_in_whitelist_ += thread_num_barcode_in_whitelist;
-  num_corrected_barcode_ += thread_num_corrected_barcode;
-  num_candidates_ += thread_num_candidates;
-  num_mappings_ += thread_num_mappings;
-  num_mapped_reads_ += thread_num_mapped_reads;
-  num_uniquely_mapped_reads_ += thread_num_uniquely_mapped_reads;
-  } // end of openmp parallel region
-  delete[] mm_history1 ;
-  delete[] mm_history2 ;
-  read_batch1_for_loading.FinalizeLoading();
-  read_batch2_for_loading.FinalizeLoading();
-  if (!is_bulk_data_) {
-    barcode_batch_for_loading.FinalizeLoading();
   }
   std::cerr << "Mapped all reads in " << Chromap<>::GetRealTime() - real_start_mapping_time << "s.\n";
+  delete[] mm_history1;
+  delete[] mm_history2;
   OutputMappingStatistics();
   index.Destroy();
   if (low_memory_mode_) {
@@ -1208,35 +1222,11 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
   SequenceBatch read_batch_for_loading(read_batch_size_);
   SequenceBatch barcode_batch(read_batch_size_);
   SequenceBatch barcode_batch_for_loading(read_batch_size_);
-  mm_cache mm_to_candidates_cache(2000007);
-  mm_to_candidates_cache.SetKmerLength(kmer_size_);
-  struct _mm_history *mm_history = new struct _mm_history[read_batch_size_];
-  read_batch_for_loading.InitializeLoading(read_file1_path_);
-  if (!is_bulk_data_) {
-    barcode_batch_for_loading.InitializeLoading(barcode_file_path_);
-  }
-  double real_start_mapping_time = Chromap<>::GetRealTime();
-  uint32_t num_loaded_reads_for_loading = 0;
-  uint32_t num_loaded_reads = LoadSingleEndReadsWithBarcodes(&read_batch_for_loading, &barcode_batch_for_loading);
-  read_batch_for_loading.SwapSequenceBatch(read_batch);
-  barcode_batch_for_loading.SwapSequenceBatch(barcode_batch);
   mappings_on_diff_ref_seqs_.reserve(num_reference_sequences);
   deduped_mappings_on_diff_ref_seqs_.reserve(num_reference_sequences);
   for (uint32_t i = 0; i < num_reference_sequences; ++i) {
     mappings_on_diff_ref_seqs_.emplace_back(std::vector<MappingRecord>());
     deduped_mappings_on_diff_ref_seqs_.emplace_back(std::vector<MappingRecord>());
-  }
-  std::vector<std::vector<std::vector<MappingRecord> > > mappings_on_diff_ref_seqs_for_diff_threads;
-  std::vector<std::vector<std::vector<MappingRecord> > > mappings_on_diff_ref_seqs_for_diff_threads_for_saving;
-  mappings_on_diff_ref_seqs_for_diff_threads.reserve(num_threads_);
-  mappings_on_diff_ref_seqs_for_diff_threads_for_saving.reserve(num_threads_);
-  for (int ti = 0; ti < num_threads_; ++ti) {
-    mappings_on_diff_ref_seqs_for_diff_threads.emplace_back(std::vector<std::vector<MappingRecord> >(num_reference_sequences));
-    mappings_on_diff_ref_seqs_for_diff_threads_for_saving.emplace_back(std::vector<std::vector<MappingRecord> >(num_reference_sequences));
-    for (uint32_t i = 0; i < num_reference_sequences; ++i) {
-      mappings_on_diff_ref_seqs_for_diff_threads[ti][i].reserve((num_loaded_reads + num_loaded_reads / 1000 * max_num_best_mappings_) / num_threads_ / num_reference_sequences);
-      mappings_on_diff_ref_seqs_for_diff_threads_for_saving[ti][i].reserve((num_loaded_reads + num_loaded_reads / 1000 * max_num_best_mappings_) / num_threads_ / num_reference_sequences);
-    }
   }
   if (output_mapping_in_BED_) {
     output_tools_ = std::unique_ptr<BEDOutputTools<MappingRecord> >(new BEDOutputTools<MappingRecord>);
@@ -1246,119 +1236,149 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
     output_tools_ = std::unique_ptr<PAFOutputTools<MappingRecord> >(new PAFOutputTools<MappingRecord>);
   }
   output_tools_->InitializeMappingOutput(mapping_output_file_path_);
+  mm_cache mm_to_candidates_cache(2000007);
+  mm_to_candidates_cache.SetKmerLength(kmer_size_);
+  struct _mm_history *mm_history = new struct _mm_history[read_batch_size_];
   static uint64_t thread_num_candidates = 0;
   static uint64_t thread_num_mappings = 0;
   static uint64_t thread_num_mapped_reads = 0; 
   static uint64_t thread_num_uniquely_mapped_reads = 0; 
 #pragma omp threadprivate(thread_num_candidates, thread_num_mappings, thread_num_mapped_reads, thread_num_uniquely_mapped_reads)
-#pragma omp parallel default(none) shared(reference, index, read_batch, barcode_batch, read_batch_for_loading, barcode_batch_for_loading, std::cerr, num_loaded_reads_for_loading, num_loaded_reads, num_reference_sequences, mappings_on_diff_ref_seqs_for_diff_threads, mappings_on_diff_ref_seqs_for_diff_threads_for_saving, mm_to_candidates_cache, mm_history) num_threads(num_threads_) reduction(+:num_candidates_, num_mappings_, num_mapped_reads_, num_uniquely_mapped_reads_)
-  {
-  std::vector<std::pair<uint64_t, uint64_t> > minimizers;
-  std::vector<uint64_t> positive_hits;
-  std::vector<uint64_t> negative_hits;
-  positive_hits.reserve(max_seed_frequencies_[0]);
-  negative_hits.reserve(max_seed_frequencies_[0]);
-  std::vector<Candidate> positive_candidates;
-  std::vector<Candidate> negative_candidates;
-  positive_candidates.reserve(max_seed_frequencies_[0]);
-  negative_candidates.reserve(max_seed_frequencies_[0]);
-  std::vector<std::pair<int, uint64_t> > positive_mappings;
-  std::vector<std::pair<int, uint64_t> > negative_mappings;
-  positive_mappings.reserve(max_seed_frequencies_[0]);
-  negative_mappings.reserve(max_seed_frequencies_[0]);
-  #pragma omp single
-  {
-  while (num_loaded_reads > 0) {
-    double real_batch_start_time = Chromap<>::GetRealTime();
-    num_reads_ += num_loaded_reads;
-#pragma omp task
-    {
-    num_loaded_reads_for_loading = LoadSingleEndReadsWithBarcodes(&read_batch_for_loading, &barcode_batch_for_loading);
-    } // end of openmp loading task
-    int grain_size = 10000;
-#pragma omp taskloop grainsize(grain_size) //num_tasks(num_threads_* 50)
-    for (uint32_t read_index = 0; read_index < num_loaded_reads; ++read_index) {
-      read_batch.PrepareNegativeSequenceAt(read_index);
-      //std::cerr << "Generated negative sequence!\n";
-      minimizers.clear();
-      minimizers.reserve(read_batch.GetSequenceLengthAt(read_index) / window_size_ * 2);
-      index.GenerateMinimizerSketch(read_batch, read_index, &minimizers);
-      if (minimizers.size() > 0) {
-        //std::cerr << "Generated minimizers!\n";
-        positive_hits.clear();
-        negative_hits.clear();
-        positive_candidates.clear();
-        negative_candidates.clear();
-        uint32_t repetitive_seed_length = 0;
-        if (mm_to_candidates_cache.Query(minimizers, positive_candidates, negative_candidates, read_batch.GetSequenceLengthAt(read_index)) == -1) {
-          index.GenerateCandidates(error_threshold_, minimizers, &repetitive_seed_length, &positive_hits, &negative_hits, &positive_candidates, &negative_candidates);
-          //printf("%d %d %d\n", minimizers.size(), positive_hits.size() + negative_hits.size(), 
-          //	positive_candidates.size() + negative_candidates.size()) ;
-          //if (positive_hits.size() + negative_hits.size() > minimizers.size() * 100)
-        }
-        if (read_index <  num_loaded_reads / num_threads_ || num_reads_ < 5000000) {
-          mm_history[read_index].minimizers = minimizers;
-          mm_history[read_index].positive_candidates = positive_candidates;
-          mm_history[read_index].negative_candidates = negative_candidates;
-        }
-        uint32_t current_num_candidates = positive_candidates.size() + negative_candidates.size(); 
-        //std::cerr << "Generated candidates!\n";
-        if (current_num_candidates > 0) {
-          thread_num_candidates += current_num_candidates;
-          positive_mappings.clear();
-          negative_mappings.clear();
-          int min_num_errors, second_min_num_errors;
-          int num_best_mappings, num_second_best_mappings;
-          VerifyCandidates(read_batch, read_index, reference, minimizers, positive_candidates, negative_candidates, &positive_mappings, &negative_mappings, &min_num_errors, &num_best_mappings, &second_min_num_errors, &num_second_best_mappings);
-          uint32_t current_num_mappings = positive_mappings.size() + negative_mappings.size();
-          //std::cerr << "Verified candidates!\n";
-          if (current_num_mappings > 0) {
-            std::vector<std::vector<MappingRecord> > &mappings_on_diff_ref_seqs = mappings_on_diff_ref_seqs_for_diff_threads[omp_get_thread_num()];
-            GenerateBestMappingsForSingleEndRead(min_num_errors, num_best_mappings, second_min_num_errors, num_second_best_mappings, read_batch, read_index, reference, barcode_batch, positive_mappings, negative_mappings, &mappings_on_diff_ref_seqs);
-            thread_num_mappings += std::min(num_best_mappings, max_num_best_mappings_);
-            //std::cerr << "Generated output!\n";
-            ++thread_num_mapped_reads;
-            if (num_best_mappings == 1) {
-              ++thread_num_uniquely_mapped_reads;
-            }
-          }
-        }
-      }
+  double real_start_mapping_time = Chromap<>::GetRealTime();
+  for (size_t read_file_index = 0; read_file_index < read_file1_paths_.size(); ++read_file_index) {
+    read_batch_for_loading.InitializeLoading(read_file1_paths_[read_file_index]);
+    if (!is_bulk_data_) {
+      barcode_batch_for_loading.InitializeLoading(barcode_file_paths_[read_file_index]);
     }
-    for (uint32_t read_index = 0; read_index < num_loaded_reads ; ++read_index) {
-      if ( num_reads_ >= 5000000 && read_index >= num_loaded_reads / num_threads_)
-        break;
-      mm_to_candidates_cache.Update(mm_history[read_index].minimizers, mm_history[read_index].positive_candidates, mm_history[read_index].negative_candidates);
-      if (mm_history[read_index].positive_candidates.size() < mm_history[read_index].positive_candidates.capacity() / 2)
-        std::vector<Candidate>().swap(mm_history[read_index].positive_candidates);
-      if (mm_history[read_index].negative_candidates.size() < mm_history[read_index].negative_candidates.capacity() / 2)
-        std::vector<Candidate>().swap(mm_history[read_index].negative_candidates);
-    }
-    //std::cerr<<"cache memusage: " << mm_to_candidates_cache.GetMemoryBytes() <<"\n" ;
-#pragma omp taskwait
-    num_loaded_reads = num_loaded_reads_for_loading;
+    uint32_t num_loaded_reads_for_loading = 0;
+    uint32_t num_loaded_reads = LoadSingleEndReadsWithBarcodes(&read_batch_for_loading, &barcode_batch_for_loading);
     read_batch_for_loading.SwapSequenceBatch(read_batch);
     barcode_batch_for_loading.SwapSequenceBatch(barcode_batch);
-    mappings_on_diff_ref_seqs_for_diff_threads.swap(mappings_on_diff_ref_seqs_for_diff_threads_for_saving);
-#pragma omp task
-    {
-    MoveMappingsInBuffersToMappingContainer(num_reference_sequences, &mappings_on_diff_ref_seqs_for_diff_threads_for_saving);
+    std::vector<std::vector<std::vector<MappingRecord> > > mappings_on_diff_ref_seqs_for_diff_threads;
+    std::vector<std::vector<std::vector<MappingRecord> > > mappings_on_diff_ref_seqs_for_diff_threads_for_saving;
+    mappings_on_diff_ref_seqs_for_diff_threads.reserve(num_threads_);
+    mappings_on_diff_ref_seqs_for_diff_threads_for_saving.reserve(num_threads_);
+    for (int ti = 0; ti < num_threads_; ++ti) {
+      mappings_on_diff_ref_seqs_for_diff_threads.emplace_back(std::vector<std::vector<MappingRecord> >(num_reference_sequences));
+      mappings_on_diff_ref_seqs_for_diff_threads_for_saving.emplace_back(std::vector<std::vector<MappingRecord> >(num_reference_sequences));
+      for (uint32_t i = 0; i < num_reference_sequences; ++i) {
+        mappings_on_diff_ref_seqs_for_diff_threads[ti][i].reserve((num_loaded_reads + num_loaded_reads / 1000 * max_num_best_mappings_) / num_threads_ / num_reference_sequences);
+        mappings_on_diff_ref_seqs_for_diff_threads_for_saving[ti][i].reserve((num_loaded_reads + num_loaded_reads / 1000 * max_num_best_mappings_) / num_threads_ / num_reference_sequences);
+      }
     }
-    std::cerr << "Mapped in " << Chromap<>::GetRealTime() - real_batch_start_time << "s.\n";
+#pragma omp parallel default(none) shared(reference, index, read_batch, barcode_batch, read_batch_for_loading, barcode_batch_for_loading, std::cerr, num_loaded_reads_for_loading, num_loaded_reads, num_reference_sequences, mappings_on_diff_ref_seqs_for_diff_threads, mappings_on_diff_ref_seqs_for_diff_threads_for_saving, mm_to_candidates_cache, mm_history) num_threads(num_threads_) reduction(+:num_candidates_, num_mappings_, num_mapped_reads_, num_uniquely_mapped_reads_)
+    {
+      thread_num_candidates = 0;
+      thread_num_mappings = 0;
+      thread_num_mapped_reads = 0;
+      thread_num_uniquely_mapped_reads = 0;
+      std::vector<std::pair<uint64_t, uint64_t> > minimizers;
+      std::vector<uint64_t> positive_hits;
+      std::vector<uint64_t> negative_hits;
+      positive_hits.reserve(max_seed_frequencies_[0]);
+      negative_hits.reserve(max_seed_frequencies_[0]);
+      std::vector<Candidate> positive_candidates;
+      std::vector<Candidate> negative_candidates;
+      positive_candidates.reserve(max_seed_frequencies_[0]);
+      negative_candidates.reserve(max_seed_frequencies_[0]);
+      std::vector<std::pair<int, uint64_t> > positive_mappings;
+      std::vector<std::pair<int, uint64_t> > negative_mappings;
+      positive_mappings.reserve(max_seed_frequencies_[0]);
+      negative_mappings.reserve(max_seed_frequencies_[0]);
+#pragma omp single
+      {
+        while (num_loaded_reads > 0) {
+          double real_batch_start_time = Chromap<>::GetRealTime();
+          num_reads_ += num_loaded_reads;
+#pragma omp task
+          {
+            num_loaded_reads_for_loading = LoadSingleEndReadsWithBarcodes(&read_batch_for_loading, &barcode_batch_for_loading);
+          } // end of openmp loading task
+          int grain_size = 10000;
+#pragma omp taskloop grainsize(grain_size) //num_tasks(num_threads_* 50)
+          for (uint32_t read_index = 0; read_index < num_loaded_reads; ++read_index) {
+            read_batch.PrepareNegativeSequenceAt(read_index);
+            //std::cerr << "Generated negative sequence!\n";
+            minimizers.clear();
+            minimizers.reserve(read_batch.GetSequenceLengthAt(read_index) / window_size_ * 2);
+            index.GenerateMinimizerSketch(read_batch, read_index, &minimizers);
+            if (minimizers.size() > 0) {
+              //std::cerr << "Generated minimizers!\n";
+              positive_hits.clear();
+              negative_hits.clear();
+              positive_candidates.clear();
+              negative_candidates.clear();
+              uint32_t repetitive_seed_length = 0;
+              if (mm_to_candidates_cache.Query(minimizers, positive_candidates, negative_candidates, read_batch.GetSequenceLengthAt(read_index)) == -1) {
+                index.GenerateCandidates(error_threshold_, minimizers, &repetitive_seed_length, &positive_hits, &negative_hits, &positive_candidates, &negative_candidates);
+                //printf("%d %d %d\n", minimizers.size(), positive_hits.size() + negative_hits.size(), 
+                //	positive_candidates.size() + negative_candidates.size()) ;
+                //if (positive_hits.size() + negative_hits.size() > minimizers.size() * 100)
+              }
+              if (read_index <  num_loaded_reads / num_threads_ || num_reads_ < 5000000) {
+                mm_history[read_index].minimizers = minimizers;
+                mm_history[read_index].positive_candidates = positive_candidates;
+                mm_history[read_index].negative_candidates = negative_candidates;
+              }
+              uint32_t current_num_candidates = positive_candidates.size() + negative_candidates.size(); 
+              //std::cerr << "Generated candidates!\n";
+              if (current_num_candidates > 0) {
+                thread_num_candidates += current_num_candidates;
+                positive_mappings.clear();
+                negative_mappings.clear();
+                int min_num_errors, second_min_num_errors;
+                int num_best_mappings, num_second_best_mappings;
+                VerifyCandidates(read_batch, read_index, reference, minimizers, positive_candidates, negative_candidates, &positive_mappings, &negative_mappings, &min_num_errors, &num_best_mappings, &second_min_num_errors, &num_second_best_mappings);
+                uint32_t current_num_mappings = positive_mappings.size() + negative_mappings.size();
+                //std::cerr << "Verified candidates!\n";
+                if (current_num_mappings > 0) {
+                  std::vector<std::vector<MappingRecord> > &mappings_on_diff_ref_seqs = mappings_on_diff_ref_seqs_for_diff_threads[omp_get_thread_num()];
+                  GenerateBestMappingsForSingleEndRead(min_num_errors, num_best_mappings, second_min_num_errors, num_second_best_mappings, read_batch, read_index, reference, barcode_batch, positive_mappings, negative_mappings, &mappings_on_diff_ref_seqs);
+                  thread_num_mappings += std::min(num_best_mappings, max_num_best_mappings_);
+                  //std::cerr << "Generated output!\n";
+                  ++thread_num_mapped_reads;
+                  if (num_best_mappings == 1) {
+                    ++thread_num_uniquely_mapped_reads;
+                  }
+                }
+              }
+            }
+          }
+          for (uint32_t read_index = 0; read_index < num_loaded_reads ; ++read_index) {
+            if ( num_reads_ >= 5000000 && read_index >= num_loaded_reads / num_threads_)
+              break;
+            mm_to_candidates_cache.Update(mm_history[read_index].minimizers, mm_history[read_index].positive_candidates, mm_history[read_index].negative_candidates);
+            if (mm_history[read_index].positive_candidates.size() < mm_history[read_index].positive_candidates.capacity() / 2)
+              std::vector<Candidate>().swap(mm_history[read_index].positive_candidates);
+            if (mm_history[read_index].negative_candidates.size() < mm_history[read_index].negative_candidates.capacity() / 2)
+              std::vector<Candidate>().swap(mm_history[read_index].negative_candidates);
+          }
+          //std::cerr<<"cache memusage: " << mm_to_candidates_cache.GetMemoryBytes() <<"\n" ;
+#pragma omp taskwait
+          num_loaded_reads = num_loaded_reads_for_loading;
+          read_batch_for_loading.SwapSequenceBatch(read_batch);
+          barcode_batch_for_loading.SwapSequenceBatch(barcode_batch);
+          mappings_on_diff_ref_seqs_for_diff_threads.swap(mappings_on_diff_ref_seqs_for_diff_threads_for_saving);
+#pragma omp task
+          {
+            MoveMappingsInBuffersToMappingContainer(num_reference_sequences, &mappings_on_diff_ref_seqs_for_diff_threads_for_saving);
+          }
+          std::cerr << "Mapped in " << Chromap<>::GetRealTime() - real_batch_start_time << "s.\n";
+        }
+      } // end of openmp single
+      {
+        num_candidates_ += thread_num_candidates;
+        num_mappings_ += thread_num_mappings;
+        num_mapped_reads_ += thread_num_mapped_reads;
+        num_uniquely_mapped_reads_ += thread_num_uniquely_mapped_reads;
+      } // end of updating shared mapping stats
+    } // end of openmp parallel region
+    read_batch_for_loading.FinalizeLoading();
+    if (!is_bulk_data_) {
+      barcode_batch_for_loading.FinalizeLoading();
+    }
   }
-  } // end of openmp single
-  {
-    num_candidates_ += thread_num_candidates;
-    num_mappings_ += thread_num_mappings;
-    num_mapped_reads_ += thread_num_mapped_reads;
-    num_uniquely_mapped_reads_ += thread_num_uniquely_mapped_reads;
-  } // end of updating shared mapping stats
-  } // end of openmp parallel region
   delete[] mm_history;
-  read_batch_for_loading.FinalizeLoading();
-  if (!is_bulk_data_) {
-    barcode_batch_for_loading.FinalizeLoading();
-  }
   OutputMappingStatistics();
   std::cerr << "Mapped all reads in " << Chromap<>::GetRealTime() - real_start_mapping_time << "s.\n";
   OutputMappingStatistics(num_reference_sequences, mappings_on_diff_ref_seqs_, mappings_on_diff_ref_seqs_);
@@ -1996,25 +2016,24 @@ void Chromap<MappingRecord>::VerifyCandidates(const SequenceBatch &read_batch, u
   
   if (maxCnt == 1) {
     Direction candidate_direction = (maxTag & 1) ? kNegative : kPositive;
-    uint32_t ci = maxTag >> 1 ;
-    *num_best_mappings = 1 ;
-    *num_second_best_mappings = 0 ;
-    *min_num_errors = 0 ;
+    uint32_t ci = maxTag >> 1;
+    *num_best_mappings = 1;
+    *num_second_best_mappings = 0;
+    *min_num_errors = 0;
 
-    uint32_t rid = 0 ; 
-    uint32_t position = 0 ; 
+    uint32_t rid = 0; 
+    uint32_t position = 0; 
     uint32_t read_length = read_batch.GetSequenceLengthAt(read_index);
     if (candidate_direction == kPositive) {
       rid = positive_candidates[ci].position >> 32;
       position = positive_candidates[ci].position;
-    }
-    else {
+    } else {
       rid = negative_candidates[ci].position >> 32;
-      position = (uint32_t)negative_candidates[ci].position - read_length + 1 ;
+      position = (uint32_t)negative_candidates[ci].position - read_length + 1;
     }
-    bool flag = true ;
+    bool flag = true;
     if (position < (uint32_t)error_threshold_ || position >= reference.GetSequenceLengthAt(rid) || position + read_length + error_threshold_ >= reference.GetSequenceLengthAt(rid)) {
-      flag = false ;
+      flag = false;
     }
     if (flag) {
       if (candidate_direction == kPositive) {
@@ -2023,7 +2042,7 @@ void Chromap<MappingRecord>::VerifyCandidates(const SequenceBatch &read_batch, u
         negative_mappings->emplace_back(0, negative_candidates[ci].position); 
       }
       //printf("Saved %d\n", positive_candidates.size() + negative_candidates.size() ) ;
-      return ;
+      return;
     }
   }
   //printf("Notsaved %d\n", positive_candidates.size() + negative_candidates.size()) ;
@@ -2562,9 +2581,9 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
   options.add_options("Input")
     ("r,ref", "Reference file", cxxopts::value<std::string>(), "FILE")
     ("x,index", "Index file", cxxopts::value<std::string>(), "FILE")
-    ("1,read1", "Single-end read file or paired-end read file 1", cxxopts::value<std::string>(), "FILE")
-    ("2,read2", "Paired-end read file 2", cxxopts::value<std::string>(), "FILE")
-    ("b,barcode", "Cell barcode file", cxxopts::value<std::string>(), "FILE")
+    ("1,read1", "Single-end read files or paired-end read files 1", cxxopts::value<std::vector<std::string> >(), "FILE")
+    ("2,read2", "Paired-end read files 2", cxxopts::value<std::vector<std::string> >(), "FILE")
+    ("b,barcode", "Cell barcode files", cxxopts::value<std::vector<std::string> >(), "FILE")
     ("barcode-whitelist", "Cell barcode whitelist file", cxxopts::value<std::string>(), "FILE");
   options.add_options("Output")
     ("o,output", "Output file", cxxopts::value<std::string>(), "FILE")
@@ -2750,21 +2769,21 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
     } else {
       chromap::Chromap<>::ExitWithMessage("No index file specified!");
     }
-    std::string read_file1_path;
+    std::vector<std::string> read_file1_paths;
     if (result.count("1")) {
-      read_file1_path = result["read1"].as<std::string>();
+      read_file1_paths = result["read1"].as<std::vector<std::string> >();
     } else {
       chromap::Chromap<>::ExitWithMessage("No read file specified!");
     }
-    std::string read_file2_path;
+    std::vector<std::string> read_file2_paths;
     if (result.count("2")) {
-      read_file2_path = result["read2"].as<std::string>();
+      read_file2_paths = result["read2"].as<std::vector<std::string> >();
     }
-    std::string barcode_file_path;
+    std::vector<std::string> barcode_file_paths;
     bool is_bulk_data = true;
     if (result.count("b")) {
       is_bulk_data = false;
-      barcode_file_path = result["barcode"].as<std::string>();
+      barcode_file_paths = result["barcode"].as<std::vector<std::string> >();
     }
     std::string barcode_whitelist_file_path;
     if (result.count("barcode-whitelist")) {
@@ -2827,12 +2846,18 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
     }
     std::cerr << "Reference file: " << reference_file_path << "\n";
     std::cerr << "Index file: " << index_file_path << "\n";
-    std::cerr << "Read file 1: " << read_file1_path << "\n";
+    for (size_t i = 0; i < read_file1_paths.size(); ++i) {
+      std::cerr << i << " read file 1: " << read_file1_paths[i] << "\n";
+    }
     if (result.count("2") != 0) {
-      std::cerr << "Read file 2: " << read_file2_path << "\n";
+      for (size_t i = 0; i < read_file2_paths.size(); ++i) {
+        std::cerr << i << " read file 2: " << read_file2_paths[i] << "\n";
+      }
     }
     if (result.count("b") != 0) {
-      std::cerr << "Cell barcode file: " << barcode_file_path << "\n";
+      for (size_t i = 0; i < barcode_file_paths.size(); ++i) {
+        std::cerr << i << " cell barcode file: " << barcode_file_paths[i] << "\n";
+      }
     }
     if (result.count("barcode-whitelist") != 0) {
       std::cerr << "Cell barcode whitelist file: " << barcode_whitelist_file_path << "\n";
@@ -2843,27 +2868,27 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
     }
     if (result.count("2") == 0) {
       if (output_mapping_in_PAF) {
-        chromap::Chromap<chromap::PAFMapping> chromap_for_mapping(error_threshold, match_score, mismatch_penalty, gap_open_penalties, gap_extension_penalties, min_num_seeds_required_for_mapping, max_seed_frequencies, max_num_best_mappings, max_insert_size, mapq_threshold, num_threads, min_read_length, multi_mapping_allocation_distance, multi_mapping_allocation_seed, drop_repetitive_reads, trim_adapters, remove_pcr_duplicates, is_bulk_data, allocate_multi_mappings, only_output_unique_mappings, Tn5_shift, output_mapping_in_BED, output_mapping_in_TagAlign, output_mapping_in_PAF, low_memory_mode, cell_by_bin, bin_size, depth_cutoff_to_call_peak, peak_min_length, peak_merge_max_length, reference_file_path, index_file_path, read_file1_path, read_file2_path, barcode_file_path, barcode_whitelist_file_path, output_file_path, matrix_output_prefix);
+        chromap::Chromap<chromap::PAFMapping> chromap_for_mapping(error_threshold, match_score, mismatch_penalty, gap_open_penalties, gap_extension_penalties, min_num_seeds_required_for_mapping, max_seed_frequencies, max_num_best_mappings, max_insert_size, mapq_threshold, num_threads, min_read_length, multi_mapping_allocation_distance, multi_mapping_allocation_seed, drop_repetitive_reads, trim_adapters, remove_pcr_duplicates, is_bulk_data, allocate_multi_mappings, only_output_unique_mappings, Tn5_shift, output_mapping_in_BED, output_mapping_in_TagAlign, output_mapping_in_PAF, low_memory_mode, cell_by_bin, bin_size, depth_cutoff_to_call_peak, peak_min_length, peak_merge_max_length, reference_file_path, index_file_path, read_file1_paths, read_file2_paths, barcode_file_paths, barcode_whitelist_file_path, output_file_path, matrix_output_prefix);
         chromap_for_mapping.MapSingleEndReads();
       } else {
         if (result.count("b") != 0) {
-          chromap::Chromap<chromap::MappingWithBarcode> chromap_for_mapping(error_threshold, match_score, mismatch_penalty, gap_open_penalties, gap_extension_penalties, min_num_seeds_required_for_mapping, max_seed_frequencies, max_num_best_mappings, max_insert_size, mapq_threshold, num_threads, min_read_length, multi_mapping_allocation_distance, multi_mapping_allocation_seed, drop_repetitive_reads, trim_adapters, remove_pcr_duplicates, is_bulk_data, allocate_multi_mappings, only_output_unique_mappings, Tn5_shift, output_mapping_in_BED, output_mapping_in_TagAlign, output_mapping_in_PAF, low_memory_mode, cell_by_bin, bin_size, depth_cutoff_to_call_peak, peak_min_length, peak_merge_max_length, reference_file_path, index_file_path, read_file1_path, read_file2_path, barcode_file_path, barcode_whitelist_file_path, output_file_path, matrix_output_prefix);
+          chromap::Chromap<chromap::MappingWithBarcode> chromap_for_mapping(error_threshold, match_score, mismatch_penalty, gap_open_penalties, gap_extension_penalties, min_num_seeds_required_for_mapping, max_seed_frequencies, max_num_best_mappings, max_insert_size, mapq_threshold, num_threads, min_read_length, multi_mapping_allocation_distance, multi_mapping_allocation_seed, drop_repetitive_reads, trim_adapters, remove_pcr_duplicates, is_bulk_data, allocate_multi_mappings, only_output_unique_mappings, Tn5_shift, output_mapping_in_BED, output_mapping_in_TagAlign, output_mapping_in_PAF, low_memory_mode, cell_by_bin, bin_size, depth_cutoff_to_call_peak, peak_min_length, peak_merge_max_length, reference_file_path, index_file_path, read_file1_paths, read_file2_paths, barcode_file_paths, barcode_whitelist_file_path, output_file_path, matrix_output_prefix);
           chromap_for_mapping.MapSingleEndReads();
         } else {
-          chromap::Chromap<chromap::MappingWithoutBarcode> chromap_for_mapping(error_threshold, match_score, mismatch_penalty, gap_open_penalties, gap_extension_penalties, min_num_seeds_required_for_mapping, max_seed_frequencies, max_num_best_mappings, max_insert_size, mapq_threshold, num_threads, min_read_length, multi_mapping_allocation_distance, multi_mapping_allocation_seed, drop_repetitive_reads, trim_adapters, remove_pcr_duplicates, is_bulk_data, allocate_multi_mappings, only_output_unique_mappings, Tn5_shift, output_mapping_in_BED, output_mapping_in_TagAlign, output_mapping_in_PAF, low_memory_mode, cell_by_bin, bin_size, depth_cutoff_to_call_peak, peak_min_length, peak_merge_max_length, reference_file_path, index_file_path, read_file1_path, read_file2_path, barcode_file_path, barcode_whitelist_file_path, output_file_path, matrix_output_prefix);
+          chromap::Chromap<chromap::MappingWithoutBarcode> chromap_for_mapping(error_threshold, match_score, mismatch_penalty, gap_open_penalties, gap_extension_penalties, min_num_seeds_required_for_mapping, max_seed_frequencies, max_num_best_mappings, max_insert_size, mapq_threshold, num_threads, min_read_length, multi_mapping_allocation_distance, multi_mapping_allocation_seed, drop_repetitive_reads, trim_adapters, remove_pcr_duplicates, is_bulk_data, allocate_multi_mappings, only_output_unique_mappings, Tn5_shift, output_mapping_in_BED, output_mapping_in_TagAlign, output_mapping_in_PAF, low_memory_mode, cell_by_bin, bin_size, depth_cutoff_to_call_peak, peak_min_length, peak_merge_max_length, reference_file_path, index_file_path, read_file1_paths, read_file2_paths, barcode_file_paths, barcode_whitelist_file_path, output_file_path, matrix_output_prefix);
           chromap_for_mapping.MapSingleEndReads();
         }
       }
     } else {
       if (output_mapping_in_PAF) {
-        chromap::Chromap<chromap::PairedPAFMapping> chromap_for_mapping(error_threshold, match_score, mismatch_penalty, gap_open_penalties, gap_extension_penalties, min_num_seeds_required_for_mapping, max_seed_frequencies, max_num_best_mappings, max_insert_size, mapq_threshold, num_threads, min_read_length, multi_mapping_allocation_distance, multi_mapping_allocation_seed, drop_repetitive_reads, trim_adapters, remove_pcr_duplicates, is_bulk_data, allocate_multi_mappings, only_output_unique_mappings, Tn5_shift, output_mapping_in_BED, output_mapping_in_TagAlign, output_mapping_in_PAF, low_memory_mode, cell_by_bin, bin_size, depth_cutoff_to_call_peak, peak_min_length, peak_merge_max_length, reference_file_path, index_file_path, read_file1_path, read_file2_path, barcode_file_path, barcode_whitelist_file_path, output_file_path, matrix_output_prefix);
+        chromap::Chromap<chromap::PairedPAFMapping> chromap_for_mapping(error_threshold, match_score, mismatch_penalty, gap_open_penalties, gap_extension_penalties, min_num_seeds_required_for_mapping, max_seed_frequencies, max_num_best_mappings, max_insert_size, mapq_threshold, num_threads, min_read_length, multi_mapping_allocation_distance, multi_mapping_allocation_seed, drop_repetitive_reads, trim_adapters, remove_pcr_duplicates, is_bulk_data, allocate_multi_mappings, only_output_unique_mappings, Tn5_shift, output_mapping_in_BED, output_mapping_in_TagAlign, output_mapping_in_PAF, low_memory_mode, cell_by_bin, bin_size, depth_cutoff_to_call_peak, peak_min_length, peak_merge_max_length, reference_file_path, index_file_path, read_file1_paths, read_file2_paths, barcode_file_paths, barcode_whitelist_file_path, output_file_path, matrix_output_prefix);
         chromap_for_mapping.MapPairedEndReads();
       } else {
         if (result.count("b") != 0) {
-          chromap::Chromap<chromap::PairedEndMappingWithBarcode> chromap_for_mapping(error_threshold, match_score, mismatch_penalty, gap_open_penalties, gap_extension_penalties, min_num_seeds_required_for_mapping, max_seed_frequencies, max_num_best_mappings, max_insert_size, mapq_threshold, num_threads, min_read_length, multi_mapping_allocation_distance, multi_mapping_allocation_seed, drop_repetitive_reads, trim_adapters, remove_pcr_duplicates, is_bulk_data, allocate_multi_mappings, only_output_unique_mappings, Tn5_shift, output_mapping_in_BED, output_mapping_in_TagAlign, output_mapping_in_PAF, low_memory_mode, cell_by_bin, bin_size, depth_cutoff_to_call_peak, peak_min_length, peak_merge_max_length, reference_file_path, index_file_path, read_file1_path, read_file2_path, barcode_file_path, barcode_whitelist_file_path, output_file_path, matrix_output_prefix);
+          chromap::Chromap<chromap::PairedEndMappingWithBarcode> chromap_for_mapping(error_threshold, match_score, mismatch_penalty, gap_open_penalties, gap_extension_penalties, min_num_seeds_required_for_mapping, max_seed_frequencies, max_num_best_mappings, max_insert_size, mapq_threshold, num_threads, min_read_length, multi_mapping_allocation_distance, multi_mapping_allocation_seed, drop_repetitive_reads, trim_adapters, remove_pcr_duplicates, is_bulk_data, allocate_multi_mappings, only_output_unique_mappings, Tn5_shift, output_mapping_in_BED, output_mapping_in_TagAlign, output_mapping_in_PAF, low_memory_mode, cell_by_bin, bin_size, depth_cutoff_to_call_peak, peak_min_length, peak_merge_max_length, reference_file_path, index_file_path, read_file1_paths, read_file2_paths, barcode_file_paths, barcode_whitelist_file_path, output_file_path, matrix_output_prefix);
           chromap_for_mapping.MapPairedEndReads();
         } else {
-          chromap::Chromap<chromap::PairedEndMappingWithoutBarcode> chromap_for_mapping(error_threshold, match_score, mismatch_penalty, gap_open_penalties, gap_extension_penalties, min_num_seeds_required_for_mapping, max_seed_frequencies, max_num_best_mappings, max_insert_size, mapq_threshold, num_threads, min_read_length, multi_mapping_allocation_distance, multi_mapping_allocation_seed, drop_repetitive_reads, trim_adapters, remove_pcr_duplicates, is_bulk_data, allocate_multi_mappings, only_output_unique_mappings, Tn5_shift, output_mapping_in_BED, output_mapping_in_TagAlign, output_mapping_in_PAF, low_memory_mode, cell_by_bin, bin_size, depth_cutoff_to_call_peak, peak_min_length, peak_merge_max_length, reference_file_path, index_file_path, read_file1_path, read_file2_path, barcode_file_path, barcode_whitelist_file_path, output_file_path, matrix_output_prefix);
+          chromap::Chromap<chromap::PairedEndMappingWithoutBarcode> chromap_for_mapping(error_threshold, match_score, mismatch_penalty, gap_open_penalties, gap_extension_penalties, min_num_seeds_required_for_mapping, max_seed_frequencies, max_num_best_mappings, max_insert_size, mapq_threshold, num_threads, min_read_length, multi_mapping_allocation_distance, multi_mapping_allocation_seed, drop_repetitive_reads, trim_adapters, remove_pcr_duplicates, is_bulk_data, allocate_multi_mappings, only_output_unique_mappings, Tn5_shift, output_mapping_in_BED, output_mapping_in_TagAlign, output_mapping_in_PAF, low_memory_mode, cell_by_bin, bin_size, depth_cutoff_to_call_peak, peak_min_length, peak_merge_max_length, reference_file_path, index_file_path, read_file1_paths, read_file2_paths, barcode_file_paths, barcode_whitelist_file_path, output_file_path, matrix_output_prefix);
           chromap_for_mapping.MapPairedEndReads();
         }
       }
