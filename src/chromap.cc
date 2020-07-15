@@ -760,6 +760,9 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
   delete[] mm_history1;
   delete[] mm_history2;
   OutputMappingStatistics();
+  if (!is_bulk_data_) {
+    OutputBarcodeStatistics();
+  }
   index.Destroy();
   if (low_memory_mode_) {
     if (num_mappings_in_mem > 0) {
@@ -856,9 +859,6 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
     // Delete temp files
   } else {
     OutputMappingStatistics(num_reference_sequences, mappings_on_diff_ref_seqs_, mappings_on_diff_ref_seqs_);
-    if (!is_bulk_data_) {
-      OutputBarcodeStatistics();
-    }
     if (Tn5_shift_) {
       ApplyTn5ShiftOnPairedEndMapping(num_reference_sequences, &mappings_on_diff_ref_seqs_);
     }

@@ -63,7 +63,7 @@ struct MappingWithBarcode {
   uint8_t num_dups;
   //uint8_t mapq;
   bool operator<(const MappingWithBarcode& m) const {
-    return std::tie(cell_barcode, fragment_start_position, fragment_length, mapq, direction, is_unique, read_id) < std::tie(m.cell_barcode, m.fragment_start_position, m.fragment_length, m.mapq, m.direction, m.is_unique, m.read_id);
+    return std::tie(fragment_start_position, fragment_length, cell_barcode, mapq, direction, is_unique, read_id) < std::tie(m.fragment_start_position, m.fragment_length, m.cell_barcode, m.mapq, m.direction, m.is_unique, m.read_id);
   }
   bool operator==(const MappingWithBarcode& m) const {
     return std::tie(cell_barcode, fragment_start_position) == std::tie(m.cell_barcode, m.fragment_start_position);
@@ -96,7 +96,7 @@ struct PairedEndMappingWithBarcode {
   uint16_t positive_alignment_length;
   uint16_t negative_alignment_length;
   bool operator<(const PairedEndMappingWithBarcode& m) const {
-    return std::tie(cell_barcode, fragment_start_position, fragment_length, mapq, direction, is_unique, read_id, positive_alignment_length, negative_alignment_length) < std::tie(m.cell_barcode, m.fragment_start_position, m.fragment_length, m.mapq, m.direction, m.is_unique, m.read_id, m.positive_alignment_length, m.negative_alignment_length);
+    return std::tie(fragment_start_position, fragment_length, cell_barcode, mapq, direction, is_unique, read_id, positive_alignment_length, negative_alignment_length) < std::tie(m.fragment_start_position, m.fragment_length, m.cell_barcode, m.mapq, m.direction, m.is_unique, m.read_id, m.positive_alignment_length, m.negative_alignment_length);
   }
   bool operator==(const PairedEndMappingWithBarcode& m) const {
     return std::tie(cell_barcode, fragment_start_position, fragment_length) == std::tie(m.cell_barcode, m.fragment_start_position, m.fragment_length);
