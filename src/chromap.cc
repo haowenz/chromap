@@ -1864,6 +1864,9 @@ void Chromap<MappingRecord>::VerifyCandidatesOnOneDirectionUsingSIMD(Direction c
               (*num_best_mappings)++;
             } else if (mapping_edit_distances[mi] == *second_min_num_errors) {
               (*num_second_best_mappings)++;
+            } else if (mapping_edit_distances[mi] < *second_min_num_errors) {
+              *num_second_best_mappings = 1;
+              *second_min_num_errors = mapping_edit_distances[mi];
             }
             if (candidate_direction == kPositive) {
               mappings->emplace_back((uint8_t)mapping_edit_distances[mi], valid_candidates[mi].position - error_threshold_ + mapping_end_positions[mi]);
@@ -1894,6 +1897,9 @@ void Chromap<MappingRecord>::VerifyCandidatesOnOneDirectionUsingSIMD(Direction c
               (*num_best_mappings)++;
             } else if (mapping_edit_distances[mi] == *second_min_num_errors) {
               (*num_second_best_mappings)++;
+            }  else if (mapping_edit_distances[mi] < *second_min_num_errors) {
+              *num_second_best_mappings = 1;
+              *second_min_num_errors = mapping_edit_distances[mi];
             }
             if (candidate_direction == kPositive) {
               mappings->emplace_back((uint8_t)mapping_edit_distances[mi], valid_candidates[mi].position - error_threshold_ + mapping_end_positions[mi]);
@@ -1984,6 +1990,9 @@ void Chromap<MappingRecord>::VerifyCandidatesOnOneDirection(Direction candidate_
         (*num_best_mappings)++;
       } else if (num_errors == *second_min_num_errors) {
         (*num_second_best_mappings)++;
+      } else if (num_errors < *second_min_num_errors) {
+        *num_second_best_mappings = 1;
+        *second_min_num_errors = num_errors;
       }
       if (candidate_direction == kPositive) {
         mappings->emplace_back(num_errors, candidates[ci].position - error_threshold_ + mapping_end_position);
