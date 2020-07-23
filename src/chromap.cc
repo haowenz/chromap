@@ -1079,6 +1079,7 @@ void Chromap<MappingRecord>::ProcessBestMappingsForPairedEndReadOnOneDirection(D
   const std::string &negative_read1 = read_batch1.GetNegativeSequenceAt(pair_index);
   const std::string &negative_read2 = read_batch2.GetNegativeSequenceAt(pair_index);
   uint32_t read_id = read_batch1.GetSequenceIdAt(pair_index);
+  //uint8_t is_unique = (num_best_mappings == 1 || num_best_mappings1 == 1 || num_best_mappings2 == 1) ? 1 : 0;
   uint8_t is_unique = num_best_mappings == 1 ? 1 : 0;
   for (uint32_t mi = 0; mi < best_mappings.size(); ++mi) {
     uint32_t i1 = best_mappings[mi].first;
@@ -1109,7 +1110,7 @@ void Chromap<MappingRecord>::ProcessBestMappingsForPairedEndReadOnOneDirection(D
           uint16_t fragment_length = position2 - fragment_start_position + 1;
           uint16_t positive_alignment_length = position1 + 1 - fragment_start_position;
           uint16_t negative_alignment_length = position2 + 1 - (verification_window_start_position2 + mapping_start_position2);
-          mapq = GetMAPQ(num_candidates1, num_candidates2, repetitive_seed_length1, repetitive_seed_length2, positive_alignment_length + negative_alignment_length, min_sum_errors, num_best_mappings, second_min_sum_errors, num_second_best_mappings);
+          mapq = GetMAPQForPairedEndRead(num_candidates1, num_candidates2, repetitive_seed_length1, repetitive_seed_length2, positive_alignment_length, negative_alignment_length, min_sum_errors, num_best_mappings, second_min_sum_errors, num_second_best_mappings, min_num_errors1, min_num_errors2, num_best_mappings1, num_best_mappings2, second_min_num_errors1, second_min_num_errors2, num_second_best_mappings1, num_second_best_mappings2);
           uint8_t direction = 1;
           //mapq |= (uint8_t)1;
           uint32_t barcode_key = 0;
@@ -1128,7 +1129,7 @@ void Chromap<MappingRecord>::ProcessBestMappingsForPairedEndReadOnOneDirection(D
           uint16_t fragment_length = position1 - fragment_start_position + 1;
           uint16_t positive_alignment_length = position2 + 1 - fragment_start_position;
           uint16_t negative_alignment_length = position1 + 1 - (verification_window_start_position1 + mapping_start_position1);
-          mapq = GetMAPQ(num_candidates1, num_candidates2, repetitive_seed_length1, repetitive_seed_length2, positive_alignment_length + negative_alignment_length, min_sum_errors, num_best_mappings, second_min_sum_errors, num_second_best_mappings);
+          mapq = GetMAPQForPairedEndRead(num_candidates2, num_candidates1, repetitive_seed_length2, repetitive_seed_length1, positive_alignment_length, negative_alignment_length, min_sum_errors, num_best_mappings, second_min_sum_errors, num_second_best_mappings, min_num_errors2, min_num_errors1, num_best_mappings2, num_best_mappings1, second_min_num_errors2, second_min_num_errors1, num_second_best_mappings2, num_second_best_mappings1);
           uint8_t direction = 0;
           uint32_t barcode_key = 0;
           if (!is_bulk_data_) {
@@ -1459,7 +1460,7 @@ void Chromap<MappingRecord>::ProcessBestMappingsForSingleEndRead(Direction mappi
           BandedTraceback(min_num_errors, reference.GetSequenceAt(rid) + verification_window_start_position, read, read_length, &mapping_start_position);
           uint32_t fragment_start_position = verification_window_start_position + mapping_start_position;
           uint16_t fragment_length = position - fragment_start_position + 1;
-          mapq = GetMAPQ(0, 0, 0, 0, fragment_length, min_num_errors, num_best_mappings, second_min_num_errors, num_second_best_mappings);
+          mapq = GetMAPQForSingleEndRead(0, 0, fragment_length, min_num_errors, num_best_mappings, second_min_num_errors, num_second_best_mappings);
           uint8_t direction = 1;
           //mapq |= 1;
           if (output_mapping_in_PAF_) {
@@ -1471,7 +1472,7 @@ void Chromap<MappingRecord>::ProcessBestMappingsForSingleEndRead(Direction mappi
           BandedTraceback(min_num_errors, reference.GetSequenceAt(rid) + verification_window_start_position, negative_read.data(), read_length, &mapping_start_position);
           uint32_t fragment_start_position = verification_window_start_position + mapping_start_position;
           uint16_t fragment_length = position - fragment_start_position + 1;
-          mapq = GetMAPQ(0, 0, 0, 0, fragment_length, min_num_errors, num_best_mappings, second_min_num_errors, num_second_best_mappings);
+          mapq = GetMAPQForSingleEndRead(0, 0, fragment_length, min_num_errors, num_best_mappings, second_min_num_errors, num_second_best_mappings);
           uint8_t direction = 0;
           if (output_mapping_in_PAF_) {
             EmplaceBackMappingRecord(read_id, read_name, (uint16_t)read_length, barcode_key, fragment_start_position, fragment_length, mapq, direction, is_unique, 1, &((*mappings_on_diff_ref_seqs)[rid]));
@@ -1906,8 +1907,8 @@ void Chromap<MappingRecord>::VerifyCandidatesOnOneDirectionUsingSIMD(Direction c
       }
       valid_candidate_index = 0;
       // Check whether we should stop early. Assuming the candidates are sorted 
-      if (GetMAPQ(num_candidates, 0, 0, 0, read_length + error_threshold_, *min_num_errors, *num_best_mappings, *second_min_num_errors, *second_min_num_errors) < mapq_threshold_)
-      	break;
+      //if (GetMAPQ(num_candidates, 0, 0, 0, read_length + error_threshold_, *min_num_errors, *num_best_mappings, *second_min_num_errors, *second_min_num_errors) < mapq_threshold_)
+      //  break;
     }
     ++candidate_index;
   }
@@ -2497,7 +2498,7 @@ void Chromap<MappingRecord>::LoadBarcodeWhitelist() {
 }
 
 template <typename MappingRecord>
-uint8_t Chromap<MappingRecord>::GetMAPQ(int num_positive_candidates, int num_negative_candidates, uint32_t repetitive_seed_length1, uint32_t repetitive_seed_length2, uint16_t alignment_length, int min_num_errors, int num_best_mappings, int second_min_num_errors, int num_second_best_mappings) {
+uint8_t Chromap<MappingRecord>::GetMAPQForSingleEndRead(int num_candidates, uint32_t repetitive_seed_length, uint16_t alignment_length, int min_num_errors, int num_best_mappings, int second_min_num_errors, int num_second_best_mappings) {
   int mapq_coef = 60;
   //int mapq_coef_length = 50;
   //double mapq_coef_fraction = log(mapq_coef_length);
@@ -2516,7 +2517,7 @@ uint8_t Chromap<MappingRecord>::GetMAPQ(int num_positive_candidates, int num_neg
     }
   } else {
     if (second_min_num_errors > error_threshold_) {
-        second_min_num_errors = 2 * error_threshold_ + 1;
+      second_min_num_errors = 2 * error_threshold_ + 1;
     }
     mapq = (int)(mapq_coef * (1. - (double)min_num_errors / second_min_num_errors) + .499);
     double tmp = alignment_identity * alignment_identity;
@@ -2530,20 +2531,38 @@ uint8_t Chromap<MappingRecord>::GetMAPQ(int num_positive_candidates, int num_neg
   if (num_second_best_mappings > 0) {
     mapq -= (int)(4.343 * log(num_second_best_mappings + 1) + 0.499);
   }
-  if (num_positive_candidates > 1 || num_negative_candidates > 1) {
-    mapq -= (int)(4.343 * log(num_positive_candidates + num_negative_candidates) + 0.499);
-  }
-  if (repetitive_seed_length1 > 0 || repetitive_seed_length2 > 0) {
-    double frac_rep = (repetitive_seed_length1 + repetitive_seed_length2) / (double)alignment_length;
-    mapq =  mapq * (1 - frac_rep) + 0.499;
-  }
+  //if (num_candidates > 1) {
+  //  mapq -= (int)(4.343 * log(num_candidates) + 0.499);
+  //}
   if (mapq > 60) {
     mapq = 60;
+  }
+  if (repetitive_seed_length > 0) {
+    double frac_rep = (repetitive_seed_length) / (double)alignment_length;
+    mapq =  mapq * (1 - frac_rep) + 0.499;
   }
   if (mapq < 0) {
     mapq = 0;
   }
   //mapq <<= 1;
+  return (uint8_t)mapq;
+}
+
+template <typename MappingRecord>
+uint8_t Chromap<MappingRecord>::GetMAPQForPairedEndRead(int num_positive_candidates, int num_negative_candidates, uint32_t repetitive_seed_length1, uint32_t repetitive_seed_length2, uint16_t positive_alignment_length, uint16_t negative_alignment_length, int min_sum_errors, int num_best_mappings, int second_min_sum_errors, int num_second_best_mappings, int min_num_errors1, int min_num_errors2, int num_best_mappings1, int num_best_mappings2, int second_min_num_errors1, int second_min_num_errors2, int num_second_best_mappings1, int num_second_best_mappings2) {
+  //uint8_t mapq_pe = GetMAPQForSingleEndRead(num_positive_candidates + num_negative_candidates, repetitive_seed_length1 + repetitive_seed_length2, positive_alignment_length + negative_alignment_length, min_sum_errors, num_best_mappings, second_min_sum_errors, num_second_best_mappings);
+  uint8_t mapq1 = GetMAPQForSingleEndRead(num_positive_candidates, repetitive_seed_length1, positive_alignment_length, min_num_errors1, num_best_mappings1, second_min_num_errors1, num_second_best_mappings1);
+  uint8_t mapq2 = GetMAPQForSingleEndRead(num_negative_candidates, repetitive_seed_length2, negative_alignment_length, min_num_errors2, num_best_mappings2, second_min_num_errors2, num_second_best_mappings2);
+  //mapq1 = mapq1 > mapq_pe ? mapq1 : mapq_pe < mapq1 + 40? mapq_pe : mapq1 + 40;
+  //mapq2 = mapq2 > mapq_pe ? mapq2 : mapq_pe < mapq2 + 40? mapq_pe : mapq2 + 40;
+  //uint8_t mapq = (mapq1 + mapq2) / 2;
+  uint8_t mapq = (mapq1 + mapq2) / 2 + 0.499;
+  if ((mapq1 < mapq2 && mapq1 + 10 > mapq2) || (mapq2 < mapq1 && mapq2 + 10 > mapq1)) {
+    //mapq = (mapq1 + mapq2) / 2;
+  } else {
+    uint8_t min_mapq = mapq1 > mapq2 ? mapq1 : mapq2;
+    mapq = (mapq + min_mapq) / 2 + 0.499;
+  }
   return (uint8_t)mapq;
 }
 
