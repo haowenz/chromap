@@ -2511,9 +2511,9 @@ void Chromap<MappingRecord>::LoadBarcodeWhitelist() {
 
 template <typename MappingRecord>
 uint8_t Chromap<MappingRecord>::GetMAPQForSingleEndRead(int num_candidates, uint32_t repetitive_seed_length, uint16_t alignment_length, int min_num_errors, int num_best_mappings, int second_min_num_errors, int num_second_best_mappings) {
-  //int mapq_coef = 60;
-  int mapq_coef_length = 50;
-  double mapq_coef_fraction = log(mapq_coef_length);
+  int mapq_coef = 60;
+  //int mapq_coef_length = 60;
+  //double mapq_coef_fraction = log(mapq_coef_length);
   double alignment_identity = 1 - (double)min_num_errors / alignment_length;
   int mapq = 0;
   if (num_best_mappings > 1) {
@@ -2532,13 +2532,14 @@ uint8_t Chromap<MappingRecord>::GetMAPQForSingleEndRead(int num_candidates, uint
       second_min_num_errors = 2 * error_threshold_ + 1;
     }
     //mapq = (int)(mapq_coef * (1. - (double)min_num_errors / second_min_num_errors) + .499);
-    //double tmp = alignment_identity * alignment_identity;
-    //tmp = tmp * tmp;
-    //tmp = tmp * tmp;
-    //mapq = alignment_identity < 0.98 ? (int)(mapq * tmp + .499) : mapq;
-    double tmp = alignment_length < mapq_coef_length ? 1.0 : mapq_coef_fraction / log(alignment_length);
-    tmp *= alignment_identity * alignment_identity;
-    mapq = 6.02 * (second_min_num_errors - min_num_errors) * tmp * tmp + 0.499;
+    mapq = (int)(mapq_coef * ((double)(second_min_num_errors - min_num_errors) / second_min_num_errors) + .499);
+    double tmp = alignment_identity * alignment_identity;
+    tmp = tmp * tmp;
+    tmp = tmp * tmp;
+    mapq = alignment_identity < 0.98 ? (int)(mapq * tmp + .499) : mapq;
+    //double tmp = alignment_length < mapq_coef_length ? 1.0 : mapq_coef_fraction / log(alignment_length);
+    //tmp *= alignment_identity * alignment_identity;
+    //mapq = 6.02 * (second_min_num_errors - min_num_errors) * tmp * tmp + 0.499;
   }
   if (num_second_best_mappings > 0) {
     mapq -= (int)(4.343 * log(num_second_best_mappings + 1) + 0.499);
@@ -2567,14 +2568,14 @@ uint8_t Chromap<MappingRecord>::GetMAPQForPairedEndRead(int num_positive_candida
   uint8_t mapq2 = GetMAPQForSingleEndRead(num_negative_candidates, repetitive_seed_length2, negative_alignment_length, min_num_errors2, num_best_mappings2, second_min_num_errors2, num_second_best_mappings2);
   mapq1 = mapq1 > mapq_pe ? mapq1 : mapq_pe < mapq1 + 40? mapq_pe : mapq1 + 40;
   mapq2 = mapq2 > mapq_pe ? mapq2 : mapq_pe < mapq2 + 40? mapq_pe : mapq2 + 40;
-  uint8_t mapq = (mapq1 + mapq2) / 2;
-  //uint8_t mapq = (mapq1 + mapq2) / 2 + 0.499;
-  //if ((mapq1 < mapq2 && mapq1 + 10 > mapq2) || (mapq2 < mapq1 && mapq2 + 10 > mapq1)) {
-  //  //mapq = (mapq1 + mapq2) / 2;
-  //} else {
-  //  uint8_t min_mapq = mapq1 > mapq2 ? mapq1 : mapq2;
-  //  mapq = (mapq + min_mapq) / 2 + 0.499;
-  //}
+  //uint8_t mapq = (mapq1 + mapq2) / 2;
+  uint8_t mapq = (mapq1 + mapq2) / 2 + 0.499;
+  if ((mapq1 < mapq2 && mapq1 + 10 > mapq2) || (mapq2 < mapq1 && mapq2 + 10 > mapq1)) {
+    //mapq = (mapq1 + mapq2) / 2;
+  } else {
+    uint8_t min_mapq = mapq1 > mapq2 ? mapq1 : mapq2;
+    mapq = (mapq + min_mapq) / 2 + 0.499;
+  }
   return (uint8_t)mapq;
 }
 
