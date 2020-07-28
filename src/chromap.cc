@@ -610,6 +610,7 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
           for (uint32_t pair_index = 0; pair_index < num_loaded_pairs; ++pair_index) {
             read_batch1.PrepareNegativeSequenceAt(pair_index);
             read_batch2.PrepareNegativeSequenceAt(pair_index);
+            //std::cerr << read_batch1.GetSequenceNameAt(pair_index);
             if (trim_adapters_) {
               TrimAdapterForPairedEndRead(pair_index, &read_batch1, &read_batch2);
             }
@@ -2514,9 +2515,9 @@ void Chromap<MappingRecord>::LoadBarcodeWhitelist() {
 
 template <typename MappingRecord>
 uint8_t Chromap<MappingRecord>::GetMAPQForSingleEndRead(int error_threshold, int num_candidates, uint32_t repetitive_seed_length, uint16_t alignment_length, int min_num_errors, int num_best_mappings, int second_min_num_errors, int num_second_best_mappings) {
-  int mapq_coef = 60;
-  //int mapq_coef_length = 45;
-  //double mapq_coef_fraction = log(mapq_coef_length);
+  //int mapq_coef = 60;
+  int mapq_coef_length = 45;
+  double mapq_coef_fraction = log(mapq_coef_length);
   double alignment_identity = 1 - (double)min_num_errors / alignment_length;
   int mapq = 0;
   if (num_best_mappings > 1) {
@@ -2531,17 +2532,17 @@ uint8_t Chromap<MappingRecord>::GetMAPQForSingleEndRead(int error_threshold, int
       mapq = 0;
     }
   } else {
-    if (second_min_num_errors > error_threshold) {
-      second_min_num_errors = error_threshold + 1;
-    }
-    mapq = (int)(mapq_coef * ((double)(second_min_num_errors - min_num_errors) / second_min_num_errors) + .499);
-    double tmp = alignment_identity * alignment_identity;
-    tmp = tmp * tmp;
+    //if (second_min_num_errors > error_threshold) {
+    //  second_min_num_errors = error_threshold + 1;
+    //}
+    //mapq = (int)(mapq_coef * ((double)(second_min_num_errors - min_num_errors) / second_min_num_errors) + .499);
+    //double tmp = alignment_identity * alignment_identity;
     //tmp = tmp * tmp;
-    mapq = alignment_identity < 0.98 ? (int)(mapq * tmp + .499) : mapq;
-    //double tmp = alignment_length < mapq_coef_length ? 1.0 : mapq_coef_fraction / log(alignment_length);
-    //tmp *= alignment_identity * alignment_identity;
-    //mapq = 6.02 * (second_min_num_errors - min_num_errors) * tmp * tmp + 0.499;
+    //tmp = tmp * tmp;
+    //mapq = alignment_identity < 0.98 ? (int)(mapq * tmp + .499) : mapq;
+    double tmp = alignment_length < mapq_coef_length ? 1.0 : mapq_coef_fraction / log(alignment_length);
+    tmp *= alignment_identity * alignment_identity;
+    mapq = 4 * 6.02 * (second_min_num_errors - min_num_errors) * tmp * tmp + 0.499;
   }
   if (num_second_best_mappings > 0) {
     mapq -= (int)(4.343 * log(num_second_best_mappings + 1) + 0.499);
@@ -2563,37 +2564,41 @@ uint8_t Chromap<MappingRecord>::GetMAPQForSingleEndRead(int error_threshold, int
   return (uint8_t)mapq;
 }
 
-#define raw_mapq(diff, a) ((int)(6.02 * (diff) / (a) + .499))
+#define raw_mapq(diff, a) ((int)(4 * 6.02 * (diff) / (a) + .499))
 
 template <typename MappingRecord>
 uint8_t Chromap<MappingRecord>::GetMAPQForPairedEndRead(int num_positive_candidates, int num_negative_candidates, uint32_t repetitive_seed_length1, uint32_t repetitive_seed_length2, uint16_t positive_alignment_length, uint16_t negative_alignment_length, int min_sum_errors, int num_best_mappings, int second_min_sum_errors, int num_second_best_mappings, int min_num_errors1, int min_num_errors2, int num_best_mappings1, int num_best_mappings2, int second_min_num_errors1, int second_min_num_errors2, int num_second_best_mappings1, int num_second_best_mappings2) {
+  //std::cerr << " rl1:" << (int)repetitive_seed_length1 << " rl2:" << (int)repetitive_seed_length2 << " pal:" << (int)positive_alignment_length << " nal:" << (int)negative_alignment_length << " me:" << min_sum_errors << " #bm:" << num_best_mappings << " sme:" << second_min_sum_errors << " #sbm:" << num_second_best_mappings << " me1:" << min_num_errors1 << " me2:" << min_num_errors2 << " #bm1:" << num_best_mappings1 << " #bm2:" << num_best_mappings2 << " sme1:" << second_min_num_errors1 << " sme2:" << second_min_num_errors2 << " #sbm1:" << num_second_best_mappings1 << " #sbm2:" << num_second_best_mappings2 << "\n";
   uint8_t mapq_pe = GetMAPQForSingleEndRead(2 * error_threshold_, num_positive_candidates + num_negative_candidates, repetitive_seed_length1 + repetitive_seed_length2, positive_alignment_length + negative_alignment_length, min_sum_errors, num_best_mappings, second_min_sum_errors, num_second_best_mappings);
   uint8_t mapq1 = GetMAPQForSingleEndRead(error_threshold_, num_positive_candidates, repetitive_seed_length1, positive_alignment_length, min_num_errors1, num_best_mappings1, second_min_num_errors1, num_second_best_mappings1);
   uint8_t mapq2 = GetMAPQForSingleEndRead(error_threshold_, num_negative_candidates, repetitive_seed_length2, negative_alignment_length, min_num_errors2, num_best_mappings2, second_min_num_errors2, num_second_best_mappings2);
+  //std::cerr << " 1:" << (int)mapq1 << " 2:" << (int)mapq2 << "\n";
   mapq1 = mapq1 > mapq_pe ? mapq1 : mapq_pe < mapq1 + 40? mapq_pe : mapq1 + 40;
   mapq2 = mapq2 > mapq_pe ? mapq2 : mapq_pe < mapq2 + 40? mapq_pe : mapq2 + 40;
-  if (second_min_num_errors1 > error_threshold_) {
-    second_min_num_errors1 = 2 * error_threshold_ + 1;
-  }
-  if (second_min_num_errors2 > error_threshold_) {
-    second_min_num_errors2 = 2 * error_threshold_ + 1;
-  }
-  int mapq_coef = 60;
-  uint8_t max_mapq1 = (int)(mapq_coef * ((double)(second_min_num_errors1 - min_num_errors1) / second_min_num_errors1) + .499);
-  uint8_t max_mapq2 = (int)(mapq_coef * ((double)(second_min_num_errors2 - min_num_errors2) / second_min_num_errors2) + .499);
-  mapq1 = mapq1 < max_mapq1 ? mapq1 : max_mapq1;
-  mapq2 = mapq2 < max_mapq2 ? mapq2 : max_mapq2;
-  //mapq1 = mapq1 < raw_mapq(second_min_num_errors1 - min_num_errors1, 1) ? mapq1 : raw_mapq(second_min_num_errors1 - min_num_errors1, 1);
-  //mapq2 = mapq2 < raw_mapq(second_min_num_errors2 - min_num_errors2, 1) ? mapq1 : raw_mapq(second_min_num_errors2 - min_num_errors2, 1);
-  uint8_t mapq = mapq1 < mapq2 ? mapq1 : mapq2;
-  //uint8_t mapq = (mapq1 + mapq2) / 2;
-  //uint8_t mapq = (mapq1 + mapq2) / 2 + 0.499;
-  //if ((mapq1 < mapq2 && mapq1 + 10 > mapq2) || (mapq2 < mapq1 && mapq2 + 10 > mapq1)) {
-  //  //mapq = (mapq1 + mapq2) / 2;
-  //} else {
-  //  uint8_t min_mapq = mapq1 > mapq2 ? mapq1 : mapq2;
-  //  mapq = (mapq + 3 * min_mapq) / 4 + 0.499;
+  //std::cerr << " 1:" << (int)mapq1 << " 2:" << (int)mapq2 << "\n";
+  //if (second_min_num_errors1 > error_threshold_) {
+  //  second_min_num_errors1 = 2 * error_threshold_ + 1;
   //}
+  //if (second_min_num_errors2 > error_threshold_) {
+  //  second_min_num_errors2 = 2 * error_threshold_ + 1;
+  //}
+  //int mapq_coef = 60;
+  //uint8_t max_mapq1 = (int)(mapq_coef * ((double)(second_min_num_errors1 - min_num_errors1) / second_min_num_errors1) + .499);
+  //uint8_t max_mapq2 = (int)(mapq_coef * ((double)(second_min_num_errors2 - min_num_errors2) / second_min_num_errors2) + .499);
+  //mapq1 = mapq1 < max_mapq1 ? mapq1 : max_mapq1;
+  //mapq2 = mapq2 < max_mapq2 ? mapq2 : max_mapq2;
+  mapq1 = mapq1 < raw_mapq(second_min_num_errors1 - min_num_errors1, 1) ? mapq1 : raw_mapq(second_min_num_errors1 - min_num_errors1, 1);
+  mapq2 = mapq2 < raw_mapq(second_min_num_errors2 - min_num_errors2, 1) ? mapq2 : raw_mapq(second_min_num_errors2 - min_num_errors2, 1);
+  //uint8_t mapq = mapq1 < mapq2 ? mapq1 : mapq2;
+  //std::cerr << " 1:" << (int)mapq1 << " 2:" << (int)mapq2 << " mapq_pe:" << (int)mapq_pe << " mapq:" << (int)mapq << "\n";
+  //uint8_t mapq = (mapq1 + mapq2) / 2;
+  uint8_t mapq = (mapq1 + mapq2) / 2 + 0.499;
+  if ((mapq1 < mapq2 && mapq1 + 10 > mapq2) || (mapq2 < mapq1 && mapq2 + 10 > mapq1)) {
+    //mapq = (mapq1 + mapq2) / 2;
+  } else {
+    uint8_t min_mapq = mapq1 > mapq2 ? mapq1 : mapq2;
+    mapq = (mapq + 1 * min_mapq) / 2 + 0.499;
+  }
   return (uint8_t)mapq;
 }
 
