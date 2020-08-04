@@ -640,7 +640,7 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
               uint32_t repetitive_seed_length2 = 0;
               if (mm_to_candidates_cache.Query(minimizers1, positive_candidates1, negative_candidates1, repetitive_seed_length1, read_batch1.GetSequenceLengthAt(pair_index)) == -1)
                 index.GenerateCandidates(error_threshold_, minimizers1, &repetitive_seed_length1, &positive_hits1, &negative_hits1, &positive_candidates1, &negative_candidates1);
-              uint32_t current_num_candidates1 = positive_candidates1.size() + negative_candidates1.size();
+	      uint32_t current_num_candidates1 = positive_candidates1.size() + negative_candidates1.size();
               if (mm_to_candidates_cache.Query(minimizers2, positive_candidates2, negative_candidates2, repetitive_seed_length2, read_batch2.GetSequenceLengthAt(pair_index)) == -1)
                 index.GenerateCandidates(error_threshold_, minimizers2, &repetitive_seed_length2, &positive_hits2, &negative_hits2, &positive_candidates2, &negative_candidates2);
               uint32_t current_num_candidates2 = positive_candidates2.size() + negative_candidates2.size();
@@ -654,6 +654,30 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
                 mm_history2[pair_index].negative_candidates = negative_candidates2;
                 mm_history2[pair_index].repetitive_seed_length = repetitive_seed_length2;
               }
+		
+              if (current_num_candidates1 + current_num_candidates2 == 1) {
+	          if (current_num_candidates1 == 1) {
+	             positive_hits2.clear();
+		     negative_hits2.clear();
+		     repetitive_seed_length2 = 0;
+		  }
+		  if (current_num_candidates2 == 1) {
+	             positive_hits1.clear();
+		     negative_hits1.clear();
+		     repetitive_seed_length1 = 0;
+		  }
+		  if (positive_candidates1.size() == 1) 
+		  	index.GenerateCandidatesFromRepetiveReadWithMateInfo(error_threshold_, minimizers2, &repetitive_seed_length2, &negative_hits2, &negative_candidates2, &positive_candidates1, -1, 2 * max_insert_size_) ;
+	          else if (negative_candidates1.size() == 1)
+		  	index.GenerateCandidatesFromRepetiveReadWithMateInfo(error_threshold_, minimizers2, &repetitive_seed_length2, &positive_hits2, &positive_candidates2, &negative_candidates1, 1, 2 * max_insert_size_) ;
+		  else if (positive_candidates2.size() == 1) 
+		  	index.GenerateCandidatesFromRepetiveReadWithMateInfo(error_threshold_, minimizers1, &repetitive_seed_length1, &negative_hits1, &negative_candidates1, &positive_candidates2, -1, 2 * max_insert_size_) ;
+	          else if (negative_candidates2.size() == 1)
+		  	index.GenerateCandidatesFromRepetiveReadWithMateInfo(error_threshold_, minimizers1, &repetitive_seed_length1, &positive_hits1, &positive_candidates1, &negative_candidates2, 1, 2 * max_insert_size_) ;
+		  current_num_candidates1 = positive_candidates1.size() + negative_candidates1.size();
+		  current_num_candidates2 = positive_candidates2.size() + negative_candidates2.size();
+	      }
+
               if (current_num_candidates1 > 0 && current_num_candidates2 > 0) {
                 positive_candidates1.swap(positive_candidates1_buffer);
                 negative_candidates1.swap(negative_candidates1_buffer);
