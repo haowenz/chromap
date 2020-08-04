@@ -46,6 +46,7 @@ void Index::GenerateMinimizerSketch(const SequenceBatch &sequence_batch, uint32_
   int unambiguous_length = 0;
   int position_in_buffer = 0;
   int min_position = 0;
+  //std::pair<uint64_t, uint64_t> pre_seed = {UINT64_MAX, UINT64_MAX};
   for (uint32_t position = 0; position < sequence_length; ++position) {
     uint8_t current_base = SequenceBatch::CharToUint8(sequence[position]);
     std::pair<uint64_t, uint64_t> current_seed = {UINT64_MAX, UINT64_MAX};
@@ -69,6 +70,43 @@ void Index::GenerateMinimizerSketch(const SequenceBatch &sequence_batch, uint32_
     }
     buffer[position_in_buffer] = current_seed; // need to do this here as appropriate position_in_buffer and buf[position_in_buffer] are needed below
     if (unambiguous_length == window_size_ + kmer_size_ - 1 && min_seed.first != UINT64_MAX) { // special case for the first window - because identical k-mers are not stored yet
+      //
+      //bool found_first_min_in_first_loop = false;
+      //bool found_first_min_in_second_loop = false; // For debug
+      //int first_min_position_in_buffer = 0;
+      //for (int j = position_in_buffer + 1; j < window_size_; ++j)
+      //  if (min_seed.first == buffer[j].first) {
+      //    found_first_min_in_first_loop = true;
+      //    first_min_position_in_buffer = j;
+      //    break;
+      //  }
+      //if (!found_first_min_in_first_loop) {
+      //  for (int j = 0; j < position_in_buffer; ++j)
+      //    if (min_seed.first == buffer[j].first) {
+      //      found_first_min_in_second_loop = true;
+      //      first_min_position_in_buffer = j;
+      //      break;
+      //    }
+      //}
+      //assert(found_first_min_in_first_loop || found_first_min_in_second_loop);
+      //bool found_pre_seed = false;
+      //if (found_first_min_in_first_loop) {
+      //  for (int j = position_in_buffer + 1; j < first_min_position_in_buffer; ++j)
+      //    if (buffer[j].first < pre_seed.first) {
+      //      pre_seed = buffer[j];
+      //      found_pre_seed = true;
+      //    }
+      //}
+      //if (found_first_min_in_second_loop) {
+      //  for (int j = 0; j < first_min_position_in_buffer; ++j)
+      //    if (buffer[j].first < pre_seed.first) {
+      //      pre_seed = buffer[j];
+      //      found_pre_seed = true;
+      //    }
+      //}
+      //if (found_pre_seed)
+      //  minimizers->push_back(pre_seed);
+      //
       for (int j = position_in_buffer + 1; j < window_size_; ++j)
         if (min_seed.first == buffer[j].first && buffer[j].second != min_seed.second) 
           minimizers->push_back(buffer[j]);
@@ -263,6 +301,7 @@ void Index::Load() {
 }
 
 void Index::GenerateCandidatesOnOneDirection(int error_threshold, std::vector<uint64_t> *hits, std::vector<Candidate> *candidates) {
+  //std::cerr << "Direction\n";
   hits->emplace_back(UINT64_MAX);
   if (hits->size() > 0) {
     std::sort(hits->begin(), hits->end());
@@ -279,6 +318,7 @@ void Index::GenerateCandidatesOnOneDirection(int error_threshold, std::vector<ui
           nc.position = previous_hit;
           nc.count = count;
           candidates->push_back(nc);
+          //std::cerr << count << " ";
         }
         count = 1;
       } else {
@@ -340,12 +380,12 @@ void Index::CollectCandidates(int max_seed_frequency, const std::vector<std::pai
         } 
       } else {
         if (previous_repetitive_seed_position > read_position) { // first minimizer
-          *repetitive_seed_length += kmer_size_;
+          *repetitive_seed_length += kmer_size_ + window_size_ - 1;
         } else {
           if (read_position < previous_repetitive_seed_position + kmer_size_) {
-            *repetitive_seed_length += previous_repetitive_seed_position + kmer_size_ - read_position;
+            *repetitive_seed_length += read_position - previous_repetitive_seed_position;
           } else {
-            *repetitive_seed_length += kmer_size_;
+            *repetitive_seed_length += kmer_size_ + window_size_ - 1;
           }
         }
         previous_repetitive_seed_position = read_position;
@@ -355,6 +395,7 @@ void Index::CollectCandidates(int max_seed_frequency, const std::vector<std::pai
 }
 
 void Index::GenerateCandidates(int error_threshold, const std::vector<std::pair<uint64_t, uint64_t> > &minimizers, uint32_t *repetitive_seed_length, std::vector<uint64_t> *positive_hits, std::vector<uint64_t> *negative_hits, std::vector<Candidate> *positive_candidates, std::vector<Candidate> *negative_candidates) {
+  *repetitive_seed_length = 0;
   CollectCandidates(max_seed_frequencies_[0], minimizers, repetitive_seed_length, positive_hits, negative_hits);
   // Now I can generate primer chain in candidates
   // Let me use sort for now, but I can use merge later.
