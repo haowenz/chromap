@@ -354,7 +354,7 @@ void Index::CollectCandidates(int max_seed_frequency, const std::vector<std::pai
   }
 }
 
-void Index::GenerateCandidatesFromRepetiveReadWithMateInfo(int error_threshold, const std::vector<std::pair<uint64_t, uint64_t> > &minimizers, uint32_t *repetitive_seed_length, std::vector<uint64_t> *hits, std::vector<Candidate> *candidates, std::vector<Candidate> *mate_candidates, int direction, unsigned int range) // directoin: +1: positive; -1: negative
+void Index::GenerateCandidatesFromRepetitiveReadWithMateInfo(int error_threshold, const std::vector<std::pair<uint64_t, uint64_t> > &minimizers, uint32_t *repetitive_seed_length, std::vector<uint64_t> *hits, std::vector<Candidate> *candidates, std::vector<Candidate> *mate_candidates, int direction, unsigned int range) // directoin: +1: positive; -1: negative
 {
   uint32_t num_minimizers = minimizers.size();
   hits->reserve(max_seed_frequencies_[0]);
@@ -389,8 +389,8 @@ void Index::GenerateCandidatesFromRepetiveReadWithMateInfo(int error_threshold, 
       uint32_t offset = value >> 32;
       uint32_t num_occurrences = value;
       // use binary search to locate the coordinate near mate position
-      uint32_t l = 0, m = 0, r = num_occurrences - 1;
-      uint64_t boundary = (mate_candidates->at(0).position < range) ? 0 : mate_candidates->at(0).position - range ;
+      int32_t l = 0, m = 0, r = num_occurrences - 1;
+      uint64_t boundary = (mate_candidates->at(0).position < range) ? 0 : (mate_candidates->at(0).position - range) ;
       while (l <= r) {
         m = (l + r) / 2;
         uint64_t value = (occurrence_table_[offset + m])>>1;
@@ -402,7 +402,7 @@ void Index::GenerateCandidatesFromRepetiveReadWithMateInfo(int error_threshold, 
 		break ;
 	}
       }
-      //printf("%s: %d %d: %d %d\n", __func__, m, num_occurrences,
+     // printf("%s: %d %d: %d %d\n", __func__, m, num_occurrences,
       //	(int)(boundary>>32), (int)boundary) ;
       for (uint32_t oi = m; oi < num_occurrences; ++oi) {
         uint64_t value = occurrence_table_[offset + oi];
