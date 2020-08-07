@@ -64,6 +64,7 @@ class Index {
   void Load();
   void GenerateCandidatesOnOneDirection(int error_threshold, std::vector<uint64_t> *hits, std::vector<Candidate> *candidates);
   void GenerateCandidates(int error_threshold, const std::vector<std::pair<uint64_t, uint64_t> > &minimizers, uint32_t *repetitive_seed_length, std::vector<uint64_t> *positive_hits, std::vector<uint64_t> *negative_hits, std::vector<Candidate> *positive_candidates, std::vector<Candidate> *negative_candidates);
+  void GenerateCandidatesFromRepetitiveReadWithMateInfo(int error_threshold, const std::vector<std::pair<uint64_t, uint64_t> > &minimizers, uint32_t *repetitive_seed_length, std::vector<uint64_t> *hits, std::vector<Candidate> *candidates, std::vector<Candidate> *mate_candidates, int direction, unsigned int range);
   void CollectCandidates(int max_seed_frequency, const std::vector<std::pair<uint64_t, uint64_t> > &minimizers, uint32_t *repetitive_seed_length, std::vector<uint64_t> *positive_hits, std::vector<uint64_t> *negative_hits);
   inline static uint64_t Hash64(uint64_t key, const uint64_t mask) {
     key = (~key + (key << 21)) & mask; // key = (key << 21) - key - 1;

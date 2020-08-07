@@ -394,6 +394,94 @@ void Index::CollectCandidates(int max_seed_frequency, const std::vector<std::pai
   }
 }
 
+void Index::GenerateCandidatesFromRepetitiveReadWithMateInfo(int error_threshold, const std::vector<std::pair<uint64_t, uint64_t> > &minimizers, uint32_t *repetitive_seed_length, std::vector<uint64_t> *hits, std::vector<Candidate> *candidates, std::vector<Candidate> *mate_candidates, int direction, unsigned int range) // directoin: +1: positive; -1: negative
+{
+  uint32_t num_minimizers = minimizers.size();
+  hits->reserve(max_seed_frequencies_[0]);
+  uint32_t previous_repetitive_seed_position = std::numeric_limits<uint32_t>::max();
+  for (uint32_t mi = 0; mi < num_minimizers; ++mi) {
+    khiter_t khash_iterator = kh_get(k64, lookup_table_, minimizers[mi].first << 1);
+    if (khash_iterator == kh_end(lookup_table_)) {
+      //std::cerr << "The minimizer is not in reference!\n";
+      continue;
+    }
+    uint64_t value = kh_value(lookup_table_, khash_iterator);
+    uint32_t read_position = minimizers[mi].second >> 1;
+    if (kh_key(lookup_table_, khash_iterator) & 1) { // singleton
+      uint64_t reference_id = value >> 33;
+      uint32_t reference_position = value >> 1;
+      // Check whether the strands of reference minimizer and read minimizer are the same
+      // Later, we can play some tricks with 0,1 here to make it faster.
+      if (((minimizers[mi].second & 1) ^ (value & 1)) == 0) { // same
+        if (direction == 1) {
+          uint32_t candidate_position = reference_position - read_position;// > 0 ? reference_position - read_position : 0;
+          // ok, for now we can't see the reference here. So let us don't do the check.
+          // Instead, we do it later some time when we check the candidates.
+          uint64_t candidate = (reference_id << 32) | candidate_position;
+          hits->push_back(candidate);
+	}
+      } else if (direction == -1){
+        uint32_t candidate_position = reference_position + read_position - kmer_size_ + 1;// < reference_length ? reference_position - read_position : 0;
+        uint64_t candidate = (reference_id << 32) | candidate_position;
+        hits->push_back(candidate);
+      }
+    } else {
+      uint32_t offset = value >> 32;
+      uint32_t num_occurrences = value;
+      // use binary search to locate the coordinate near mate position
+      int32_t l = 0, m = 0, r = num_occurrences - 1;
+      uint64_t boundary = (mate_candidates->at(0).position < range) ? 0 : (mate_candidates->at(0).position - range) ;
+      while (l <= r) {
+        m = (l + r) / 2;
+        uint64_t value = (occurrence_table_[offset + m])>>1;
+	if (value <= boundary) {
+		l = m + 1;
+	} else if (value > boundary) {
+		r = m - 1;
+	} else {
+		break ;
+	}
+      }
+     // printf("%s: %d %d: %d %d\n", __func__, m, num_occurrences,
+      //	(int)(boundary>>32), (int)boundary) ;
+      for (uint32_t oi = m; oi < num_occurrences; ++oi) {
+        uint64_t value = occurrence_table_[offset + oi];
+	if ((value >> 1) > mate_candidates->at(0).position + range)
+		break ;
+        uint64_t reference_id = value >> 33;
+        uint32_t reference_position = value >> 1;
+        if (((minimizers[mi].second & 1) ^ (value & 1)) == 0) { // same
+	  if (direction == 1) {
+            uint32_t candidate_position = reference_position - read_position;
+            uint64_t candidate = (reference_id << 32) | candidate_position;
+            hits->push_back(candidate);
+	  }
+        } else if (direction == -1){
+          uint32_t candidate_position = reference_position + read_position - kmer_size_ + 1;
+          uint64_t candidate = (reference_id << 32) | candidate_position;
+          hits->push_back(candidate);
+        }
+      }  
+
+      if (num_occurrences >= (uint32_t)max_seed_frequencies_[1]) {
+        if (previous_repetitive_seed_position > read_position) { // first minimizer
+          *repetitive_seed_length += kmer_size_;
+        } else {
+          if (read_position < previous_repetitive_seed_position + kmer_size_) {
+            *repetitive_seed_length += previous_repetitive_seed_position + kmer_size_ - read_position;
+          } else {
+            *repetitive_seed_length += kmer_size_;
+          }
+        }
+        previous_repetitive_seed_position = read_position;
+      }
+    }
+  } // for mi
+
+  GenerateCandidatesOnOneDirection(error_threshold, hits, candidates);
+  //printf("%s: %d %d\n", __func__, hits->size(), candidates->size()) ;
+}
+
 void Index::GenerateCandidates(int error_threshold, const std::vector<std::pair<uint64_t, uint64_t> > &minimizers, uint32_t *repetitive_seed_length, std::vector<uint64_t> *positive_hits, std::vector<uint64_t> *negative_hits, std::vector<Candidate> *positive_candidates, std::vector<Candidate> *negative_candidates) {
   *repetitive_seed_length = 0;
   CollectCandidates(max_seed_frequencies_[0], minimizers, repetitive_seed_length, positive_hits, negative_hits);
