@@ -1902,6 +1902,8 @@ void Chromap<MappingRecord>::VerifyCandidatesOnOneDirectionUsingSIMD(Direction c
             } else {
               mappings->emplace_back((uint8_t)mapping_edit_distances[mi], valid_candidates[mi].position - read_length + 1 - error_threshold_ + mapping_end_positions[mi]); 
             }
+          } else {
+            candidate_count_threshold = valid_candidates[mi].count;
           }
         }
       } else if (NUM_VPU_LANES_ == 4) {
@@ -1942,8 +1944,8 @@ void Chromap<MappingRecord>::VerifyCandidatesOnOneDirectionUsingSIMD(Direction c
       }
       valid_candidate_index = 0;
       // Check whether we should stop early. Assuming the candidates are sorted 
-      //if (GetMAPQ(num_candidates, 0, 0, 0, read_length + error_threshold_, *min_num_errors, *num_best_mappings, *second_min_num_errors, *second_min_num_errors) < mapq_threshold_)
-      //  break;
+      if (GetMAPQForSingleEndRead(error_threshold_, num_candidates, 0, read_length + error_threshold_, *min_num_errors, *num_best_mappings, *second_min_num_errors, *second_min_num_errors) == 0)
+        break;
     }
     ++candidate_index;
   }
@@ -2588,7 +2590,7 @@ uint8_t Chromap<MappingRecord>::GetMAPQForSingleEndRead(int error_threshold, int
     if (repetitive_seed_length >= alignment_length) {
       frac_rep = 0.999;
     }
-    mapq =  mapq * (1 - frac_rep) + 0.499;
+    mapq =  mapq * (1 - frac_rep / 2) + 0.499;
   }
   //mapq <<= 1;
   return (uint8_t)mapq;
