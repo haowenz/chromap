@@ -69,44 +69,53 @@ void Index::GenerateMinimizerSketch(const SequenceBatch &sequence_batch, uint32_
       unambiguous_length = 0;
     }
     buffer[position_in_buffer] = current_seed; // need to do this here as appropriate position_in_buffer and buf[position_in_buffer] are needed below
-    if (unambiguous_length == window_size_ + kmer_size_ - 1 && min_seed.first != UINT64_MAX) { // special case for the first window - because identical k-mers are not stored yet
-      //
-      //bool found_first_min_in_first_loop = false;
-      //bool found_first_min_in_second_loop = false; // For debug
-      //int first_min_position_in_buffer = 0;
-      //for (int j = position_in_buffer + 1; j < window_size_; ++j)
-      //  if (min_seed.first == buffer[j].first) {
-      //    found_first_min_in_first_loop = true;
-      //    first_min_position_in_buffer = j;
-      //    break;
-      //  }
-      //if (!found_first_min_in_first_loop) {
-      //  for (int j = 0; j < position_in_buffer; ++j)
-      //    if (min_seed.first == buffer[j].first) {
-      //      found_first_min_in_second_loop = true;
-      //      first_min_position_in_buffer = j;
-      //      break;
-      //    }
-      //}
-      //assert(found_first_min_in_first_loop || found_first_min_in_second_loop);
-      //bool found_pre_seed = false;
-      //if (found_first_min_in_first_loop) {
-      //  for (int j = position_in_buffer + 1; j < first_min_position_in_buffer; ++j)
-      //    if (buffer[j].first < pre_seed.first) {
-      //      pre_seed = buffer[j];
-      //      found_pre_seed = true;
-      //    }
-      //}
-      //if (found_first_min_in_second_loop) {
-      //  for (int j = 0; j < first_min_position_in_buffer; ++j)
-      //    if (buffer[j].first < pre_seed.first) {
-      //      pre_seed = buffer[j];
-      //      found_pre_seed = true;
-      //    }
-      //}
-      //if (found_pre_seed)
-      //  minimizers->push_back(pre_seed);
-      //
+    //if (unambiguous_length == window_size_ + kmer_size_ - 1 && min_seed.first != UINT64_MAX) { // special case for the first window - because identical k-mers are not stored yet
+    //  //
+    //  //bool found_first_min_in_first_loop = false;
+    //  //bool found_first_min_in_second_loop = false; // For debug
+    //  //int first_min_position_in_buffer = 0;
+    //  //for (int j = position_in_buffer + 1; j < window_size_; ++j)
+    //  //  if (min_seed.first == buffer[j].first) {
+    //  //    found_first_min_in_first_loop = true;
+    //  //    first_min_position_in_buffer = j;
+    //  //    break;
+    //  //  }
+    //  //if (!found_first_min_in_first_loop) {
+    //  //  for (int j = 0; j < position_in_buffer; ++j)
+    //  //    if (min_seed.first == buffer[j].first) {
+    //  //      found_first_min_in_second_loop = true;
+    //  //      first_min_position_in_buffer = j;
+    //  //      break;
+    //  //    }
+    //  //}
+    //  //assert(found_first_min_in_first_loop || found_first_min_in_second_loop);
+    //  //bool found_pre_seed = false;
+    //  //if (found_first_min_in_first_loop) {
+    //  //  for (int j = position_in_buffer + 1; j < first_min_position_in_buffer; ++j)
+    //  //    if (buffer[j].first < pre_seed.first) {
+    //  //      pre_seed = buffer[j];
+    //  //      found_pre_seed = true;
+    //  //    }
+    //  //}
+    //  //if (found_first_min_in_second_loop) {
+    //  //  for (int j = 0; j < first_min_position_in_buffer; ++j)
+    //  //    if (buffer[j].first < pre_seed.first) {
+    //  //      pre_seed = buffer[j];
+    //  //      found_pre_seed = true;
+    //  //    }
+    //  //}
+    //  //if (found_pre_seed)
+    //  //  minimizers->push_back(pre_seed);
+    //  //
+    //  for (int j = position_in_buffer + 1; j < window_size_; ++j)
+    //    if (min_seed.first == buffer[j].first && buffer[j].second != min_seed.second) 
+    //      minimizers->push_back(buffer[j]);
+    //  for (int j = 0; j < position_in_buffer; ++j)
+    //    if (min_seed.first == buffer[j].first && buffer[j].second != min_seed.second) 
+    //      minimizers->push_back(buffer[j]);
+    //}
+
+    if (unambiguous_length == window_size_ + kmer_size_ - 1 && min_seed.first != UINT64_MAX && min_seed.first < current_seed.first) { // special case for the first window - because identical k-mers are not stored yet
       for (int j = position_in_buffer + 1; j < window_size_; ++j)
         if (min_seed.first == buffer[j].first && buffer[j].second != min_seed.second) 
           minimizers->push_back(buffer[j]);
@@ -114,6 +123,7 @@ void Index::GenerateMinimizerSketch(const SequenceBatch &sequence_batch, uint32_
         if (min_seed.first == buffer[j].first && buffer[j].second != min_seed.second) 
           minimizers->push_back(buffer[j]);
     }
+
     if (current_seed.first <= min_seed.first) { // a new minimum; then write the old min
       if (unambiguous_length >= window_size_ + kmer_size_ && min_seed.first != UINT64_MAX) {
         minimizers->push_back(min_seed);
@@ -419,8 +429,8 @@ void Index::GenerateCandidatesFromRepetitiveReadWithMateInfo(int error_threshold
           // Instead, we do it later some time when we check the candidates.
           uint64_t candidate = (reference_id << 32) | candidate_position;
           hits->push_back(candidate);
-	}
-      } else if (direction == -1){
+        }
+      } else if (direction == -1) {
         uint32_t candidate_position = reference_position + read_position - kmer_size_ + 1;// < reference_length ? reference_position - read_position : 0;
         uint64_t candidate = (reference_id << 32) | candidate_position;
         hits->push_back(candidate);
@@ -434,28 +444,28 @@ void Index::GenerateCandidatesFromRepetitiveReadWithMateInfo(int error_threshold
       while (l <= r) {
         m = (l + r) / 2;
         uint64_t value = (occurrence_table_[offset + m])>>1;
-	if (value <= boundary) {
-		l = m + 1;
-	} else if (value > boundary) {
-		r = m - 1;
-	} else {
-		break ;
-	}
+        if (value <= boundary) {
+          l = m + 1;
+        } else if (value > boundary) {
+          r = m - 1;
+        } else {
+          break ;
+        }
       }
-     // printf("%s: %d %d: %d %d\n", __func__, m, num_occurrences,
+      // printf("%s: %d %d: %d %d\n", __func__, m, num_occurrences,
       //	(int)(boundary>>32), (int)boundary) ;
       for (uint32_t oi = m; oi < num_occurrences; ++oi) {
         uint64_t value = occurrence_table_[offset + oi];
-	if ((value >> 1) > mate_candidates->at(0).position + range)
-		break ;
+        if ((value >> 1) > mate_candidates->at(0).position + range)
+          break;
         uint64_t reference_id = value >> 33;
         uint32_t reference_position = value >> 1;
         if (((minimizers[mi].second & 1) ^ (value & 1)) == 0) { // same
-	  if (direction == 1) {
+          if (direction == 1) {
             uint32_t candidate_position = reference_position - read_position;
             uint64_t candidate = (reference_id << 32) | candidate_position;
             hits->push_back(candidate);
-	  }
+          }
         } else if (direction == -1){
           uint32_t candidate_position = reference_position + read_position - kmer_size_ + 1;
           uint64_t candidate = (reference_id << 32) | candidate_position;

@@ -43,11 +43,12 @@ struct PairedPAFMapping {
   uint16_t fragment_length;
   uint16_t positive_alignment_length;
   uint16_t negative_alignment_length;
-  uint8_t mapq : 6, direction : 1, is_unique : 1;
+  uint8_t mapq;
+  uint16_t mapq1 : 6, mapq2 : 6, direction : 1, is_unique : 1, reserved : 2;
   uint8_t num_dups;
   //uint8_t mapq; // least significant bit saves the direction of mapping
   bool operator<(const PairedPAFMapping& m) const {
-    return std::tie(fragment_start_position, fragment_length, mapq, direction, is_unique, read_id, positive_alignment_length, negative_alignment_length) < std::tie(m.fragment_start_position, m.fragment_length, m.mapq, m.direction, m.is_unique, m.read_id, m.positive_alignment_length, m.negative_alignment_length);
+    return std::tie(fragment_start_position, fragment_length, mapq1, mapq2, direction, is_unique, read_id, positive_alignment_length, negative_alignment_length) < std::tie(m.fragment_start_position, m.fragment_length, m.mapq1, m.mapq2, m.direction, m.is_unique, m.read_id, m.positive_alignment_length, m.negative_alignment_length);
   }
   bool operator==(const PairedPAFMapping& m) const {
     return std::tie(fragment_start_position, fragment_length) == std::tie(m.fragment_start_position, m.fragment_length);
