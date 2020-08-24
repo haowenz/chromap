@@ -944,6 +944,12 @@ void Chromap<MappingRecord>::ReduceCandidatesForPairedEndReadOnOneDirection(cons
   uint32_t i2 = 0;
   uint32_t mapping_positions_distance = max_insert_size_;
   uint32_t previous_end_i2 = i2;
+#ifdef LI_DEBUG
+  for (int i = 0 ; i < candidates1.size(); ++i)
+    printf("%s 0: %d %d:%d\n", __func__, i, (int)(candidates1[i].position>>32), (int)candidates1[i].position) ;
+  for (int i = 0 ; i < candidates2.size(); ++i)
+    printf("%s 1: %d %d:%d\n", __func__, i, (int)(candidates2[i].position>>32), (int)candidates2[i].position) ;
+#endif
   while (i1 < candidates1.size() && i2 < candidates2.size()) {
     if (candidates1[i1].position > candidates2[i2].position + mapping_positions_distance) {
       ++i2;
@@ -951,7 +957,7 @@ void Chromap<MappingRecord>::ReduceCandidatesForPairedEndReadOnOneDirection(cons
       ++i1;
     } else {
       // ok, find a pair, we store current ni2 somewhere and keep looking until we go out of the range, 
-      // then we go back and then move to next pi1 and keep doing the similar thing. 
+      // then we go back and then move to next pi1 and keep doing the similar thing.
       filtered_candidates1->emplace_back(candidates1[i1]);
       uint32_t current_i2 = i2;
       while (current_i2 < candidates2.size() && candidates2[current_i2].position <= candidates1[i1].position + mapping_positions_distance) {
@@ -1043,6 +1049,12 @@ void Chromap<MappingRecord>::GenerateBestMappingsForPairedEndReadOnOneDirection(
   uint32_t min_overlap_length = min_read_length_;
   uint32_t read1_length = read_batch1.GetSequenceLengthAt(pair_index);
   uint32_t read2_length = read_batch2.GetSequenceLengthAt(pair_index);
+#ifdef LI_DEBUG
+  for (int i = 0; i < mappings1.size(); ++i) 
+    printf("mappings1 %d %d:%d\n", i, (int)(mappings1[i].second>>32), (int)mappings1[i].second) ;
+  for (int i = 0; i < mappings1.size(); ++i) 
+    printf("mappings2 %d %d:%d\n", i, (int)(mappings2[i].second>>32), (int)mappings2[i].second) ;
+#endif
   while (i1 < mappings1.size() && i2 < mappings2.size()) {
     if ((first_read_direction == kNegative && mappings1[i1].second > mappings2[i2].second + max_insert_size_ - read1_length) || (first_read_direction == kPositive && mappings1[i1].second > mappings2[i2].second + read2_length - min_overlap_length)) {
       ++i2;
@@ -1053,6 +1065,9 @@ void Chromap<MappingRecord>::GenerateBestMappingsForPairedEndReadOnOneDirection(
       // then we go back and then move to next pi1 and keep doing the similar thing. 
       uint32_t current_i2 = i2;
       while (current_i2 < mappings2.size() && ((first_read_direction == kPositive && mappings2[current_i2].second <= mappings1[i1].second + max_insert_size_ - read2_length) || (first_read_direction == kNegative && mappings2[current_i2].second <= mappings1[i1].second + read1_length - min_overlap_length))) {
+#ifdef LI_DEBUG 
+	printf("%s: %llu %d %llu %d\n", __func__, mappings1[i1].second >> 32, int(mappings1[i1].second), mappings2[i2].second>>32, int(mappings2[i2].second)) ;
+#endif
         int current_sum_errors = mappings1[i1].first + mappings2[current_i2].first;
         if (current_sum_errors < *min_sum_errors) {
           *second_min_sum_errors = *min_sum_errors;
@@ -1949,7 +1964,7 @@ void Chromap<MappingRecord>::VerifyCandidatesOnOneDirectionUsingSIMD(Direction c
       valid_candidate_index = 0;
       // Check whether we should stop early. Assuming the candidates are sorted 
       if (GetMAPQForSingleEndRead(error_threshold_, num_candidates, 0, read_length + error_threshold_, *min_num_errors, *num_best_mappings, *second_min_num_errors, *num_second_best_mappings) == 0)
-        break;
+        candidate_count_threshold = candidates[candidate_index].count - 1;
     }
     ++candidate_index;
   }
@@ -2051,14 +2066,18 @@ void Chromap<MappingRecord>::VerifyCandidates(const SequenceBatch &read_batch, u
   int maxTag = 0;
   //printf("LI_DEBUG: %u %u\n", positive_candidates.size() + negative_candidates.size(), minimizers.size()) ;
   for (i = 0; i < positive_candidates.size(); ++i) {
-    //printf("+ %u %u\n", i, positive_candidates[i].mmCnt) ;
+#ifdef LI_DEBUG
+    printf("%s + %u %u %d:%d\n", __func__, i, positive_candidates[i].count, (int)(positive_candidates[i].position>>32), (int)positive_candidates[i].position) ;
+#endif
     if (positive_candidates[i].count == minimizers.size()) {
       maxTag = i << 1;
       ++maxCnt;
     }
   }
   for (i = 0; i < negative_candidates.size(); ++i) {
-    //printf("- %u %u\n", i, negative_candidates[i].mmCnt) ;
+#ifdef LI_DEBUG
+    printf("%s - %u %u %d:%d\n", __func__, i, negative_candidates[i].count, (int)(negative_candidates[i].position>>32), (int)negative_candidates[i].position) ;
+#endif
     if (negative_candidates[i].count == minimizers.size()) {
       maxTag = (i << 1)|1;
       ++maxCnt;
