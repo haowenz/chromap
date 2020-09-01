@@ -1845,7 +1845,7 @@ void Chromap<MappingRecord>::AllocateMultiMappings(uint32_t num_reference_sequen
       } else {
         std::discrete_distribution<uint32_t> distribution(weights.begin(), weights.end());
         uint32_t randomly_assigned_mapping_index = distribution(generator);
-        allocated_mappings_on_diff_ref_seqs_[multi_mappings_[start_mapping_index + randomly_assigned_mapping_index].first].emplace_back(multi_mappings_[start_mapping_index + randomly_assigned_mapping_index].second);
+	allocated_mappings_on_diff_ref_seqs_[multi_mappings_[start_mapping_index + randomly_assigned_mapping_index].first].emplace_back(multi_mappings_[start_mapping_index + randomly_assigned_mapping_index].second);
         ++num_allocated_multi_mappings;
       }
       // update current
@@ -1963,8 +1963,8 @@ void Chromap<MappingRecord>::VerifyCandidatesOnOneDirectionUsingSIMD(Direction c
       }
       valid_candidate_index = 0;
       // Check whether we should stop early. Assuming the candidates are sorted 
-      if (GetMAPQForSingleEndRead(error_threshold_, num_candidates, 0, read_length + error_threshold_, *min_num_errors, *num_best_mappings, *second_min_num_errors, *num_second_best_mappings) == 0)
-        candidate_count_threshold = candidates[candidate_index].count - 1;
+      if (GetMAPQForSingleEndRead(error_threshold_, num_candidates, 0, read_length + error_threshold_, *min_num_errors, *num_best_mappings, *second_min_num_errors, *num_second_best_mappings) == 0 && candidate_count_threshold + 1 < candidates[candidate_index].count)
+        candidate_count_threshold = candidates[candidate_index].count - 1 ;
     }
     ++candidate_index;
   }
