@@ -318,7 +318,7 @@ void Index::Load() {
   std::cerr << "Loaded index successfully in "<< Chromap<>::GetRealTime() - real_start_time << "s.\n";
 }
 
-void Index::GenerateCandidatesOnOneDirection(int error_threshold, std::vector<uint64_t> *hits, std::vector<Candidate> *candidates) {
+void Index::GenerateCandidatesOnOneDirection(int error_threshold, int num_seeds_required, std::vector<uint64_t> *hits, std::vector<Candidate> *candidates) {
   //std::cerr << "Direction\n";
   hits->emplace_back(UINT64_MAX);
   if (hits->size() > 0) {
@@ -334,7 +334,7 @@ void Index::GenerateCandidatesOnOneDirection(int error_threshold, std::vector<ui
       printf("%s: %d %d\n", __func__, current_reference_id, current_reference_position);
 #endif
       if (current_reference_id != previous_reference_id || current_reference_position > previous_reference_position + error_threshold) {
-        if (count >= min_num_seeds_required_for_mapping_) {
+        if (count >= num_seeds_required) {
           Candidate nc;
           nc.position = previous_hit;
           nc.count = count;
@@ -493,6 +493,11 @@ int Index::CollectCandidates(int max_seed_frequency, const std::vector<std::pair
   	std::sort(positive_hits->begin(), positive_hits->end());
 	std::sort(negative_hits->begin(), negative_hits->end());
   }
+  /*for (uint32_t mi = 0 ; mi < positive_hits->size() ; ++mi)
+  	printf("+ %llu\n", positive_hits->at(mi)) ;
+
+  for (uint32_t mi = 0 ; mi < negative_hits->size() ; ++mi)
+  	printf("- %llu\n", negative_hits->at(mi)) ;*/
   return repetitive_seed_count ;
 }
 
@@ -501,6 +506,25 @@ void Index::GenerateCandidatesFromRepetitiveReadWithMateInfo(int error_threshold
   uint32_t num_minimizers = minimizers.size();
   hits->reserve(max_seed_frequencies_[0]);
   uint32_t previous_repetitive_seed_position = std::numeric_limits<uint32_t>::max();
+
+  int best_candidate = -1;
+  int max_count = 0;
+  int best_candidate_num = 0;
+  uint32_t mate_candidates_size = mate_candidates->size();
+  for (uint32_t i = 0 ; i < mate_candidates_size; ++i) {
+ 	int count = mate_candidates->at(i).count;
+  	if (count > max_count) {
+		best_candidate = i;
+		max_count = count;
+		best_candidate_num = 1;
+	}
+	else if (count == max_count) {
+		++best_candidate_num;
+	}
+  }
+  if (best_candidate_num != 1) 
+  	return;
+
   for (uint32_t mi = 0; mi < num_minimizers; ++mi) {
     khiter_t khash_iterator = kh_get(k64, lookup_table_, minimizers[mi].first << 1);
     if (khash_iterator == kh_end(lookup_table_)) {
@@ -532,7 +556,7 @@ void Index::GenerateCandidatesFromRepetitiveReadWithMateInfo(int error_threshold
       uint32_t num_occurrences = value;
       // use binary search to locate the coordinate near mate position
       int32_t l = 0, m = 0, r = num_occurrences - 1;
-      uint64_t boundary = (mate_candidates->at(0).position < range) ? 0 : (mate_candidates->at(0).position - range) ;
+      uint64_t boundary = (mate_candidates->at(best_candidate).position < range) ? 0 : (mate_candidates->at(best_candidate).position - range) ;
       while (l <= r) {
         m = (l + r) / 2;
         uint64_t value = (occurrence_table_[offset + m])>>1;
@@ -548,7 +572,7 @@ void Index::GenerateCandidatesFromRepetitiveReadWithMateInfo(int error_threshold
       //	(int)(boundary>>32), (int)boundary) ;
       for (uint32_t oi = m; oi < num_occurrences; ++oi) {
         uint64_t value = occurrence_table_[offset + oi];
-        if ((value >> 1) > mate_candidates->at(0).position + range)
+        if ((value >> 1) > mate_candidates->at(best_candidate).position + range)
           break;
         uint64_t reference_id = value >> 33;
         uint32_t reference_position = value >> 1;
@@ -581,7 +605,7 @@ void Index::GenerateCandidatesFromRepetitiveReadWithMateInfo(int error_threshold
   } // for mi
 
   std::sort(hits->begin(), hits->end());
-  GenerateCandidatesOnOneDirection(error_threshold, hits, candidates);
+  GenerateCandidatesOnOneDirection(error_threshold, 1, hits, candidates);
   //printf("%s: %d %d\n", __func__, hits->size(), candidates->size()) ;
 }
 
@@ -593,14 +617,16 @@ void Index::GenerateCandidates(int error_threshold, const std::vector<std::pair<
     positive_hits->clear();
     negative_hits->clear();
     *repetitive_seed_length = 0;
-    CollectCandidates(max_seed_frequencies_[1], minimizers, repetitive_seed_length, positive_hits, negative_hits, true);
+    repetitive_seed_count = CollectCandidates(max_seed_frequencies_[1], minimizers, repetitive_seed_length, positive_hits, negative_hits, true);
     recollect = false;
   }
+
   // Now I can generate primer chain in candidates
   // Let me use sort for now, but I can use merge later.
   //printf("p+n: %d\n", positive_hits->size() + negative_hits->size()) ;
-  GenerateCandidatesOnOneDirection(error_threshold, positive_hits, positive_candidates);
-  GenerateCandidatesOnOneDirection(error_threshold, negative_hits, negative_candidates);
+  GenerateCandidatesOnOneDirection(error_threshold, min_num_seeds_required_for_mapping_, positive_hits, positive_candidates);
+  GenerateCandidatesOnOneDirection(error_threshold, min_num_seeds_required_for_mapping_, negative_hits, negative_candidates);
+  //fprintf(stderr, "p+n: %d\n", positive_candidates->size() + negative_candidates->size()) ;
   if (positive_candidates->size() + negative_candidates->size() == 0 && recollect) {
     positive_hits->clear();
     negative_hits->clear();
@@ -608,8 +634,8 @@ void Index::GenerateCandidates(int error_threshold, const std::vector<std::pair<
     *repetitive_seed_length = 0;
     CollectCandidates(max_seed_frequencies_[1], minimizers, repetitive_seed_length, positive_hits, negative_hits, true);
     //printf("p+n2: %d\n", positive_hits->size() + negative_hits->size()) ;
-    GenerateCandidatesOnOneDirection(error_threshold, positive_hits, positive_candidates);
-    GenerateCandidatesOnOneDirection(error_threshold, negative_hits, negative_candidates);
+    GenerateCandidatesOnOneDirection(error_threshold, min_num_seeds_required_for_mapping_, positive_hits, positive_candidates);
+    GenerateCandidatesOnOneDirection(error_threshold, min_num_seeds_required_for_mapping_, negative_hits, negative_candidates);
     // TODO: if necessary, we can further improve the rescue. But the code below is not thread safe. We can think about this later
 //    if (positive_candidates->size() + negative_candidates->size() == 0) {
 //      --min_num_seeds_required_for_mapping_;

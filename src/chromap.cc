@@ -610,7 +610,7 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
           for (uint32_t pair_index = 0; pair_index < num_loaded_pairs; ++pair_index) {
             read_batch1.PrepareNegativeSequenceAt(pair_index);
             read_batch2.PrepareNegativeSequenceAt(pair_index);
-            //std::cerr << read_batch1.GetSequenceNameAt(pair_index) << "\n";
+            //std::cerr << pair_index<<" "<<read_batch1.GetSequenceNameAt(pair_index) << "\n";
             if (trim_adapters_) {
               TrimAdapterForPairedEndRead(pair_index, &read_batch1, &read_batch2);
             }
@@ -654,24 +654,24 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
                 mm_history2[pair_index].negative_candidates = negative_candidates2;
                 mm_history2[pair_index].repetitive_seed_length = repetitive_seed_length2;
               }
-              if (current_num_candidates1 + current_num_candidates2 == 1) {
-                if (current_num_candidates1 == 1) {
+              if (current_num_candidates1 == 0 || current_num_candidates2 == 0) {
+                if (current_num_candidates1 > 0) {
                   positive_hits2.clear();
                   negative_hits2.clear();
                   repetitive_seed_length2 = 0;
                 }
-                if (current_num_candidates2 == 1) {
+                if (current_num_candidates2 > 0) {
                   positive_hits1.clear();
                   negative_hits1.clear();
                   repetitive_seed_length1 = 0;
                 }
-                if (positive_candidates1.size() == 1) 
+                if (positive_candidates1.size() > 0) 
                   index.GenerateCandidatesFromRepetitiveReadWithMateInfo(error_threshold_, minimizers2, &repetitive_seed_length2, &negative_hits2, &negative_candidates2, &positive_candidates1, -1, 2 * max_insert_size_) ;
-                else if (negative_candidates1.size() == 1)
+                if (negative_candidates1.size() > 0)
                   index.GenerateCandidatesFromRepetitiveReadWithMateInfo(error_threshold_, minimizers2, &repetitive_seed_length2, &positive_hits2, &positive_candidates2, &negative_candidates1, 1, 2 * max_insert_size_) ;
-                else if (positive_candidates2.size() == 1) 
+                if (positive_candidates2.size() > 0) 
                   index.GenerateCandidatesFromRepetitiveReadWithMateInfo(error_threshold_, minimizers1, &repetitive_seed_length1, &negative_hits1, &negative_candidates1, &positive_candidates2, -1, 2 * max_insert_size_) ;
-                else if (negative_candidates2.size() == 1)
+                if (negative_candidates2.size() > 0)
                   index.GenerateCandidatesFromRepetitiveReadWithMateInfo(error_threshold_, minimizers1, &repetitive_seed_length1, &positive_hits1, &positive_candidates1, &negative_candidates2, 1, 2 * max_insert_size_) ;
                 current_num_candidates1 = positive_candidates1.size() + negative_candidates1.size();
                 current_num_candidates2 = positive_candidates2.size() + negative_candidates2.size();
@@ -1074,6 +1074,7 @@ void Chromap<MappingRecord>::GenerateBestMappingsForPairedEndReadOnOneDirection(
           *num_second_best_mappings = *num_best_mappings;
           *min_sum_errors = current_sum_errors;
           *num_best_mappings = 1;
+	  best_mappings->clear();
           best_mappings->emplace_back(i1, current_i2);
         } else if (current_sum_errors == *min_sum_errors) {
           (*num_best_mappings)++;
@@ -2083,7 +2084,6 @@ void Chromap<MappingRecord>::VerifyCandidates(const SequenceBatch &read_batch, u
       ++maxCnt;
     }
   }
-  
   if (maxCnt == 1 && positive_candidates.size() + negative_candidates.size() == 1) {
     Direction candidate_direction = (maxTag & 1) ? kNegative : kPositive;
     uint32_t ci = maxTag >> 1;
@@ -2111,7 +2111,7 @@ void Chromap<MappingRecord>::VerifyCandidates(const SequenceBatch &read_batch, u
       } else {
         negative_mappings->emplace_back(0, negative_candidates[ci].position); 
       }
-      //printf("Saved %d\n", positive_candidates.size() + negative_candidates.size() ) ;
+      //fprintf(stderr, "Saved %d\n", positive_candidates.size() + negative_candidates.size() ) ;
       return;
     }
   }
