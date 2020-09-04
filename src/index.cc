@@ -613,7 +613,7 @@ void Index::GenerateCandidates(int error_threshold, const std::vector<std::pair<
   *repetitive_seed_length = 0;
   bool recollect = true;
   int repetitive_seed_count = CollectCandidates(max_seed_frequencies_[0], minimizers, repetitive_seed_length, positive_hits, negative_hits, false);
-  if (repetitive_seed_count > (int)minimizers.size() / 2) {
+  if (repetitive_seed_count > (int)minimizers.size() / 2 && minimizers.size() >= 10) {
     positive_hits->clear();
     negative_hits->clear();
     *repetitive_seed_length = 0;
