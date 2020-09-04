@@ -623,7 +623,7 @@ void Index::GenerateCandidates(int error_threshold, const std::vector<std::pair<
 
   // Now I can generate primer chain in candidates
   // Let me use sort for now, but I can use merge later.
-  //printf("p+n: %d\n", positive_hits->size() + negative_hits->size()) ;
+  //printf("p+n: %d. %d %d\n", positive_hits->size() + negative_hits->size(), repetitive_seed_count, minimizers.size()) ;
   GenerateCandidatesOnOneDirection(error_threshold, min_num_seeds_required_for_mapping_, positive_hits, positive_candidates);
   GenerateCandidatesOnOneDirection(error_threshold, min_num_seeds_required_for_mapping_, negative_hits, negative_candidates);
   //fprintf(stderr, "p+n: %d\n", positive_candidates->size() + negative_candidates->size()) ;
