@@ -324,9 +324,13 @@ void Index::GenerateCandidatesOnOneDirection(int error_threshold, int num_seeds_
   if (hits->size() > 0) {
     //std::sort(hits->begin(), hits->end());
     int count = 1;
+    int equal_count = 1 ; // the number of seeds with the exact same reference position.
+    int best_equal_count = 1 ;
+
     uint64_t previous_hit = (*hits)[0];
     uint32_t previous_reference_id = previous_hit >> 32;
     uint32_t previous_reference_position = previous_hit;
+    uint64_t best_local_hit = (*hits)[0];
     for (uint32_t pi = 1; pi < hits->size(); ++pi) {
       uint32_t current_reference_id = (*hits)[pi] >> 32;
       uint32_t current_reference_position = (*hits)[pi];
@@ -336,15 +340,32 @@ void Index::GenerateCandidatesOnOneDirection(int error_threshold, int num_seeds_
       if (current_reference_id != previous_reference_id || current_reference_position > previous_reference_position + error_threshold) {
         if (count >= num_seeds_required) {
           Candidate nc;
-          nc.position = previous_hit;
+          nc.position = best_local_hit;
           nc.count = count;
           candidates->push_back(nc);
           //std::cerr << count << " ";
         }
         count = 1;
+	equal_count = 1;
+	best_equal_count = 1;
+	best_local_hit = (*hits)[pi];
       } else {
+	//printf("%d %d %d: %d %d\n", (int)best_local_hit, (int)previous_hit, (int)(*hits)[pi], equal_count, best_equal_count);
+        if ( (*hits)[pi] == best_local_hit ) { 
+		++equal_count ;
+		++best_equal_count ;
+	} else if ( (*hits)[pi] == previous_hit ) {
+		++equal_count ;
+		if (equal_count > best_equal_count) {
+			best_local_hit = previous_hit ;
+			best_equal_count = equal_count ;
+		}
+	} else {
+		equal_count = 1 ;
+	}
         ++count;
       }
+      
       previous_hit = (*hits)[pi];
       previous_reference_id = current_reference_id;
       previous_reference_position = current_reference_position;
@@ -522,7 +543,7 @@ void Index::GenerateCandidatesFromRepetitiveReadWithMateInfo(int error_threshold
 		++best_candidate_num;
 	}
   }
-  if (best_candidate_num != 1) 
+  if (best_candidate_num != 1 || max_count < min_num_seeds_required_for_mapping_) 
   	return;
 
   for (uint32_t mi = 0; mi < num_minimizers; ++mi) {
@@ -568,7 +589,7 @@ void Index::GenerateCandidatesFromRepetitiveReadWithMateInfo(int error_threshold
           break ;
         }
       }
-      // printf("%s: %d %d: %d %d\n", __func__, m, num_occurrences,
+      //printf("%s: %d %d: %d %d\n", __func__, m, num_occurrences,
       //	(int)(boundary>>32), (int)boundary) ;
       for (uint32_t oi = m; oi < num_occurrences; ++oi) {
         uint64_t value = occurrence_table_[offset + oi];
@@ -605,6 +626,8 @@ void Index::GenerateCandidatesFromRepetitiveReadWithMateInfo(int error_threshold
   } // for mi
 
   std::sort(hits->begin(), hits->end());
+  //for (uint32_t i = 0 ; i < hits->size(); ++i)
+  //	  printf("%s: %d %d\n", __func__, (int)(hits->at(i)>>32),(int)hits->at(i));
   GenerateCandidatesOnOneDirection(error_threshold, 1, hits, candidates);
   //printf("%s: %d %d\n", __func__, hits->size(), candidates->size()) ;
 }

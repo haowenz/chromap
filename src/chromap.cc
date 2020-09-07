@@ -1937,6 +1937,11 @@ void Chromap<MappingRecord>::MergeCandidates(std::vector<Candidate> &c1, const s
 	size1 = c1.size();
 	size2 = c2.size();
 	buffer.clear();
+
+	/*for (i = 0 ; i < size1 ; ++i)
+		printf("c1: %d %d %d\n", (int)(c1[i].position >> 32), (int)c1[i].position, c1[i].count);
+	for (i = 0 ; i < size2 ; ++i)
+		printf("c2: %d %d %d\n", (int)(c2[i].position >> 32), (int)c2[i].position, c2[i].count);*/
 	i = 0; j = 0;
 	while (i < size1 && j < size2) {
 		if (c1[i].position == c2[j].position) {
