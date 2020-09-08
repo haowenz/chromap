@@ -374,7 +374,7 @@ void Index::GenerateCandidatesOnOneDirection(int error_threshold, int num_seeds_
 }
 
 // Return the number of repetitive seeds
-int Index::CollectCandidates(int max_seed_frequency, const std::vector<std::pair<uint64_t, uint64_t> > &minimizers, uint32_t *repetitive_seed_length, std::vector<uint64_t> *positive_hits, std::vector<uint64_t> *negative_hits, bool use_heap) {
+int Index::CollectCandidates(int max_seed_frequency, int repetitive_seed_frequency, const std::vector<std::pair<uint64_t, uint64_t> > &minimizers, uint32_t *repetitive_seed_length, std::vector<uint64_t> *positive_hits, std::vector<uint64_t> *negative_hits, bool use_heap) {
   uint32_t num_minimizers = minimizers.size();
   int repetitive_seed_count = 0 ;
   std::vector<uint64_t> *mm_positive_hits = NULL, *mm_negative_hits = NULL;
@@ -440,7 +440,9 @@ int Index::CollectCandidates(int max_seed_frequency, const std::vector<std::pair
 	      negative_hits->push_back(candidate);
           }
         } 
-      } else {
+      } 
+      
+      if (num_occurrences >= (uint32_t)repetitive_seed_frequency){
         if (previous_repetitive_seed_position > read_position) { // first minimizer
           *repetitive_seed_length += kmer_size_ + window_size_ - 1;
         } else {
@@ -546,6 +548,7 @@ void Index::GenerateCandidatesFromRepetitiveReadWithMateInfo(int error_threshold
   if (best_candidate_num != 1 || max_count < min_num_seeds_required_for_mapping_) 
   	return;
 
+  *repetitive_seed_length = 0 ;
   for (uint32_t mi = 0; mi < num_minimizers; ++mi) {
     khiter_t khash_iterator = kh_get(k64, lookup_table_, minimizers[mi].first << 1);
     if (khash_iterator == kh_end(lookup_table_)) {
@@ -610,7 +613,7 @@ void Index::GenerateCandidatesFromRepetitiveReadWithMateInfo(int error_threshold
         }
       }  
 
-      if (num_occurrences >= (uint32_t)max_seed_frequencies_[1]) {
+      if (num_occurrences >= (uint32_t)max_seed_frequencies_[0]) {
         if (previous_repetitive_seed_position > read_position) { // first minimizer
           *repetitive_seed_length += kmer_size_ + window_size_ - 1;
         } else {
@@ -635,12 +638,12 @@ void Index::GenerateCandidatesFromRepetitiveReadWithMateInfo(int error_threshold
 void Index::GenerateCandidates(int error_threshold, const std::vector<std::pair<uint64_t, uint64_t> > &minimizers, uint32_t *repetitive_seed_length, std::vector<uint64_t> *positive_hits, std::vector<uint64_t> *negative_hits, std::vector<Candidate> *positive_candidates, std::vector<Candidate> *negative_candidates) {
   *repetitive_seed_length = 0;
   bool recollect = true;
-  int repetitive_seed_count = CollectCandidates(max_seed_frequencies_[0], minimizers, repetitive_seed_length, positive_hits, negative_hits, false);
+  int repetitive_seed_count = CollectCandidates(max_seed_frequencies_[0], max_seed_frequencies_[0], minimizers, repetitive_seed_length, positive_hits, negative_hits, false);
   if (repetitive_seed_count > (int)minimizers.size() / 2 && minimizers.size() >= 10) {
     positive_hits->clear();
     negative_hits->clear();
     *repetitive_seed_length = 0;
-    repetitive_seed_count = CollectCandidates(max_seed_frequencies_[1], minimizers, repetitive_seed_length, positive_hits, negative_hits, true);
+    repetitive_seed_count = CollectCandidates(max_seed_frequencies_[1], max_seed_frequencies_[0], minimizers, repetitive_seed_length, positive_hits, negative_hits, true);
     recollect = false;
   }
 
@@ -655,7 +658,7 @@ void Index::GenerateCandidates(int error_threshold, const std::vector<std::pair<
     negative_hits->clear();
     //printf("second round\n") ;
     *repetitive_seed_length = 0;
-    CollectCandidates(max_seed_frequencies_[1], minimizers, repetitive_seed_length, positive_hits, negative_hits, true);
+    CollectCandidates(max_seed_frequencies_[1], max_seed_frequencies_[0], minimizers, repetitive_seed_length, positive_hits, negative_hits, true);
     //printf("p+n2: %d\n", positive_hits->size() + negative_hits->size()) ;
     GenerateCandidatesOnOneDirection(error_threshold, min_num_seeds_required_for_mapping_, positive_hits, positive_candidates);
     GenerateCandidatesOnOneDirection(error_threshold, min_num_seeds_required_for_mapping_, negative_hits, negative_candidates);

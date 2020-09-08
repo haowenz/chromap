@@ -719,7 +719,6 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
 		      if (augment_flag) {
 			      positive_hits->clear();
 			      negative_hits->clear();
-			      *repetitive_seed_length = 0;
 			      if (mate_positive_candidates->size() > 0) 
 				      index.GenerateCandidatesFromRepetitiveReadWithMateInfo(error_threshold_, *minimizers, repetitive_seed_length, negative_hits, augment_negative_candidates, mate_positive_candidates, -1, 2 * max_insert_size_) ;
 			      if (mate_negative_candidates->size() > 0)
@@ -1130,7 +1129,7 @@ void Chromap<MappingRecord>::GenerateBestMappingsForPairedEndReadOnOneDirection(
       uint32_t current_i2 = i2;
       while (current_i2 < mappings2.size() && ((first_read_direction == kPositive && mappings2[current_i2].second <= mappings1[i1].second + max_insert_size_ - read2_length) || (first_read_direction == kNegative && mappings2[current_i2].second <= mappings1[i1].second + read1_length - min_overlap_length))) {
 #ifdef LI_DEBUG 
-	printf("%s: %llu %d %llu %d\n", __func__, mappings1[i1].second >> 32, int(mappings1[i1].second), mappings2[i2].second>>32, int(mappings2[i2].second)) ;
+	printf("%s passed: %llu %d %llu %d: %d %d %d\n", __func__, mappings1[i1].second >> 32, int(mappings1[i1].second), mappings2[current_i2].second>>32, int(mappings2[current_i2].second), mappings1[i1].first + mappings2[current_i2].first, mappings1[i1].first, mappings2[current_i2].first) ;
 #endif
         int current_sum_errors = mappings1[i1].first + mappings2[current_i2].first;
         if (current_sum_errors < *min_sum_errors) {
@@ -1938,10 +1937,12 @@ void Chromap<MappingRecord>::MergeCandidates(std::vector<Candidate> &c1, const s
 	size2 = c2.size();
 	buffer.clear();
 
-	/*for (i = 0 ; i < size1 ; ++i)
+#ifdef LI_DEBUG
+	for (i = 0 ; i < size1 ; ++i)
 		printf("c1: %d %d %d\n", (int)(c1[i].position >> 32), (int)c1[i].position, c1[i].count);
 	for (i = 0 ; i < size2 ; ++i)
-		printf("c2: %d %d %d\n", (int)(c2[i].position >> 32), (int)c2[i].position, c2[i].count);*/
+		printf("c2: %d %d %d\n", (int)(c2[i].position >> 32), (int)c2[i].position, c2[i].count);
+#endif
 	i = 0; j = 0;
 	while (i < size1 && j < size2) {
 		if (c1[i].position == c2[j].position) {
@@ -2707,6 +2708,7 @@ uint8_t Chromap<MappingRecord>::GetMAPQForSingleEndRead(int error_threshold, int
     mapq = 5 * 6.02 * (second_min_num_errors - min_num_errors) * tmp * tmp + 0.499;
     //mapq = 30 - 34.0 / error_threshold + 34.0 / error_threshold * (second_min_num_errors - min_num_errors) * tmp * tmp + 0.499;
   }
+  //printf("%d %d %d\n", mapq);
   if (num_second_best_mappings > 0) {
     mapq -= (int)(4.343 * log(num_second_best_mappings + 1) + 0.499);
   }
