@@ -378,6 +378,7 @@ int Index::CollectCandidates(int max_seed_frequency, int repetitive_seed_frequen
   uint32_t num_minimizers = minimizers.size();
   int repetitive_seed_count = 0 ;
   std::vector<uint64_t> *mm_positive_hits = NULL, *mm_negative_hits = NULL;
+  bool heap_resort = false ; // need to sort the elements of heap first
   if (use_heap) {
     mm_positive_hits = new std::vector<uint64_t>[num_minimizers] ;
     mm_negative_hits = new std::vector<uint64_t>[num_minimizers] ;
@@ -403,8 +404,9 @@ int Index::CollectCandidates(int max_seed_frequency, int repetitive_seed_frequen
         // ok, for now we can't see the reference here. So let us don't do the check.
         // Instead, we do it later some time when we check the candidates.
         uint64_t candidate = (reference_id << 32) | candidate_position;
-        if (use_heap)
+        if (use_heap) {
 	  mm_positive_hits[mi].push_back(candidate);
+	}
 	else
 	  positive_hits->push_back(candidate);
       } else {
@@ -427,8 +429,11 @@ int Index::CollectCandidates(int max_seed_frequency, int repetitive_seed_frequen
           if (((minimizers[mi].second & 1) ^ (value & 1)) == 0) { // same
             uint32_t candidate_position = reference_position - read_position;
             uint64_t candidate = (reference_id << 32) | candidate_position;
-	    if (use_heap)
+	    if (use_heap) {
+	      if (reference_position < read_position)
+	        heap_resort = true ;
               mm_positive_hits[mi].push_back(candidate);
+	    }
 	    else
 	      positive_hits->push_back(candidate);
           } else {
@@ -465,6 +470,9 @@ int Index::CollectCandidates(int max_seed_frequency, int repetitive_seed_frequen
 	  for (uint32_t mi = 0; mi < num_minimizers; ++mi) {
 		  if (mm_positive_hits[mi].size() == 0)
 			  continue;
+		  // only the positive part may have the underflow issue
+		  if (heap_resort) 
+		  	std::sort(mm_positive_hits[mi].begin(), mm_positive_hits[mi].end());
 		  struct mmHit nh;
 		  nh.mi = mi;
 		  nh.position = mm_positive_hits[mi][0];
@@ -517,10 +525,10 @@ int Index::CollectCandidates(int max_seed_frequency, int repetitive_seed_frequen
 	std::sort(negative_hits->begin(), negative_hits->end());
   }
   /*for (uint32_t mi = 0 ; mi < positive_hits->size() ; ++mi)
-  	printf("+ %llu\n", positive_hits->at(mi)) ;
+  	printf("+ %llu %d %d\n", positive_hits->at(mi), (int)(positive_hits->at(mi)>>32), (int)(positive_hits->at(mi))) ;
 
   for (uint32_t mi = 0 ; mi < negative_hits->size() ; ++mi)
-  	printf("- %llu\n", negative_hits->at(mi)) ;*/
+  	printf("- %llu %d %d\n", negative_hits->at(mi), (int)(negative_hits->at(mi)>>32), (int)(negative_hits->at(mi))) ;*/
   return repetitive_seed_count ;
 }
 
