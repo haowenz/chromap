@@ -133,7 +133,7 @@ template <typename MappingRecord>
 void Chromap<MappingRecord>::CorrectBarcodeAt(uint32_t barcode_index, SequenceBatch *barcode_batch, uint64_t *num_barcode_in_whitelist, uint64_t *num_corrected_barcode) {
   uint32_t barcode_length = barcode_batch->GetSequenceLengthAt(barcode_index);
   uint32_t barcode_key = barcode_batch->GenerateSeedFromSequenceAt(barcode_index, 0, barcode_length);
-  khiter_t barcode_whitelist_lookup_table_iterator = kh_get(k32_set, barcode_whitelist_lookup_table_, barcode_key);
+  khiter_t barcode_whitelist_lookup_table_iterator = kh_get(k32, barcode_whitelist_lookup_table_, barcode_key);
   if (barcode_whitelist_lookup_table_iterator != kh_end(barcode_whitelist_lookup_table_)) {
     // Correct barcode
     ++(*num_barcode_in_whitelist);
@@ -155,10 +155,12 @@ void Chromap<MappingRecord>::CorrectBarcodeAt(uint32_t barcode_index, SequenceBa
         base_to_change &= mask;
         // generate the corrected key
         uint32_t corrected_barcode_key = barcode_key_to_change | (base_to_change << (2 * i));
-        barcode_whitelist_lookup_table_iterator = kh_get(k32_set, barcode_whitelist_lookup_table_, corrected_barcode_key);
+        barcode_whitelist_lookup_table_iterator = kh_get(k32, barcode_whitelist_lookup_table_, corrected_barcode_key);
+        double barcode_abundance = kh_value(barcode_whitelist_lookup_table_, barcode_whitelist_lookup_table_iterator) / (double)num_sample_barcodes_;
+        double score = (1 - pow(10.0, ((-(int)barcode_qual[barcode_length - 1 - i]) / 10.0))) * barcode_abundance;
         if (barcode_whitelist_lookup_table_iterator != kh_end(barcode_whitelist_lookup_table_)) {
           // find one possible corrected barcode
-          corrected_barcodes_with_quals.emplace_back(BarcodeWithQual{barcode_length - 1 - i, SequenceBatch::Uint8ToChar(base_to_change), barcode_qual[barcode_length - 1 - i]});
+          corrected_barcodes_with_quals.emplace_back(BarcodeWithQual{barcode_length - 1 - i, SequenceBatch::Uint8ToChar(base_to_change), barcode_qual[barcode_length - 1 - i], barcode_abundance, score});
         }
       }
     }
@@ -169,26 +171,32 @@ void Chromap<MappingRecord>::CorrectBarcodeAt(uint32_t barcode_index, SequenceBa
       // Just correct it
       //std::cerr << "Corrected the barcode from " << barcode << " to ";
       barcode_batch->CorrectBaseAt(barcode_index, corrected_barcodes_with_quals[0].corrected_base_index, corrected_barcodes_with_quals[0].correct_base);
+      //std::cerr << "score: " << corrected_barcodes_with_quals[0].score << "\n";
       ++(*num_corrected_barcode);
       //std::cerr << barcode << "\n";
     } else {
       // Randomly select one of the best corrections
       std::sort(corrected_barcodes_with_quals.begin(), corrected_barcodes_with_quals.end(), std::greater<BarcodeWithQual>());
-      int num_ties = 0;
-      for (size_t ci = 1; ci < num_possible_corrected_barcodes; ++ci) {
-        if (corrected_barcodes_with_quals[ci].qual == corrected_barcodes_with_quals[0].qual) {
-          ++num_ties;
-        }
+      //int num_ties = 0;
+      double sum_score = 0;
+      for (size_t ci = 0; ci < num_possible_corrected_barcodes; ++ci) {
+        sum_score += corrected_barcodes_with_quals[ci].score;
+        //if (corrected_barcodes_with_quals[ci].qual == corrected_barcodes_with_quals[0].qual) {
+        //  ++num_ties;
+        //}
       }
       int best_corrected_barcode_index = 0;
-      if (num_ties > 0) {
-        std::mt19937 tmp_generator(11);
-        std::uniform_int_distribution<int> distribution(0, num_ties); // important: inclusive range
-        best_corrected_barcode_index = distribution(tmp_generator);
-      }
+      //if (num_ties > 0) {
+      //  std::mt19937 tmp_generator(11);
+      //  std::uniform_int_distribution<int> distribution(0, num_ties); // important: inclusive range
+      //  best_corrected_barcode_index = distribution(tmp_generator);
+      //}
       //std::cerr << "Corrected the barcode from " << barcode << " to ";
-      barcode_batch->CorrectBaseAt(barcode_index, corrected_barcodes_with_quals[best_corrected_barcode_index].corrected_base_index, corrected_barcodes_with_quals[best_corrected_barcode_index].correct_base);
-      ++(*num_corrected_barcode);
+      if (corrected_barcodes_with_quals[best_corrected_barcode_index].score / sum_score >= 0.9) {
+        barcode_batch->CorrectBaseAt(barcode_index, corrected_barcodes_with_quals[best_corrected_barcode_index].corrected_base_index, corrected_barcodes_with_quals[best_corrected_barcode_index].correct_base);
+        //std::cerr << "score: " << corrected_barcodes_with_quals[best_corrected_barcode_index].score << "\n";
+        ++(*num_corrected_barcode);
+      }
       //std::cerr << barcode << "\n";
     }
   }
@@ -474,6 +482,37 @@ uint32_t Chromap<MappingRecord>::LoadPairedEndReadsWithBarcodes(SequenceBatch *r
 }
 
 template <typename MappingRecord>
+void Chromap<MappingRecord>::ComputeBarcodeAbundance(uint64_t max_num_sample_barcodes) {
+  double real_start_time = Chromap<>::GetRealTime();
+  SequenceBatch barcode_batch(read_batch_size_);
+  for (size_t read_file_index = 0; read_file_index < read_file1_paths_.size(); ++read_file_index) {
+    barcode_batch.InitializeLoading(barcode_file_paths_[read_file_index]);
+    uint32_t num_loaded_barcodes = barcode_batch.LoadBatch();
+    while (num_loaded_barcodes > 0) {
+      for (uint32_t barcode_index = 0; barcode_index < num_loaded_barcodes; ++barcode_index) {
+        uint32_t barcode_length = barcode_batch.GetSequenceLengthAt(barcode_index);
+        uint32_t barcode_key = barcode_batch.GenerateSeedFromSequenceAt(barcode_index, 0, barcode_length);
+        khiter_t barcode_whitelist_lookup_table_iterator = kh_get(k32, barcode_whitelist_lookup_table_, barcode_key);
+        if (barcode_whitelist_lookup_table_iterator != kh_end(barcode_whitelist_lookup_table_)) {
+          // Correct barcode
+          kh_value(barcode_whitelist_lookup_table_, barcode_whitelist_lookup_table_iterator) += 1;
+          ++num_sample_barcodes_;
+        }
+      }
+      if (num_sample_barcodes_ >= max_num_sample_barcodes) {
+        break;
+      }
+      num_loaded_barcodes = barcode_batch.LoadBatch();
+    }
+    barcode_batch.FinalizeLoading();
+    if (num_sample_barcodes_ >= max_num_sample_barcodes) {
+      break;
+    }
+  }
+  std::cerr << "Compute barcode abundance using " << num_sample_barcodes_ << " in "<< Chromap<>::GetRealTime() - real_start_time << "s.\n";
+}
+
+template <typename MappingRecord>
 void Chromap<MappingRecord>::MapPairedEndReads() {
   double real_start_time = Chromap<>::GetRealTime();
   SequenceBatch reference;
@@ -513,6 +552,7 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
   if (!is_bulk_data_) {
     if (!barcode_whitelist_file_path_.empty()) {
       LoadBarcodeWhitelist();
+      ComputeBarcodeAbundance(20000000);
     }
   }
   static uint64_t thread_num_candidates = 0;
@@ -984,11 +1024,11 @@ void Chromap<MappingRecord>::OutputMappingsInVector(uint8_t mapq_threshold, uint
   for (uint32_t ri = 0; ri < num_reference_sequences; ++ri) {
     for (auto it = mappings[ri].begin(); it != mappings[ri].end(); ++it) {
       uint8_t mapq = (it->mapq);
-      uint8_t is_unique = (it->is_unique);
+      //uint8_t is_unique = (it->is_unique);
       if (mapq >= mapq_threshold) {
-        if (allocate_multi_mappings_ || (only_output_unique_mappings_ && is_unique == 1)) {
+        //if (allocate_multi_mappings_ || (only_output_unique_mappings_ && is_unique == 1)) {
           output_tools_->AppendMapping(ri, reference, *it);
-        }
+        //}
       }
     }
   }
@@ -2668,7 +2708,8 @@ void Chromap<MappingRecord>::LoadBarcodeWhitelist() {
     //PoreModelParameters &pore_model_parameters = pore_models_[kmer_hash_value];
     //barcode_whitelist_file_line_string_stream >> pore_model_parameters.level_mean >> pore_model_parameters.level_stdv >> pore_model_parameters.sd_mean >> pore_model_parameters.sd_stdv;
     int khash_return_code;
-    kh_put(k32_set, barcode_whitelist_lookup_table_, barcode_key, &khash_return_code);
+    khiter_t barcode_whitelist_lookup_table_iterator = kh_put(k32, barcode_whitelist_lookup_table_, barcode_key, &khash_return_code);
+    kh_value(barcode_whitelist_lookup_table_, barcode_whitelist_lookup_table_iterator) = 0;
     assert(khash_return_code != -1 && khash_return_code != 0);
     ++num_barcodes;
   }
