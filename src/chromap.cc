@@ -690,7 +690,8 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
               if (mm_to_candidates_cache.Query(minimizers2, positive_candidates2, negative_candidates2, repetitive_seed_length2, read_batch2.GetSequenceLengthAt(pair_index)) == -1)
                 index.GenerateCandidates(error_threshold_, minimizers2, &repetitive_seed_length2, &positive_hits2, &negative_hits2, &positive_candidates2, &negative_candidates2);
               uint32_t current_num_candidates2 = positive_candidates2.size() + negative_candidates2.size();
-              if (pair_index < num_loaded_pairs / num_threads_ || num_reads_ < 2 * 5000000) {
+              if (pair_index < num_loaded_pairs / 2 
+	         && (pair_index < num_loaded_pairs / num_threads_ || num_reads_ < 2 * 5000000)) {
                 mm_history1[pair_index].minimizers = minimizers1;
                 mm_history1[pair_index].positive_candidates = positive_candidates1;
                 mm_history1[pair_index].negative_candidates = negative_candidates1;
@@ -834,7 +835,7 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
               }
             }
           }
-          for (uint32_t pair_index = 0; pair_index < num_loaded_pairs; ++pair_index) {
+          for (uint32_t pair_index = 0; pair_index < num_loaded_pairs / 2; ++pair_index) {
             if (num_reads_ >= 2 * 5000000 && pair_index >= num_loaded_pairs / num_threads_)
               break;
             mm_to_candidates_cache.Update(mm_history1[pair_index].minimizers, mm_history1[pair_index].positive_candidates, mm_history1[pair_index].negative_candidates, mm_history1[pair_index].repetitive_seed_length);
@@ -1471,7 +1472,8 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
                 //	positive_candidates.size() + negative_candidates.size()) ;
                 //if (positive_hits.size() + negative_hits.size() > minimizers.size() * 100)
               }
-              if (read_index <  num_loaded_reads / num_threads_ || num_reads_ < 5000000) {
+              if (read_index < num_loaded_reads / 2 
+	        && (read_index <  num_loaded_reads / num_threads_ || num_reads_ < 5000000)) {
                 mm_history[read_index].minimizers = minimizers;
                 mm_history[read_index].positive_candidates = positive_candidates;
                 mm_history[read_index].negative_candidates = negative_candidates;
@@ -1500,7 +1502,7 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
               }
             }
           }
-          for (uint32_t read_index = 0; read_index < num_loaded_reads ; ++read_index) {
+          for (uint32_t read_index = 0; read_index < num_loaded_reads / 2; ++read_index) {
             if ( num_reads_ >= 5000000 && read_index >= num_loaded_reads / num_threads_)
               break;
             mm_to_candidates_cache.Update(mm_history[read_index].minimizers, mm_history[read_index].positive_candidates, mm_history[read_index].negative_candidates, mm_history[read_index].repetitive_seed_length);
