@@ -449,12 +449,12 @@ int Index::CollectCandidates(int max_seed_frequency, int repetitive_seed_frequen
       
       if (num_occurrences >= (uint32_t)repetitive_seed_frequency){
         if (previous_repetitive_seed_position > read_position) { // first minimizer
-          *repetitive_seed_length += kmer_size_ + window_size_ - 1;
+          *repetitive_seed_length += kmer_size_;
         } else {
-          if (read_position < previous_repetitive_seed_position + kmer_size_) {
+          if (read_position < previous_repetitive_seed_position + kmer_size_ + window_size_ - 1) {
             *repetitive_seed_length += read_position - previous_repetitive_seed_position;
           } else {
-            *repetitive_seed_length += kmer_size_ + window_size_ - 1;
+            *repetitive_seed_length += kmer_size_;
           }
         }
         previous_repetitive_seed_position = read_position;
@@ -623,12 +623,12 @@ void Index::GenerateCandidatesFromRepetitiveReadWithMateInfo(int error_threshold
 
       if (num_occurrences >= (uint32_t)max_seed_frequencies_[0]) {
         if (previous_repetitive_seed_position > read_position) { // first minimizer
-          *repetitive_seed_length += kmer_size_ + window_size_ - 1;
+          *repetitive_seed_length += kmer_size_;
         } else {
-          if (read_position < previous_repetitive_seed_position + kmer_size_) {
+          if (read_position < previous_repetitive_seed_position + kmer_size_ + window_size_ - 1) {
             *repetitive_seed_length += read_position - previous_repetitive_seed_position;
           } else {
-            *repetitive_seed_length += kmer_size_ + window_size_ - 1;
+            *repetitive_seed_length += kmer_size_;
           }
         }
         previous_repetitive_seed_position = read_position;

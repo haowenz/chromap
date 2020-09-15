@@ -160,6 +160,7 @@ class Chromap {
   uint32_t GetNumOverlappedMappings(uint32_t ref_id, const MappingRecord &mapping);
   void LoadBarcodeWhitelist();
   void ComputeBarcodeAbundance(uint64_t max_num_sample_barcodes);
+  void UpdateBarcodeAbundance(uint32_t num_loaded_barcodes, const SequenceBatch &barcode_batch);
   void CorrectBarcodeAt(uint32_t barcode_index, SequenceBatch *barcode_batch, uint64_t *num_barcode_in_whitelist, uint64_t *num_corrected_barcode);
   uint32_t CallPeaks(uint16_t coverage_threshold, uint32_t num_reference_sequences, const SequenceBatch &reference);
   void OutputFeatureMatrix(uint32_t num_sequences, const SequenceBatch &reference);
@@ -253,6 +254,7 @@ class Chromap {
   uint64_t num_reads_ = 0;
   uint64_t num_duplicated_reads_ = 0; // # identical reads
   // For barcode stats
+  uint64_t initial_num_sample_barcodes_ = 100000000;
   uint64_t num_sample_barcodes_ = 0;
   uint64_t num_barcode_in_whitelist_ = 0;
   uint64_t num_corrected_barcode_ = 0;

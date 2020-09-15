@@ -513,6 +513,22 @@ void Chromap<MappingRecord>::ComputeBarcodeAbundance(uint64_t max_num_sample_bar
 }
 
 template <typename MappingRecord>
+void Chromap<MappingRecord>::UpdateBarcodeAbundance(uint32_t num_loaded_barcodes, const SequenceBatch &barcode_batch) {
+  double real_start_time = Chromap<>::GetRealTime();
+  for (uint32_t barcode_index = 0; barcode_index < num_loaded_barcodes; ++barcode_index) {
+    uint32_t barcode_length = barcode_batch.GetSequenceLengthAt(barcode_index);
+    uint32_t barcode_key = barcode_batch.GenerateSeedFromSequenceAt(barcode_index, 0, barcode_length);
+    khiter_t barcode_whitelist_lookup_table_iterator = kh_get(k32, barcode_whitelist_lookup_table_, barcode_key);
+    if (barcode_whitelist_lookup_table_iterator != kh_end(barcode_whitelist_lookup_table_)) {
+      // Correct barcode
+      kh_value(barcode_whitelist_lookup_table_, barcode_whitelist_lookup_table_iterator) += 1;
+      ++num_sample_barcodes_;
+    }
+  }
+  std::cerr << "Update barcode abundance using " << num_sample_barcodes_ << " in "<< Chromap<>::GetRealTime() - real_start_time << "s.\n";
+}
+
+template <typename MappingRecord>
 void Chromap<MappingRecord>::MapPairedEndReads() {
   double real_start_time = Chromap<>::GetRealTime();
   SequenceBatch reference;
@@ -552,7 +568,7 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
   if (!is_bulk_data_) {
     if (!barcode_whitelist_file_path_.empty()) {
       LoadBarcodeWhitelist();
-      ComputeBarcodeAbundance(20000000);
+      ComputeBarcodeAbundance(initial_num_sample_barcodes_);
     }
   }
   static uint64_t thread_num_candidates = 0;
@@ -791,6 +807,11 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
                 //std::cerr << "#pc1: " << positive_candidates1_buffer.size() << ", #nc1: " << negative_candidates1_buffer.size() << ", #pc2: " << positive_candidates2_buffer.size() << ", #nc2: " << negative_candidates2_buffer.size() << "\n";
                 ReduceCandidatesForPairedEndRead(positive_candidates1_buffer, negative_candidates1_buffer, positive_candidates2_buffer, negative_candidates2_buffer, &positive_candidates1, &negative_candidates1, &positive_candidates2, &negative_candidates2);
                 //std::cerr << "After pe filter, #pc1: " << positive_candidates1.size() << ", #nc1: " << negative_candidates1.size() << ", #pc2: " << positive_candidates2.size() << ", #nc2: " << negative_candidates2.size() << "\n";
+                current_num_candidates1 = positive_candidates1.size() + negative_candidates1.size();
+                current_num_candidates2 = positive_candidates2.size() + negative_candidates2.size();
+
+                if (current_num_candidates1 > 0 && current_num_candidates2 > 0) {
+
                 thread_num_candidates += positive_candidates1.size() + positive_candidates2.size() + negative_candidates1.size() + negative_candidates2.size();
 
                 positive_mappings1.clear();
@@ -831,9 +852,17 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
                     ++thread_num_mapped_reads;
                   }
                 }
+                }
               }
             }
           }
+          //if (num_reads_ / 2 > initial_num_sample_barcodes_) {
+          //  if (!is_bulk_data_) {
+          //    if (!barcode_whitelist_file_path_.empty()) {
+          //      UpdateBarcodeAbundance(num_loaded_pairs, barcode_batch);
+          //    }
+          //  }
+          //}
           for (uint32_t pair_index = 0; pair_index < num_loaded_pairs; ++pair_index) {
             if (num_reads_ >= 2 * 5000000 && pair_index >= num_loaded_pairs / num_threads_)
               break;
@@ -2746,7 +2775,7 @@ uint8_t Chromap<MappingRecord>::GetMAPQForSingleEndRead(int error_threshold, int
     //mapq = alignment_identity < 0.98 ? (int)(mapq * tmp + .499) : mapq;
     double tmp = alignment_length < mapq_coef_length ? 1.0 : mapq_coef_fraction / log(alignment_length);
     tmp *= alignment_identity * alignment_identity;
-    mapq = 5 * 6.02 * (second_min_num_errors - min_num_errors) * tmp * tmp + 0.499;
+    mapq = 6 * 6.02 * (second_min_num_errors - min_num_errors) * tmp * tmp + 0.499 + 10;
     //mapq = 30 - 34.0 / error_threshold + 34.0 / error_threshold * (second_min_num_errors - min_num_errors) * tmp * tmp + 0.499;
   }
   //printf("%d %d %d\n", mapq);
@@ -2773,7 +2802,7 @@ uint8_t Chromap<MappingRecord>::GetMAPQForSingleEndRead(int error_threshold, int
   return (uint8_t)mapq;
 }
 
-#define raw_mapq(diff, a) ((int)(5 * 6.02 * (diff) / (a) + .499))
+#define raw_mapq(diff, a) ((int)(6 * 6.02 * (diff) / (a) + .499))
 
 template <typename MappingRecord>
 uint8_t Chromap<MappingRecord>::GetMAPQForPairedEndRead(int num_positive_candidates, int num_negative_candidates, uint32_t repetitive_seed_length1, uint32_t repetitive_seed_length2, uint16_t positive_alignment_length, uint16_t negative_alignment_length, int min_sum_errors, int num_best_mappings, int second_min_sum_errors, int num_second_best_mappings, int min_num_errors1, int min_num_errors2, int num_best_mappings1, int num_best_mappings2, int second_min_num_errors1, int second_min_num_errors2, int num_second_best_mappings1, int num_second_best_mappings2, uint8_t &mapq1, uint8_t &mapq2) {
