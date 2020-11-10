@@ -26,6 +26,14 @@ struct Candidate {
   }
 };
 
+struct mmHit {
+  uint32_t mi;
+  uint64_t position;
+  bool operator<(const mmHit &h)  const {
+    return position > h.position; // the inversed direction is to make a min-heap
+  }
+};
+
 class Index {
  public:
   Index(int min_num_seeds_required_for_mapping, const std::vector<int> &max_seed_frequencies, const std::string &index_file_path) : min_num_seeds_required_for_mapping_(min_num_seeds_required_for_mapping), max_seed_frequencies_(max_seed_frequencies), index_file_path_(index_file_path) { // for read mapping
@@ -65,10 +73,10 @@ class Index {
   void Construct(uint32_t num_sequences, const SequenceBatch &reference);
   void Save();
   void Load();
-  void GenerateCandidatesOnOneDirection(int error_threshold, int num_seeds_required, std::vector<uint64_t> *hits, std::vector<Candidate> *candidates);
-  void GenerateCandidates(int error_threshold, const std::vector<std::pair<uint64_t, uint64_t> > &minimizers, uint32_t *repetitive_seed_length, std::vector<uint64_t> *positive_hits, std::vector<uint64_t> *negative_hits, std::vector<Candidate> *positive_candidates, std::vector<Candidate> *negative_candidates);
-  void GenerateCandidatesFromRepetitiveReadWithMateInfo(int error_threshold, const std::vector<std::pair<uint64_t, uint64_t> > &minimizers, uint32_t *repetitive_seed_length, std::vector<uint64_t> *hits, std::vector<Candidate> *candidates, std::vector<Candidate> *mate_candidates, int direction, unsigned int range);
-  int CollectCandidates(int max_seed_frequency, int repetitive_seed_frequency, const std::vector<std::pair<uint64_t, uint64_t> > &minimizers, uint32_t *repetitive_seed_length, std::vector<uint64_t> *positive_hits, std::vector<uint64_t> *negative_hits, bool use_heap);
+  void GenerateCandidatesOnOneDirection(int error_threshold, int num_seeds_required, std::vector<uint64_t> *hits, std::vector<Candidate> *candidates) const;
+  void GenerateCandidates(int error_threshold, const std::vector<std::pair<uint64_t, uint64_t> > &minimizers, uint32_t *repetitive_seed_length, std::vector<uint64_t> *positive_hits, std::vector<uint64_t> *negative_hits, std::vector<Candidate> *positive_candidates, std::vector<Candidate> *negative_candidates) const;
+  void GenerateCandidatesFromRepetitiveReadWithMateInfo(int error_threshold, const std::vector<std::pair<uint64_t, uint64_t> > &minimizers, uint32_t *repetitive_seed_length, std::vector<uint64_t> *hits, std::vector<Candidate> *candidates, std::vector<Candidate> *mate_candidates, int direction, unsigned int range) const;
+  int CollectCandidates(int max_seed_frequency, int repetitive_seed_frequency, const std::vector<std::pair<uint64_t, uint64_t> > &minimizers, uint32_t *repetitive_seed_length, std::vector<uint64_t> *positive_hits, std::vector<uint64_t> *negative_hits, bool use_heap) const;
   inline static uint64_t Hash64(uint64_t key, const uint64_t mask) {
     key = (~key + (key << 21)) & mask; // key = (key << 21) - key - 1;
     key = key ^ key >> 24;

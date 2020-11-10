@@ -19,13 +19,14 @@ class SequenceBatch {
     sequence_batch_.reserve(max_num_sequences_);
     for (uint32_t i = 0; i < max_num_sequences_; ++i) {
       sequence_batch_.emplace_back((kseq_t*)calloc(1, sizeof(kseq_t)));
+      sequence_batch_.back()->f = NULL;
     }
     negative_sequence_batch_.assign(max_num_sequences_, "");
   }
   ~SequenceBatch(){
     if (sequence_batch_.size() > 0) {
       for (uint32_t i = 0; i < sequence_batch_.size(); ++i) {
-        free(sequence_batch_[i]);
+        kseq_destroy(sequence_batch_[i]);
       }
     }
   }

@@ -28,6 +28,14 @@ struct StackCell {
   StackCell(int k_, size_t x_, int w_) : x(x_), k(k_), w(w_) {};
 };
 
+struct _mm_history {
+	bool skip;
+	std::vector<std::pair<uint64_t, uint64_t> > minimizers;
+	std::vector<Candidate> positive_candidates;
+	std::vector<Candidate> negative_candidates;
+  uint32_t repetitive_seed_length;
+};
+
 struct Peak {
   uint32_t start_position;
   uint16_t length;
@@ -144,6 +152,7 @@ class Chromap {
   void BandedAlign8PatternsToText(const char **patterns, const char *text, int read_length, int16_t *mapping_edit_distances, int16_t *mapping_end_positions);
   void BandedTraceback(int min_num_errors, const char *pattern, const char *text, const int read_length, int *mapping_start_position);
   void MergeCandidates(std::vector<Candidate> &c1, const std::vector<Candidate> &c2, std::vector<Candidate> &buffer);
+  void SupplementCandidates(const Index &index, uint32_t repetitive_seed_length1, uint32_t repetitive_seed_length2, std::vector<std::pair<uint64_t, uint64_t> > &minimizers1, std::vector<std::pair<uint64_t, uint64_t> > &minimizers2, std::vector<uint64_t> &positive_hits1, std::vector<uint64_t> &positive_hits2, std::vector<Candidate> &positive_candidates1, std::vector<Candidate> &positive_candidates2, std::vector<Candidate> &positive_candidates1_buffer, std::vector<Candidate> &positive_candidates2_buffer, std::vector<uint64_t> &negative_hits1, std::vector<uint64_t> &negative_hits2, std::vector<Candidate> &negative_candidates1, std::vector<Candidate> &negative_candidates2, std::vector<Candidate> &negative_candidates1_buffer, std::vector<Candidate> &negative_candidates2_buffer);
   void VerifyCandidatesOnOneDirectionUsingSIMD(Direction candidate_direction, const SequenceBatch &read_batch, uint32_t read_index, const SequenceBatch &reference, const std::vector<Candidate> &candidates, std::vector<std::pair<int, uint64_t> > *mappings, int *min_num_errors, int *num_best_mappings, int *second_min_num_errors, int *num_second_best_mappings);
   void VerifyCandidatesOnOneDirection(Direction candidate_direction, const SequenceBatch &read_batch, uint32_t read_index, const SequenceBatch &reference, const std::vector<Candidate> &candidates, std::vector<std::pair<int, uint64_t> > *mappings, int *min_num_errors, int *num_best_mappings, int *second_min_num_errors, int *num_second_best_mappings);
   void VerifyCandidates(const SequenceBatch &read_batch, uint32_t read_index, const SequenceBatch &reference, const std::vector<std::pair<uint64_t, uint64_t> > &minimizers, const std::vector<Candidate> &positive_candidates, const std::vector<Candidate> &negative_candidates, std::vector<std::pair<int, uint64_t> > *positive_mappings, std::vector<std::pair<int, uint64_t> > *negative_mappings, int *min_num_errors, int *num_best_mappings, int *second_min_num_errors, int *num_second_best_mappings);
