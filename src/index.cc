@@ -509,23 +509,23 @@ void Index::GenerateCandidatesFromRepetitiveReadWithMateInfo(int error_threshold
       uint64_t value = kh_value(lookup_table_, khash_iterator);
       uint32_t read_position = minimizers[mi].second >> 1;
       if (kh_key(lookup_table_, khash_iterator) & 1) { // singleton
-        //uint64_t reference_id = value >> 33;
-        //uint32_t reference_position = value >> 1;
-        //// Check whether the strands of reference minimizer and read minimizer are the same
-        //// Later, we can play some tricks with 0,1 here to make it faster.
-        //if (((minimizers[mi].second & 1) ^ (value & 1)) == 0) { // same
-        //  if (direction == kPositive) {
-        //    uint32_t candidate_position = reference_position - read_position;// > 0 ? reference_position - read_position : 0;
-        //    // ok, for now we can't see the reference here. So let us don't do the check.
-        //    // Instead, we do it later some time when we check the candidates.
-        //    uint64_t candidate = (reference_id << 32) | candidate_position;
-        //    hits->push_back(candidate);
-        //  }
-        //} else if (direction == kNegative) {
-        //  uint32_t candidate_position = reference_position + read_position - kmer_size_ + 1;// < reference_length ? reference_position - read_position : 0;
-        //  uint64_t candidate = (reference_id << 32) | candidate_position;
-        //  hits->push_back(candidate);
-        //}
+        uint64_t reference_id = value >> 33;
+        uint32_t reference_position = value >> 1;
+        // Check whether the strands of reference minimizer and read minimizer are the same
+        // Later, we can play some tricks with 0,1 here to make it faster.
+        if (((minimizers[mi].second & 1) ^ (value & 1)) == 0) { // same
+          if (direction == kPositive) {
+            uint32_t candidate_position = reference_position - read_position;// > 0 ? reference_position - read_position : 0;
+            // ok, for now we can't see the reference here. So let us don't do the check.
+            // Instead, we do it later some time when we check the candidates.
+            uint64_t candidate = (reference_id << 32) | candidate_position;
+            hits->push_back(candidate);
+          }
+        } else if (direction == kNegative) {
+          uint32_t candidate_position = reference_position + read_position - kmer_size_ + 1;// < reference_length ? reference_position - read_position : 0;
+          uint64_t candidate = (reference_id << 32) | candidate_position;
+          hits->push_back(candidate);
+        }
       } else {
         uint32_t offset = value >> 32;
         uint32_t num_occurrences = value;
