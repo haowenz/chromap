@@ -493,7 +493,8 @@ void Index::GenerateCandidatesFromRepetitiveReadWithMateInfo(int error_threshold
     }
   }
   //if (best_candidate_num != 1 || max_count < min_num_seeds_required_for_mapping_) 
-  //  return;
+  if (best_candidate_num >= 500) 
+    return;
 
   for (uint32_t ci = 0; ci < mate_candidates_size; ++ci) {
     if (mate_candidates->at(ci).count != max_count) {
