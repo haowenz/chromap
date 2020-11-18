@@ -492,9 +492,10 @@ void Index::GenerateCandidatesFromRepetitiveReadWithMateInfo(int error_threshold
       ++best_candidate_num;
     }
   }
-  if (best_candidate_num >= 500)//|| max_count < min_num_seeds_required_for_mapping_) 
+  if (best_candidate_num >= 500 
+    || (max_count < min_num_seeds_required_for_mapping_ && best_candidate_num >= 5)
+    || (max_count == min_num_seeds_required_for_mapping_ && best_candidate_num >=50)) 
     return;
-
   std::vector<std::pair<uint64_t, uint64_t> > boundaries;
   boundaries.reserve(500);
   for (uint32_t ci = 0; ci < mate_candidates_size; ++ci) {
@@ -551,9 +552,10 @@ void Index::GenerateCandidatesFromRepetitiveReadWithMateInfo(int error_threshold
     } else {
       uint32_t offset = value >> 32;
       uint32_t num_occurrences = value;
+      uint32_t prev_l = 0;
       for (uint32_t bi = 0; bi < boundary_size; ++bi) {
         // use binary search to locate the coordinate near mate position
-        int32_t l = 0, m = 0, r = num_occurrences - 1;
+        int32_t l = prev_l, m = 0, r = num_occurrences - 1;
         uint64_t boundary = boundaries[bi].first;
         while (l <= r) {
           m = (l + r) / 2;
@@ -568,6 +570,7 @@ void Index::GenerateCandidatesFromRepetitiveReadWithMateInfo(int error_threshold
             break;
           }
         }
+	prev_l = m;
         //printf("%s: %d %d: %d %d\n", __func__, m, num_occurrences, (int)(boundary>>32), (int)boundary) ;
         for (uint32_t oi = m; oi < num_occurrences; ++oi) {
           uint64_t value = occurrence_table_[offset + oi];
@@ -616,12 +619,14 @@ void Index::GenerateCandidates(int error_threshold, const std::vector<std::pair<
   int repetitive_seed_count = CollectCandidates(max_seed_frequencies_[0], max_seed_frequencies_[0], minimizers, repetitive_seed_length, positive_hits, negative_hits, false);
   //std::cerr << "rep seed: " << repetitive_seed_count << "\n";
   //if ((repetitive_seed_count > (int)minimizers.size() / 2 && minimizers.size() >= 10)) {
+  bool checkmore = false;
   if (positive_hits->size() + negative_hits->size() == 0) {
     positive_hits->clear();
     negative_hits->clear();
     *repetitive_seed_length = 0;
     repetitive_seed_count = CollectCandidates(max_seed_frequencies_[1], max_seed_frequencies_[0], minimizers, repetitive_seed_length, positive_hits, negative_hits, true);
     //recollect = false;
+    checkmore = true;
   }
   //if ((positive_candidates->size() == 0 || negative_candidates->size() == 0) && recollect) {
   ////if (positive_candidates->size() + negative_candidates->size() == 0 && recollect) {
@@ -653,6 +658,8 @@ void Index::GenerateCandidates(int error_threshold, const std::vector<std::pair<
   int num_required_seeds = minimizers.size() - repetitive_seed_count;
   num_required_seeds = num_required_seeds > 1 ? num_required_seeds : 1; 
   num_required_seeds = num_required_seeds > min_num_seeds_required_for_mapping_ ? min_num_seeds_required_for_mapping_ : num_required_seeds;
+  if (checkmore)
+  	num_required_seeds = min_num_seeds_required_for_mapping_;
   GenerateCandidatesOnOneDirection(error_threshold, num_required_seeds, positive_hits, positive_candidates);
   GenerateCandidatesOnOneDirection(error_threshold, num_required_seeds, negative_hits, negative_candidates);
   //fprintf(stderr, "p+n: %d\n", positive_candidates->size() + negative_candidates->size()) ;
