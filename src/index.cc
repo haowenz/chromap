@@ -492,10 +492,11 @@ void Index::GenerateCandidatesFromRepetitiveReadWithMateInfo(int error_threshold
       ++best_candidate_num;
     }
   }
-  if (best_candidate_num > 500)//|| max_count < min_num_seeds_required_for_mapping_) 
+  if (best_candidate_num >= 500)//|| max_count < min_num_seeds_required_for_mapping_) 
     return;
-  std::vector<std::pair<uint64_t, uint64_t> > boundaries ;
-  for (uint32_t ci = 0; ci < mate_candidates_size; ++ci){
+  std::vector<std::pair<uint64_t, uint64_t> > boundaries;
+  boundaries.reserve(500);
+  for (uint32_t ci = 0; ci < mate_candidates_size; ++ci) {
     if (mate_candidates->at(ci).count == max_count) {
       std::pair<uint64_t, uint64_t> r;
       r.first = (mate_candidates->at(ci).position < range) ? 0 : (mate_candidates->at(ci).position - range);
@@ -509,8 +510,8 @@ void Index::GenerateCandidatesFromRepetitiveReadWithMateInfo(int error_threshold
   uint32_t raw_boundary_size = boundaries.size();
   if (raw_boundary_size == 0)
     return;
-  for (uint32_t bi = 1; bi < raw_boundary_size; ++bi){
-    if (boundaries[boundary_size - 1].second < boundaries[bi].first){
+  for (uint32_t bi = 1; bi < raw_boundary_size; ++bi) {
+    if (boundaries[boundary_size - 1].second < boundaries[bi].first) {
       boundaries[boundary_size] = boundaries[bi];
       ++boundary_size;
     } else {
@@ -519,7 +520,7 @@ void Index::GenerateCandidatesFromRepetitiveReadWithMateInfo(int error_threshold
   }
   boundaries.resize(boundary_size);
 
-  *repetitive_seed_length = 0 ;
+  *repetitive_seed_length = 0;
   for (uint32_t mi = 0; mi < num_minimizers; ++mi) {
     khiter_t khash_iterator = kh_get(k64, lookup_table_, minimizers[mi].first << 1);
     if (khash_iterator == kh_end(lookup_table_)) {
@@ -552,7 +553,7 @@ void Index::GenerateCandidatesFromRepetitiveReadWithMateInfo(int error_threshold
       for (uint32_t bi = 0; bi < boundary_size; ++bi) {
         // use binary search to locate the coordinate near mate position
         int32_t l = 0, m = 0, r = num_occurrences - 1;
-        uint64_t boundary = boundaries[bi].first ;
+        uint64_t boundary = boundaries[bi].first;
         while (l <= r) {
           m = (l + r) / 2;
           uint64_t value = (occurrence_table_[offset + m])>>1;
@@ -584,7 +585,7 @@ void Index::GenerateCandidatesFromRepetitiveReadWithMateInfo(int error_threshold
             uint64_t candidate = (reference_id << 32) | candidate_position;
             hits->push_back(candidate);
           }
-        }  
+        }
       } // for bi
       if (num_occurrences >= (uint32_t)max_seed_frequencies_[0]) {
         if (previous_repetitive_seed_position > read_position) { // first minimizer
@@ -649,7 +650,7 @@ void Index::GenerateCandidates(int error_threshold, const std::vector<std::pair<
   //printf("p+n: %d. %d %d\n", positive_hits->size() + negative_hits->size(), repetitive_seed_count, minimizers.size()) ;
 
   int num_required_seeds = minimizers.size() - repetitive_seed_count;
-  num_required_seeds = num_required_seeds >= 1 ? num_required_seeds : 1; 
+  num_required_seeds = num_required_seeds > 1 ? num_required_seeds : 1; 
   num_required_seeds = num_required_seeds > min_num_seeds_required_for_mapping_ ? min_num_seeds_required_for_mapping_ : num_required_seeds;
   GenerateCandidatesOnOneDirection(error_threshold, num_required_seeds, positive_hits, positive_candidates);
   GenerateCandidatesOnOneDirection(error_threshold, num_required_seeds, negative_hits, negative_candidates);
