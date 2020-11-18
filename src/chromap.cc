@@ -563,28 +563,28 @@ void Chromap<MappingRecord>::SupplementCandidates(const Index &index, uint32_t r
     uint32_t mm_count = minimizers->size();
     bool augment_flag = true;
     uint32_t candidate_num = positive_candidates->size();
-    if (positive_candidates->size() >= (uint32_t)max_seed_frequencies_[0]) {
-      augment_flag = false;
-    } else {
+    //if (positive_candidates->size() >= (uint32_t)max_seed_frequencies_[0]) {
+    //  augment_flag = false;
+    //} else {
       for (uint32_t i = 0; i < candidate_num; ++i) {
         if (positive_candidates->at(i).count >= mm_count / 2) {
           augment_flag = false;
           break;
         }
       }
-    }
+    //}
     candidate_num = negative_candidates->size();
     if (augment_flag) {
-      if (negative_candidates->size() >= (uint32_t)max_seed_frequencies_[0]) {
-        augment_flag = false;
-      } else {
+      //if (negative_candidates->size() >= (uint32_t)max_seed_frequencies_[0]) {
+      //  augment_flag = false;
+      //} else {
         for (uint32_t i = 0; i < candidate_num; ++i) {
           if (negative_candidates->at(i).count >= mm_count / 2) {
             augment_flag = false;
             break;
           }
         }
-      }
+      //}
     }
     if (augment_flag) {
       positive_hits->clear();

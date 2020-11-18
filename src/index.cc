@@ -492,52 +492,74 @@ void Index::GenerateCandidatesFromRepetitiveReadWithMateInfo(int error_threshold
       ++best_candidate_num;
     }
   }
-  //if (best_candidate_num != 1 || max_count < min_num_seeds_required_for_mapping_) 
-  if (best_candidate_num >= 500) 
+  if (best_candidate_num >= 500)//|| max_count < min_num_seeds_required_for_mapping_) 
     return;
 
+  std::vector<std::pair<uint64_t, uint64_t> > boundaries;
+  boundaries.reserve(500);
   for (uint32_t ci = 0; ci < mate_candidates_size; ++ci) {
-    if (mate_candidates->at(ci).count != max_count) {
+    if (mate_candidates->at(ci).count == max_count) {
+      std::pair<uint64_t, uint64_t> r;
+      r.first = (mate_candidates->at(ci).position < range) ? 0 : (mate_candidates->at(ci).position - range);
+      r.second = mate_candidates->at(ci).position + range;
+      boundaries.push_back(r);
+    }
+  }
+  
+  // Merge adjacent boundary point. assume the candidates are sorted by coordinate so boundaries are also sorted.
+  uint32_t boundary_size = 1;
+  uint32_t raw_boundary_size = boundaries.size();
+  if (raw_boundary_size == 0)
+    return;
+  for (uint32_t bi = 1; bi < raw_boundary_size; ++bi) {
+    if (boundaries[boundary_size - 1].second < boundaries[bi].first) {
+      boundaries[boundary_size] = boundaries[bi];
+      ++boundary_size;
+    } else {
+      boundaries[boundary_size - 1].second = boundaries[bi].second;
+    }
+  }
+  boundaries.resize(boundary_size);
+
+  *repetitive_seed_length = 0;
+  for (uint32_t mi = 0; mi < num_minimizers; ++mi) {
+    khiter_t khash_iterator = kh_get(k64, lookup_table_, minimizers[mi].first << 1);
+    if (khash_iterator == kh_end(lookup_table_)) {
+      //std::cerr << "The minimizer is not in reference!\n";
       continue;
     }
-    *repetitive_seed_length = 0 ;
-    for (uint32_t mi = 0; mi < num_minimizers; ++mi) {
-      khiter_t khash_iterator = kh_get(k64, lookup_table_, minimizers[mi].first << 1);
-      if (khash_iterator == kh_end(lookup_table_)) {
-        //std::cerr << "The minimizer is not in reference!\n";
-        continue;
-      }
-      uint64_t value = kh_value(lookup_table_, khash_iterator);
-      uint32_t read_position = minimizers[mi].second >> 1;
-      if (kh_key(lookup_table_, khash_iterator) & 1) { // singleton
-        uint64_t reference_id = value >> 33;
-        uint32_t reference_position = value >> 1;
-        // Check whether the strands of reference minimizer and read minimizer are the same
-        // Later, we can play some tricks with 0,1 here to make it faster.
-        if (((minimizers[mi].second & 1) ^ (value & 1)) == 0) { // same
-          if (direction == kPositive) {
-            uint32_t candidate_position = reference_position - read_position;// > 0 ? reference_position - read_position : 0;
-            // ok, for now we can't see the reference here. So let us don't do the check.
-            // Instead, we do it later some time when we check the candidates.
-            uint64_t candidate = (reference_id << 32) | candidate_position;
-            hits->push_back(candidate);
-          }
-        } else if (direction == kNegative) {
-          uint32_t candidate_position = reference_position + read_position - kmer_size_ + 1;// < reference_length ? reference_position - read_position : 0;
+    uint64_t value = kh_value(lookup_table_, khash_iterator);
+    uint32_t read_position = minimizers[mi].second >> 1;
+    if (kh_key(lookup_table_, khash_iterator) & 1) { // singleton
+      uint64_t reference_id = value >> 33;
+      uint32_t reference_position = value >> 1;
+      // Check whether the strands of reference minimizer and read minimizer are the same
+      // Later, we can play some tricks with 0,1 here to make it faster.
+      if (((minimizers[mi].second & 1) ^ (value & 1)) == 0) { // same
+        if (direction == kPositive) {
+          uint32_t candidate_position = reference_position - read_position;// > 0 ? reference_position - read_position : 0;
+          // ok, for now we can't see the reference here. So let us don't do the check.
+          // Instead, we do it later some time when we check the candidates.
           uint64_t candidate = (reference_id << 32) | candidate_position;
           hits->push_back(candidate);
         }
-      } else {
-        uint32_t offset = value >> 32;
-        uint32_t num_occurrences = value;
+      } else if (direction == kNegative) {
+        uint32_t candidate_position = reference_position + read_position - kmer_size_ + 1;// < reference_length ? reference_position - read_position : 0;
+        uint64_t candidate = (reference_id << 32) | candidate_position;
+        hits->push_back(candidate);
+      }
+    } else {
+      uint32_t offset = value >> 32;
+      uint32_t num_occurrences = value;
+      for (uint32_t bi = 0; bi < boundary_size; ++bi) {
         // use binary search to locate the coordinate near mate position
         int32_t l = 0, m = 0, r = num_occurrences - 1;
-        uint64_t boundary = (mate_candidates->at(ci).position < range) ? 0 : (mate_candidates->at(ci).position - range) ;
+        uint64_t boundary = boundaries[bi].first;
         while (l <= r) {
           m = (l + r) / 2;
           uint64_t value = (occurrence_table_[offset + m])>>1;
           //std::cerr << "l: " << l << ", r: " << r << ", m: " << m << ", val: " << (value >> 32) << ", " << (uint32_t)value << ", bd: " << (boundary >> 32) << ", " << (uint32_t)(boundary) << "\n";
-          //if (value <= boundary) {
+          //if (value <= boundary) 
           if (value < boundary) {
             l = m + 1;
           } else if (value > boundary) {
@@ -549,7 +571,7 @@ void Index::GenerateCandidatesFromRepetitiveReadWithMateInfo(int error_threshold
         //printf("%s: %d %d: %d %d\n", __func__, m, num_occurrences, (int)(boundary>>32), (int)boundary) ;
         for (uint32_t oi = m; oi < num_occurrences; ++oi) {
           uint64_t value = occurrence_table_[offset + oi];
-          if ((value >> 1) > mate_candidates->at(ci).position + range)
+          if ((value >> 1) > boundaries[bi].second)
             break;
           uint64_t reference_id = value >> 33;
           uint32_t reference_position = value >> 1;
@@ -564,23 +586,22 @@ void Index::GenerateCandidatesFromRepetitiveReadWithMateInfo(int error_threshold
             uint64_t candidate = (reference_id << 32) | candidate_position;
             hits->push_back(candidate);
           }
-        }  
-
-        if (num_occurrences >= (uint32_t)max_seed_frequencies_[0]) {
-          if (previous_repetitive_seed_position > read_position) { // first minimizer
-            *repetitive_seed_length += kmer_size_;
-          } else {
-            if (read_position < previous_repetitive_seed_position + kmer_size_ + window_size_ - 1) {
-              *repetitive_seed_length += read_position - previous_repetitive_seed_position;
-            } else {
-              *repetitive_seed_length += kmer_size_;
-            }
-          }
-          previous_repetitive_seed_position = read_position;
         }
-      } // for mi
-    }
-  }
+      } // for bi
+      if (num_occurrences >= (uint32_t)max_seed_frequencies_[0]) {
+        if (previous_repetitive_seed_position > read_position) { // first minimizer
+          *repetitive_seed_length += kmer_size_;
+        } else {
+          if (read_position < previous_repetitive_seed_position + kmer_size_ + window_size_ - 1) {
+            *repetitive_seed_length += read_position - previous_repetitive_seed_position;
+          } else {
+            *repetitive_seed_length += kmer_size_;
+          }
+        }
+        previous_repetitive_seed_position = read_position;
+      }
+    } // for if-else on occurence
+  } // for mi
 
   std::sort(hits->begin(), hits->end());
   //for (uint32_t i = 0 ; i < hits->size(); ++i)
@@ -630,7 +651,7 @@ void Index::GenerateCandidates(int error_threshold, const std::vector<std::pair<
   //printf("p+n: %d. %d %d\n", positive_hits->size() + negative_hits->size(), repetitive_seed_count, minimizers.size()) ;
 
   int num_required_seeds = minimizers.size() - repetitive_seed_count;
-  num_required_seeds = num_required_seeds >= 1 ? num_required_seeds : 1; 
+  num_required_seeds = num_required_seeds > 1 ? num_required_seeds : 1; 
   num_required_seeds = num_required_seeds > min_num_seeds_required_for_mapping_ ? min_num_seeds_required_for_mapping_ : num_required_seeds;
   GenerateCandidatesOnOneDirection(error_threshold, num_required_seeds, positive_hits, positive_candidates);
   GenerateCandidatesOnOneDirection(error_threshold, num_required_seeds, negative_hits, negative_candidates);
