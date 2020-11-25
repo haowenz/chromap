@@ -753,8 +753,9 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
           {
             num_loaded_pairs_for_loading = LoadPairedEndReadsWithBarcodes(&read_batch1_for_loading, &read_batch2_for_loading, &barcode_batch_for_loading);
           } // end of openmp loading task
-          int grain_size = 10000;
-#pragma omp taskloop grainsize(grain_size) //num_tasks(num_threads_* 50)
+          //int grain_size = 5000;
+//#pragma omp taskloop grainsize(grain_size) //num_tasks(num_threads_* 50)
+#pragma omp taskloop num_tasks(num_threads_* num_threads_)
           for (uint32_t pair_index = 0; pair_index < num_loaded_pairs; ++pair_index) {
             read_batch1.PrepareNegativeSequenceAt(pair_index);
             read_batch2.PrepareNegativeSequenceAt(pair_index);

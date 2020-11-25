@@ -388,8 +388,8 @@ int Index::CollectCandidates(int max_seed_frequency, int repetitive_seed_frequen
               negative_hits->push_back(candidate);
             }
           }
-        } 
-      } 
+        }
+      }
       if (num_occurrences >= (uint32_t)repetitive_seed_frequency){
         if (previous_repetitive_seed_position > read_position) { // first minimizer
           *repetitive_seed_length += kmer_size_;
@@ -492,12 +492,11 @@ void Index::GenerateCandidatesFromRepetitiveReadWithMateInfo(int error_threshold
       ++best_candidate_num;
     }
   }
-  if (best_candidate_num >= 500 
-    || (max_count < min_num_seeds_required_for_mapping_ && best_candidate_num >= 5)
-    || (max_count == min_num_seeds_required_for_mapping_ && best_candidate_num >=50)) 
+  if (best_candidate_num >= 300 || (max_count <= min_num_seeds_required_for_mapping_ && best_candidate_num >= 200)) {
     return;
+  }
   std::vector<std::pair<uint64_t, uint64_t> > boundaries;
-  boundaries.reserve(500);
+  boundaries.reserve(300);
   for (uint32_t ci = 0; ci < mate_candidates_size; ++ci) {
     if (mate_candidates->at(ci).count == max_count) {
       std::pair<uint64_t, uint64_t> r;
@@ -552,7 +551,7 @@ void Index::GenerateCandidatesFromRepetitiveReadWithMateInfo(int error_threshold
     } else {
       uint32_t offset = value >> 32;
       uint32_t num_occurrences = value;
-      uint32_t prev_l = 0;
+      int32_t prev_l = 0;
       for (uint32_t bi = 0; bi < boundary_size; ++bi) {
         // use binary search to locate the coordinate near mate position
         int32_t l = prev_l, m = 0, r = num_occurrences - 1;
@@ -570,7 +569,7 @@ void Index::GenerateCandidatesFromRepetitiveReadWithMateInfo(int error_threshold
             break;
           }
         }
-	prev_l = m;
+        prev_l = m;
         //printf("%s: %d %d: %d %d\n", __func__, m, num_occurrences, (int)(boundary>>32), (int)boundary) ;
         for (uint32_t oi = m; oi < num_occurrences; ++oi) {
           uint64_t value = occurrence_table_[offset + oi];
@@ -619,14 +618,17 @@ void Index::GenerateCandidates(int error_threshold, const std::vector<std::pair<
   int repetitive_seed_count = CollectCandidates(max_seed_frequencies_[0], max_seed_frequencies_[0], minimizers, repetitive_seed_length, positive_hits, negative_hits, false);
   //std::cerr << "rep seed: " << repetitive_seed_count << "\n";
   //if ((repetitive_seed_count > (int)minimizers.size() / 2 && minimizers.size() >= 10)) {
-  bool checkmore = false;
+  bool use_high_frequency_minimizers = false;
   if (positive_hits->size() + negative_hits->size() == 0) {
     positive_hits->clear();
     negative_hits->clear();
     *repetitive_seed_length = 0;
     repetitive_seed_count = CollectCandidates(max_seed_frequencies_[1], max_seed_frequencies_[0], minimizers, repetitive_seed_length, positive_hits, negative_hits, true);
     //recollect = false;
-    checkmore = true;
+    use_high_frequency_minimizers = true;
+    if (positive_hits->size() == 0 || negative_hits->size() == 0) {
+      use_high_frequency_minimizers = false;
+    }
   }
   //if ((positive_candidates->size() == 0 || negative_candidates->size() == 0) && recollect) {
   ////if (positive_candidates->size() + negative_candidates->size() == 0 && recollect) {
@@ -658,8 +660,9 @@ void Index::GenerateCandidates(int error_threshold, const std::vector<std::pair<
   int num_required_seeds = minimizers.size() - repetitive_seed_count;
   num_required_seeds = num_required_seeds > 1 ? num_required_seeds : 1; 
   num_required_seeds = num_required_seeds > min_num_seeds_required_for_mapping_ ? min_num_seeds_required_for_mapping_ : num_required_seeds;
-  if (checkmore)
+  if (use_high_frequency_minimizers) {
   	num_required_seeds = min_num_seeds_required_for_mapping_;
+  }
   GenerateCandidatesOnOneDirection(error_threshold, num_required_seeds, positive_hits, positive_candidates);
   GenerateCandidatesOnOneDirection(error_threshold, num_required_seeds, negative_hits, negative_candidates);
   //fprintf(stderr, "p+n: %d\n", positive_candidates->size() + negative_candidates->size()) ;

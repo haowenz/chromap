@@ -218,7 +218,7 @@ class Chromap {
   bool output_mapping_in_BED_;
   bool output_mapping_in_TagAlign_;
   bool output_mapping_in_PAF_;
-  uint32_t read_batch_size_ = 1000000; // default batch size, # reads for single-end reads, # read pairs for paired-end reads
+  uint32_t read_batch_size_ = 500000; // default batch size, # reads for single-end reads, # read pairs for paired-end reads
   bool low_memory_mode_;
   bool cell_by_bin_;
   int bin_size_;
@@ -258,7 +258,7 @@ class Chromap {
   uint64_t num_reads_ = 0;
   uint64_t num_duplicated_reads_ = 0; // # identical reads
   // For barcode stats
-  uint64_t initial_num_sample_barcodes_ = 100000000;
+  uint64_t initial_num_sample_barcodes_ = 50000000;
   uint64_t num_sample_barcodes_ = 0;
   uint64_t num_barcode_in_whitelist_ = 0;
   uint64_t num_corrected_barcode_ = 0;
