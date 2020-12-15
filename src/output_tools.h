@@ -141,7 +141,7 @@ struct TempMappingFileHandle {
     fread(&num_mappings_on_current_rid, sizeof(size_t), 1, file);
     mappings.resize(block_size);
     num_loaded_mappings_on_current_rid = 0;
-    std::cerr << "Block size: " << block_size << ", initialize temp file " << file_path << "\n";
+    //std::cerr << "Block size: " << block_size << ", initialize temp file " << file_path << "\n";
   }
   inline void FinalizeTempMappingLoading() {
     fclose(file);

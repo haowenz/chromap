@@ -47,9 +47,9 @@ uint32_t SequenceBatch::LoadBatch() {
     }
   }
   if (num_sequences != 0) {
-    std::cerr << "Number of sequences: " << num_sequences << ".\n";
-    std::cerr << "Number of bases: " << num_bases_ << ".\n";
-    std::cerr << "Loaded sequence batch successfully in " << Chromap<>::GetRealTime() - real_start_time << "s.\n";
+    std::cerr << "Loaded sequence batch successfully in " << Chromap<>::GetRealTime() - real_start_time << "s, ";
+    std::cerr << "number of sequences: " << num_sequences << ", ";
+    std::cerr << "number of bases: " << num_bases_ << ".\n";
   } else {
     std::cerr << "No more sequences.\n";
   }
@@ -114,9 +114,9 @@ uint32_t SequenceBatch::LoadAllSequences() {
     }
     length = kseq_read(sequence_kseq_);
   }
-  std::cerr << "Number of sequences: " << num_sequences << ".\n";
-  std::cerr << "Number of bases: " << num_bases_ << ".\n";
-  std::cerr << "Loaded all sequences successfully in " << Chromap<>::GetRealTime() - real_start_time << "s.\n";
+  std::cerr << "Loaded all sequences successfully in " << Chromap<>::GetRealTime() - real_start_time << "s, ";
+  std::cerr << "number of sequences: " << num_sequences << ", ";
+  std::cerr << "number of bases: " << num_bases_ << ".\n";
   return num_sequences;
 }
 

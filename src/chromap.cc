@@ -2,6 +2,7 @@
 
 #include <assert.h>
 #include <fstream>
+#include <iomanip>
 #include <iostream> 
 #include <limits>
 #include <math.h>
@@ -441,7 +442,7 @@ uint32_t Chromap<MappingRecord>::GetNumOverlappedPeaks(uint32_t ref_id, const Ma
 
 template <typename MappingRecord>
 uint32_t Chromap<MappingRecord>::LoadPairedEndReadsWithBarcodes(SequenceBatch *read_batch1, SequenceBatch *read_batch2, SequenceBatch *barcode_batch) {
-  double real_start_time = Chromap<>::GetRealTime();
+  //double real_start_time = Chromap<>::GetRealTime();
   uint32_t num_loaded_pairs = 0;
   while (num_loaded_pairs < read_batch_size_) {
     bool no_more_read1 = read_batch1->LoadOneSequenceAndSaveAt(num_loaded_pairs);
@@ -465,11 +466,11 @@ uint32_t Chromap<MappingRecord>::LoadPairedEndReadsWithBarcodes(SequenceBatch *r
     }
     ++num_loaded_pairs;
   }
-  if (num_loaded_pairs > 0) {
-    std::cerr << "Loaded " << num_loaded_pairs << " pairs in "<< Chromap<>::GetRealTime() - real_start_time << "s.\n";
-  } else {
-    std::cerr << "No more reads.\n";
-  }
+  //if (num_loaded_pairs > 0) {
+  //  std::cerr << "Loaded " << num_loaded_pairs << " pairs in "<< Chromap<>::GetRealTime() - real_start_time << "s. ";
+  //} else {
+  //  std::cerr << "No more reads.\n";
+  //}
   return num_loaded_pairs;
 }
 
@@ -655,7 +656,8 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
   }
   output_tools_->InitializeMappingOutput(mapping_output_file_path_);
   uint32_t num_mappings_in_mem = 0;
-  uint64_t max_num_mappings_in_mem = 1 * ((uint64_t)1 << 30) / sizeof(MappingRecord);
+  //uint64_t max_num_mappings_in_mem = 1 * ((uint64_t)1 << 30) / sizeof(MappingRecord);
+  uint64_t max_num_mappings_in_mem = 1 * ((uint64_t)1 << 28) / sizeof(MappingRecord);
   // Preprocess barcodes for single cell data
   if (!is_bulk_data_) {
     if (!barcode_whitelist_file_path_.empty()) {
@@ -745,8 +747,8 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
       std::mt19937 generator(11);
 #pragma omp single
       {
+        double real_batch_start_time = Chromap<>::GetRealTime();
         while (num_loaded_pairs > 0) {
-          double real_batch_start_time = Chromap<>::GetRealTime();
           num_reads_ += num_loaded_pairs;
           num_reads_ += num_loaded_pairs;
 #pragma omp task
@@ -954,6 +956,8 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
             }
           }
 #pragma omp taskwait
+          std::cerr << "Mapped " << num_loaded_pairs << " read pairs in " << Chromap<>::GetRealTime() - real_batch_start_time << "s.\n";
+          real_batch_start_time = Chromap<>::GetRealTime();
           // Swap to next batch
           num_loaded_pairs = num_loaded_pairs_for_loading;
           read_batch1_for_loading.SwapSequenceBatch(read_batch1);
@@ -976,7 +980,6 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
               }
             }
           }
-          std::cerr << "Mapped in " << Chromap<>::GetRealTime() - real_batch_start_time << "s.\n";
         }
       } // end of openmp single
       num_barcode_in_whitelist_ += thread_num_barcode_in_whitelist;
@@ -1006,9 +1009,9 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
       temp_mapping_file_handle.file_path = mapping_output_file_path_ + ".temp" + std::to_string(temp_mapping_file_handles_.size());
       temp_mapping_file_handles_.emplace_back(temp_mapping_file_handle);
       SortOutputMappings(num_reference_sequences, &mappings_on_diff_ref_seqs_);
-      double output_temp_mapping_start_time = Chromap<>::GetRealTime();
+      //double output_temp_mapping_start_time = Chromap<>::GetRealTime();
       output_tools_-> OutputTempMapping(temp_mapping_file_handle.file_path, num_reference_sequences, mappings_on_diff_ref_seqs_);
-      std::cerr << "Output temp mappings in " << Chromap<>::GetRealTime() - output_temp_mapping_start_time << "s.\n";
+      //std::cerr << "Output temp mappings in " << Chromap<>::GetRealTime() - output_temp_mapping_start_time << "s.\n";
       num_mappings_in_mem = 0;
       for (uint32_t i = 0; i < num_reference_sequences; ++i) {
         mappings_on_diff_ref_seqs_[i].clear();
@@ -1027,6 +1030,9 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
     uint32_t last_rid = std::numeric_limits<uint32_t>::max();
     MappingRecord last_mapping;
     uint8_t dup_count = 0;
+    uint64_t num_uni_mappings = 0;
+    uint64_t num_multi_mappings = 0;
+    uint64_t num_mappings_passing_filters = 0;
     while (!all_merged) {
       // Merge, dedupe and output
       // Find min first (sorted by rid and then barcode and then positions)
@@ -1049,7 +1055,7 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
         } else {
           if (dup_count > 0) {
             if (last_mapping.mapq >= mapq_threshold_) {
-              if (allocate_multi_mappings_ || (only_output_unique_mappings_ && last_mapping.is_unique == 1)) {
+              //if (allocate_multi_mappings_ || (only_output_unique_mappings_ && last_mapping.is_unique == 1)) {
                 last_mapping.num_dups = dup_count;
                 if (Tn5_shift_) {
                   last_mapping.fragment_start_position += 4;
@@ -1058,7 +1064,13 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
                   last_mapping.negative_alignment_length -= 5;
                 }
                 output_tools_->AppendMapping(last_rid, reference, last_mapping);
-              }
+                ++num_mappings_passing_filters;
+              //}
+            }
+            if (last_mapping.is_unique == 1) {
+              ++num_uni_mappings;
+            } else {
+              ++num_multi_mappings;
             }
           }
           last_mapping = current_min_mapping;
@@ -1076,7 +1088,7 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
       }
     }
     if (last_mapping.mapq >= mapq_threshold_) {
-      if (allocate_multi_mappings_ || (only_output_unique_mappings_ && last_mapping.is_unique == 1)) {
+      //if (allocate_multi_mappings_ || (only_output_unique_mappings_ && last_mapping.is_unique == 1)) {
         last_mapping.num_dups = dup_count;
         if (Tn5_shift_) {
           last_mapping.fragment_start_position += 4;
@@ -1085,16 +1097,24 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
           last_mapping.negative_alignment_length -= 5;
         }
         output_tools_->AppendMapping(last_rid, reference, last_mapping);
-      }
+        ++num_mappings_passing_filters;
+      //}
     }
+    if (last_mapping.is_unique == 1) {
+      ++num_uni_mappings;
+    } else {
+      ++num_multi_mappings;
+    }
+    // Delete temp files
     for (size_t hi = 0; hi < temp_mapping_file_handles_.size(); ++hi) {
       temp_mapping_file_handles_[hi].FinalizeTempMappingLoading();
       remove(temp_mapping_file_handles_[hi].file_path.c_str());
     }
     std::cerr << "Sorted, deduped and outputed mappings in " << Chromap<>::GetRealTime() - sort_and_dedupe_start_time << "s.\n";
-    // Delete temp files
+    std::cerr << "# uni-mappings: " << num_uni_mappings << ", # multi-mappings: " << num_multi_mappings << ", total: " << num_uni_mappings + num_multi_mappings << ".\n";
+    std::cerr << "Number of output mappings (passed filters): " << num_mappings_passing_filters << "\n";
   } else {
-    OutputMappingStatistics(num_reference_sequences, mappings_on_diff_ref_seqs_, mappings_on_diff_ref_seqs_);
+    //OutputMappingStatistics(num_reference_sequences, mappings_on_diff_ref_seqs_, mappings_on_diff_ref_seqs_);
     if (Tn5_shift_) {
       ApplyTn5ShiftOnPairedEndMapping(num_reference_sequences, &mappings_on_diff_ref_seqs_);
     }
@@ -1128,6 +1148,7 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
 
 template <typename MappingRecord>
 void Chromap<MappingRecord>::OutputMappingsInVector(uint8_t mapq_threshold, uint32_t num_reference_sequences, const SequenceBatch &reference, const std::vector<std::vector<MappingRecord> > &mappings) {
+  uint64_t num_mappings_passing_filters = 0;
   for (uint32_t ri = 0; ri < num_reference_sequences; ++ri) {
     for (auto it = mappings[ri].begin(); it != mappings[ri].end(); ++it) {
       uint8_t mapq = (it->mapq);
@@ -1135,10 +1156,12 @@ void Chromap<MappingRecord>::OutputMappingsInVector(uint8_t mapq_threshold, uint
       if (mapq >= mapq_threshold) {
         //if (allocate_multi_mappings_ || (only_output_unique_mappings_ && is_unique == 1)) {
           output_tools_->AppendMapping(ri, reference, *it);
+          ++num_mappings_passing_filters;
         //}
       }
     }
   }
+  std::cerr << "Number of output mappings (passed filters): " << num_mappings_passing_filters << "\n";
 }
 
 template <typename MappingRecord>
@@ -1578,8 +1601,7 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
                 //	positive_candidates.size() + negative_candidates.size()) ;
                 //if (positive_hits.size() + negative_hits.size() > minimizers.size() * 100)
               }
-              if (read_index < num_loaded_reads / 2 
-	        && (read_index <  num_loaded_reads / num_threads_ || num_reads_ < 5000000)) {
+              if (read_index < num_loaded_reads / 2 && (read_index <  num_loaded_reads / num_threads_ || num_reads_ < 5000000)) {
                 mm_history[read_index].minimizers = minimizers;
                 mm_history[read_index].positive_candidates = positive_candidates;
                 mm_history[read_index].negative_candidates = negative_candidates;
@@ -1609,7 +1631,7 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
             }
           }
           for (uint32_t read_index = 0; read_index < num_loaded_reads / 2; ++read_index) {
-            if ( num_reads_ >= 5000000 && read_index >= num_loaded_reads / num_threads_)
+            if (num_reads_ >= 5000000 && read_index >= num_loaded_reads / num_threads_)
               break;
             mm_to_candidates_cache.Update(mm_history[read_index].minimizers, mm_history[read_index].positive_candidates, mm_history[read_index].negative_candidates, mm_history[read_index].repetitive_seed_length);
             if (mm_history[read_index].positive_candidates.size() < mm_history[read_index].positive_candidates.capacity() / 2)
@@ -1820,7 +1842,7 @@ uint32_t Chromap<MappingRecord>::LoadSingleEndReadsWithBarcodes(SequenceBatch *r
     ++num_loaded_reads;
   }
   if (num_loaded_reads > 0) {
-    std::cerr << "Loaded " << num_loaded_reads << " reads in "<< Chromap<>::GetRealTime() - real_start_time << "s.\n";
+    std::cerr << "Loaded " << num_loaded_reads << " reads in "<< Chromap<>::GetRealTime() - real_start_time << "s. ";
   } else {
     std::cerr << "No more reads.\n";
   }
@@ -1843,7 +1865,7 @@ void Chromap<MappingRecord>::ConstructIndex() {
 
 template <typename MappingRecord>
 uint32_t Chromap<MappingRecord>::MoveMappingsInBuffersToMappingContainer(uint32_t num_reference_sequences, std::vector<std::vector<std::vector<MappingRecord> > > *mappings_on_diff_ref_seqs_for_diff_threads_for_saving) {
-  double real_start_time = Chromap<>::GetRealTime();
+  //double real_start_time = Chromap<>::GetRealTime();
   uint32_t num_moved_mappings = 0;
   for (int ti = 0; ti < num_threads_; ++ti) {
     for (uint32_t i = 0; i < num_reference_sequences; ++i) {
@@ -1852,19 +1874,19 @@ uint32_t Chromap<MappingRecord>::MoveMappingsInBuffersToMappingContainer(uint32_
       (*mappings_on_diff_ref_seqs_for_diff_threads_for_saving)[ti][i].clear();
     }
   }
-  std::cerr << "Move mappings in " << Chromap<>::GetRealTime() - real_start_time << "s.\n";
+  //std::cerr << "Moved mappings in " << Chromap<>::GetRealTime() - real_start_time << "s.\n";
   return num_moved_mappings;
 }
 
 template <typename MappingRecord>
 void Chromap<MappingRecord>::SortOutputMappings(uint32_t num_reference_sequences, std::vector<std::vector<MappingRecord> > *mappings) {
-  double real_dedupe_start_time = Chromap<>::GetRealTime();
+  //double real_dedupe_start_time = Chromap<>::GetRealTime();
   uint32_t num_mappings = 0;
   for (uint32_t ri = 0; ri < num_reference_sequences; ++ri) {
     std::sort((*mappings)[ri].begin(), (*mappings)[ri].end());
     num_mappings += (*mappings)[ri].size(); 
   }
-  std::cerr << "Sorted " << num_mappings << " elements in " << Chromap<>::GetRealTime() - real_dedupe_start_time << "s.\n";
+  //std::cerr << "Sorted " << num_mappings << " elements in " << Chromap<>::GetRealTime() - real_dedupe_start_time << "s.\n";
 }
 
 template <typename MappingRecord>
@@ -3108,6 +3130,7 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
     peak_merge_max_length = result["peak-merge-max-length"].as<int>();
   }
 
+  std::cerr << std::setprecision(2) << std::fixed;
   if (result.count("i")) {
     std::string reference_file_path;
     if (result.count("r")) {
@@ -3128,7 +3151,7 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
     chromap::Chromap<> chromap_for_indexing(kmer_size, window_size, num_threads, reference_file_path, output_file_path);
     chromap_for_indexing.ConstructIndex();
   } else if (result.count("m")) {
-    std::cerr << "Map reads.\n";
+    std::cerr << "Start to map reads.\n";
     std::string reference_file_path;
     if (result.count("r")) {
       reference_file_path = result["ref"].as<std::string>();
@@ -3177,7 +3200,7 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
         chromap::Chromap<>::ExitWithMessage("No barcode file specified but asked to output matrix files!");
       }
     }
-    std::cerr << "error threshold: " << error_threshold << ", match score: " << match_score << ", mismatch_penalty: " << mismatch_penalty << ", gap open penalties for deletions and insertions: " << gap_open_penalties[0] << "," << gap_open_penalties[1] << ", gap extension penalties for deletions and insertions: " << gap_extension_penalties[0] << "," << gap_extension_penalties[1] << ", min-num-seeds: " << min_num_seeds_required_for_mapping << ", max-seed-frequency: " << max_seed_frequencies[0] << "," << max_seed_frequencies[1] << ", max-num-best-mappings: " << max_num_best_mappings << ", max-insert-size: " << max_insert_size << ", MAPQ-threshold: " << (int)mapq_threshold << ", min-read-length: " << min_read_length << ", multi-mapping-allocation-distance: " << multi_mapping_allocation_distance << ", multi-mapping-allocation-seed: " << multi_mapping_allocation_seed << ", drop-repetitive-reads: " << drop_repetitive_reads << "\n";
+    std::cerr << "Parameters: error threshold: " << error_threshold << ", match score: " << match_score << ", mismatch_penalty: " << mismatch_penalty << ", gap open penalties for deletions and insertions: " << gap_open_penalties[0] << "," << gap_open_penalties[1] << ", gap extension penalties for deletions and insertions: " << gap_extension_penalties[0] << "," << gap_extension_penalties[1] << ", min-num-seeds: " << min_num_seeds_required_for_mapping << ", max-seed-frequency: " << max_seed_frequencies[0] << "," << max_seed_frequencies[1] << ", max-num-best-mappings: " << max_num_best_mappings << ", max-insert-size: " << max_insert_size << ", MAPQ-threshold: " << (int)mapq_threshold << ", min-read-length: " << min_read_length << ", multi-mapping-allocation-distance: " << multi_mapping_allocation_distance << ", multi-mapping-allocation-seed: " << multi_mapping_allocation_seed << ", drop-repetitive-reads: " << drop_repetitive_reads << "\n";
     std::cerr << "Number of threads: " << num_threads << "\n";
     if (is_bulk_data) {
       std::cerr << "Analyze bulk data.\n";
@@ -3225,16 +3248,16 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
     std::cerr << "Reference file: " << reference_file_path << "\n";
     std::cerr << "Index file: " << index_file_path << "\n";
     for (size_t i = 0; i < read_file1_paths.size(); ++i) {
-      std::cerr << i << " read file 1: " << read_file1_paths[i] << "\n";
+      std::cerr << i + 1 << "th read 1 file: " << read_file1_paths[i] << "\n";
     }
     if (result.count("2") != 0) {
       for (size_t i = 0; i < read_file2_paths.size(); ++i) {
-        std::cerr << i << " read file 2: " << read_file2_paths[i] << "\n";
+        std::cerr << i + 1 << "th read 2 file: " << read_file2_paths[i] << "\n";
       }
     }
     if (result.count("b") != 0) {
       for (size_t i = 0; i < barcode_file_paths.size(); ++i) {
-        std::cerr << i << " cell barcode file: " << barcode_file_paths[i] << "\n";
+        std::cerr << i + 1 << "th cell barcode file: " << barcode_file_paths[i] << "\n";
       }
     }
     if (result.count("barcode-whitelist") != 0) {
