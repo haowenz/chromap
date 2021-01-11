@@ -590,21 +590,28 @@ int ksw_semi_global2(int qlen, const char *query, int tlen, const char *target, 
 	}
 	//score = eh[qlen].h;
 	score = eh[qlen].h;
+
+  int max_score_position = qlen;
   for (j = 1; j < w; ++j) {
-    score = eh[qlen - j].h > score ? eh[qlen - j].h : score;
+    if (eh[qlen - j].h > score) {
+      score = eh[qlen - j].h;
+      max_score_position = qlen - j;
+    }
   }
 	if (n_cigar_ && cigar_) { // backtrack
 		int n_cigar = 0, m_cigar = 0, which = 0;
 		uint32_t *cigar = 0, tmp;
-		i = tlen - 1; k = (i + w + 1 < qlen? i + w + 1 : qlen) - 1; // (i,k) points to the last cell
+		//i = tlen - 1; k = (i + w + 1 < qlen? i + w + 1 : qlen) - 1; // (i,k) points to the last cell
+		i = tlen - 1; k = max_score_position - 1; // (i,k) points to the last cell
 		while (i >= 0 && k >= 0) {
-			which = z[(long)i * n_col + (k - (i > w? i - w : 0))] >> (which<<1) & 3;
+			//which = z[(long)i * n_col + (k - (i > w? i - w : 0))] >> (which<<1) & 3;
+			which = z[(long)i * n_col + (k - i)] >> (which<<1) & 3;
 			if (which == 0)      cigar = push_cigar(&n_cigar, &m_cigar, cigar, 0, 1), --i, --k;
 			else if (which == 1) cigar = push_cigar(&n_cigar, &m_cigar, cigar, 2, 1), --i;
 			else                 cigar = push_cigar(&n_cigar, &m_cigar, cigar, 1, 1), --k;
 		}
 		if (i >= 0) cigar = push_cigar(&n_cigar, &m_cigar, cigar, 2, i + 1);
-		if (k >= 0) cigar = push_cigar(&n_cigar, &m_cigar, cigar, 1, k + 1);
+		//if (k >= 0) cigar = push_cigar(&n_cigar, &m_cigar, cigar, 1, k + 1);
 		for (i = 0; i < n_cigar>>1; ++i) // reverse CIGAR
 			tmp = cigar[i], cigar[i] = cigar[n_cigar-1-i], cigar[n_cigar-1-i] = tmp;
 		*n_cigar_ = n_cigar, *cigar_ = cigar;
