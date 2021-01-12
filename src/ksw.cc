@@ -502,7 +502,7 @@ static inline uint32_t *push_cigar(int *n_cigar, int *m_cigar, uint32_t *cigar, 
 	return cigar;
 }
 
-int ksw_semi_global2(int qlen, const char *query, int tlen, const char *target, int m, const int8_t *mat, int o_del, int e_del, int o_ins, int e_ins, int w, int *n_cigar_, uint32_t **cigar_)
+int ksw_semi_global3(int qlen, const char *query, int tlen, const char *target, int m, const int8_t *mat, int o_del, int e_del, int o_ins, int e_ins, int w, int *n_cigar_, uint32_t **cigar_, int *mapping_start_position, int *mapping_end_position)
 {
 	eh_t *eh;
 	int8_t *qp; // query profile
@@ -598,6 +598,9 @@ int ksw_semi_global2(int qlen, const char *query, int tlen, const char *target, 
       max_score_position = qlen - j;
     }
   }
+  if (mapping_end_position) {
+    *mapping_end_position = max_score_position;
+  }
 	if (n_cigar_ && cigar_) { // backtrack
 		int n_cigar = 0, m_cigar = 0, which = 0;
 		uint32_t *cigar = 0, tmp;
@@ -611,6 +614,9 @@ int ksw_semi_global2(int qlen, const char *query, int tlen, const char *target, 
 			else                 cigar = push_cigar(&n_cigar, &m_cigar, cigar, 1, 1), --k;
 		}
 		if (i >= 0) cigar = push_cigar(&n_cigar, &m_cigar, cigar, 2, i + 1);
+    if (mapping_start_position) {
+      *mapping_start_position = k;
+    }
 		//if (k >= 0) cigar = push_cigar(&n_cigar, &m_cigar, cigar, 1, k + 1);
 		for (i = 0; i < n_cigar>>1; ++i) // reverse CIGAR
 			tmp = cigar[i], cigar[i] = cigar[n_cigar-1-i], cigar[n_cigar-1-i] = tmp;
@@ -623,6 +629,11 @@ int ksw_semi_global2(int qlen, const char *query, int tlen, const char *target, 
 int ksw_semi_global(int qlen, const char *query, int tlen, const char *target, int m, const int8_t *mat, int gapo, int gape, int w, int *n_cigar_, uint32_t **cigar_)
 {
 	return ksw_semi_global2(qlen, query, tlen, target, m, mat, gapo, gape, gapo, gape, w, n_cigar_, cigar_);
+}
+
+int ksw_semi_global2(int qlen, const char *query, int tlen, const char *target, int m, const int8_t *mat, int o_del, int e_del, int o_ins, int e_ins, int w, int *n_cigar_, uint32_t **cigar_)
+{
+	return ksw_semi_global3(qlen, query, tlen, target, m, mat, o_del, e_del, o_ins, e_ins, w, n_cigar_, cigar_, NULL, NULL);
 }
 
 int ksw_global2(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int o_del, int e_del, int o_ins, int e_ins, int w, int *n_cigar_, uint32_t **cigar_)
