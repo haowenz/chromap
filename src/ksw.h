@@ -84,6 +84,7 @@ extern "C" {
 	int ksw_global2(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int o_del, int e_del, int o_ins, int e_ins, int w, int *n_cigar, uint32_t **cigar);
 	int ksw_semi_global(int qlen, const char *query, int tlen, const char *target, int m, const int8_t *mat, int gapo, int gape, int w, int *n_cigar, uint32_t **cigar);
 	int ksw_semi_global2(int qlen, const char *query, int tlen, const char *target, int m, const int8_t *mat, int o_del, int e_del, int o_ins, int e_ins, int w, int *n_cigar, uint32_t **cigar);
+	int ksw_semi_global3(int qlen, const char *query, int tlen, const char *target, int m, const int8_t *mat, int o_del, int e_del, int o_ins, int e_ins, int w, int *n_cigar, uint32_t **cigar, int *mapping_start_position, int *mapping_end_position);
 
 	/**
 	 * Extend alignment
