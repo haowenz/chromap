@@ -1593,16 +1593,15 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
           {
             num_loaded_reads_for_loading = LoadSingleEndReadsWithBarcodes(&read_batch_for_loading, &barcode_batch_for_loading);
           } // end of openmp loading task
-          int grain_size = 10000;
-#pragma omp taskloop grainsize(grain_size) //num_tasks(num_threads_* 50)
+          //int grain_size = 10000;
+//#pragma omp taskloop grainsize(grain_size) //num_tasks(num_threads_* 50)
+#pragma omp taskloop num_tasks(num_threads_* num_threads_)
           for (uint32_t read_index = 0; read_index < num_loaded_reads; ++read_index) {
             read_batch.PrepareNegativeSequenceAt(read_index);
-            //std::cerr << "Generated negative sequence!\n";
             minimizers.clear();
             minimizers.reserve(read_batch.GetSequenceLengthAt(read_index) / window_size_ * 2);
             index.GenerateMinimizerSketch(read_batch, read_index, &minimizers);
             if (minimizers.size() > 0) {
-              //std::cerr << "Generated minimizers!\n";
               positive_hits.clear();
               negative_hits.clear();
               positive_candidates.clear();
@@ -1610,9 +1609,6 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
               uint32_t repetitive_seed_length = 0;
               if (mm_to_candidates_cache.Query(minimizers, positive_candidates, negative_candidates, repetitive_seed_length, read_batch.GetSequenceLengthAt(read_index)) == -1) {
                 index.GenerateCandidates(error_threshold_, minimizers, &repetitive_seed_length, &positive_hits, &negative_hits, &positive_candidates, &negative_candidates);
-                //printf("%d %d %d\n", minimizers.size(), positive_hits.size() + negative_hits.size(), 
-                //	positive_candidates.size() + negative_candidates.size()) ;
-                //if (positive_hits.size() + negative_hits.size() > minimizers.size() * 100)
               }
               if (read_index < num_loaded_reads / 2 && (read_index <  num_loaded_reads / num_threads_ || num_reads_ < 5000000)) {
                 mm_history[read_index].minimizers = minimizers;
@@ -1620,7 +1616,6 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
                 mm_history[read_index].negative_candidates = negative_candidates;
               }
               uint32_t current_num_candidates = positive_candidates.size() + negative_candidates.size(); 
-              //std::cerr << "Generated candidates!\n";
               if (current_num_candidates > 0) {
                 thread_num_candidates += current_num_candidates;
                 positive_mappings.clear();
@@ -1631,12 +1626,10 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
                 int num_best_mappings, num_second_best_mappings;
                 VerifyCandidates(read_batch, read_index, reference, minimizers, positive_candidates, negative_candidates, &positive_mappings, &positive_split_sites, &negative_mappings, &negative_split_sites, &min_num_errors, &num_best_mappings, &second_min_num_errors, &num_second_best_mappings);
                 uint32_t current_num_mappings = positive_mappings.size() + negative_mappings.size();
-                //std::cerr << "Verified candidates!\n";
                 if (current_num_mappings > 0) {
                   std::vector<std::vector<MappingRecord> > &mappings_on_diff_ref_seqs = mappings_on_diff_ref_seqs_for_diff_threads[omp_get_thread_num()];
                   GenerateBestMappingsForSingleEndRead(min_num_errors, num_best_mappings, second_min_num_errors, num_second_best_mappings, read_batch, read_index, reference, barcode_batch, positive_mappings, positive_split_sites, negative_mappings, negative_split_sites, &mappings_on_diff_ref_seqs);
                   thread_num_mappings += std::min(num_best_mappings, max_num_best_mappings_);
-                  //std::cerr << "Generated output!\n";
                   ++thread_num_mapped_reads;
                   if (num_best_mappings == 1) {
                     ++thread_num_uniquely_mapped_reads;
@@ -1646,13 +1639,16 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
             }
           }
           for (uint32_t read_index = 0; read_index < num_loaded_reads / 2; ++read_index) {
-            if (num_reads_ >= 5000000 && read_index >= num_loaded_reads / num_threads_)
+            if (num_reads_ >= 5000000 && read_index >= num_loaded_reads / num_threads_) {
               break;
+            }
             mm_to_candidates_cache.Update(mm_history[read_index].minimizers, mm_history[read_index].positive_candidates, mm_history[read_index].negative_candidates, mm_history[read_index].repetitive_seed_length);
-            if (mm_history[read_index].positive_candidates.size() < mm_history[read_index].positive_candidates.capacity() / 2)
+            if (mm_history[read_index].positive_candidates.size() < mm_history[read_index].positive_candidates.capacity() / 2) {
               std::vector<Candidate>().swap(mm_history[read_index].positive_candidates);
-            if (mm_history[read_index].negative_candidates.size() < mm_history[read_index].negative_candidates.capacity() / 2)
+            }
+            if (mm_history[read_index].negative_candidates.size() < mm_history[read_index].negative_candidates.capacity() / 2) {
               std::vector<Candidate>().swap(mm_history[read_index].negative_candidates);
+            }
           }
           //std::cerr<<"cache memusage: " << mm_to_candidates_cache.GetMemoryBytes() <<"\n" ;
 #pragma omp taskwait
@@ -1765,24 +1761,12 @@ void Chromap<MappingRecord>::ProcessBestMappingsForSingleEndRead(Direction mappi
         read_length = read_batch.GetSequenceLengthAt(read_index);
         uint32_t rid = mappings[mi].second >> 32;
         uint32_t position = mappings[mi].second;
+        int split_site = 0;
         if (split_alignment_) {
-          //if (split_sites[mi] < (int)read_length - 1) {
-          //  read_length = split_sites[mi] - error_threshold_ >= 30 ? split_sites[mi] - error_threshold_ : split_sites[mi];
-          //} else {
-            read_length = split_sites[mi];
-          //}
-          //if (mapping_direction == kPositive) { 
-          //  read_length = split_sites[mi];
-          //} else {
-          //  read_length = read_length - split_sites[mi];
-          //}
+          read_length = split_sites[mi];
+          split_site =  split_sites[mi];
         }
         uint32_t verification_window_start_position = position + 1 > (read_length + error_threshold_) ? position + 1 - read_length - error_threshold_ : 0;
-        //if (split_alignment_) {
-        //  if (mapping_direction != kPositive) { 
-        //    verification_window_start_position = position > (uint32_t)error_threshold_ ? position - error_threshold_ : 0;
-        //  }
-        //}
         if (position >= reference.GetSequenceLengthAt(rid)) {
           verification_window_start_position = reference.GetSequenceLengthAt(rid) - error_threshold_ - read_length; 
         }
@@ -1805,18 +1789,18 @@ void Chromap<MappingRecord>::ProcessBestMappingsForSingleEndRead(Direction mappi
             mapq = GetMAPQForSingleEndRead(error_threshold_, 0, 0, mapping_end_position - mapping_start_position + 1, min_num_errors, num_best_mappings, second_min_num_errors, num_second_best_mappings);
             EmplaceBackMappingRecord(read_id, read_name, 1, verification_window_start_position + mapping_start_position, rid, flag, 1, is_unique, mapq, min_num_errors, n_cigar, cigar, &((*mappings_on_diff_ref_seqs)[rid]));
           } else {
-            int n_cigar = 0;
-            uint32_t *cigar;
-            int mapping_end_position;
-            ksw_semi_global3(read_length + 2 * error_threshold_, reference.GetSequenceAt(rid) + verification_window_start_position, read_length, read, 5, mat, gap_open_penalties_[0], gap_extension_penalties_[0], gap_open_penalties_[1], gap_extension_penalties_[1], error_threshold_ * 2 + 1, &n_cigar, &cigar, &mapping_start_position, &mapping_end_position);
-            mapq = GetMAPQForSingleEndRead(error_threshold_, 0, 0, mapping_end_position - mapping_start_position + 1, min_num_errors, num_best_mappings, second_min_num_errors, num_second_best_mappings);
-            uint32_t fragment_start_position = verification_window_start_position + mapping_start_position;
-            uint16_t fragment_length = mapping_end_position - mapping_start_position + 1;
-            
-            //BandedTraceback(min_num_errors, reference.GetSequenceAt(rid) + verification_window_start_position, read, read_length, &mapping_start_position);
+            //int n_cigar = 0;
+            //uint32_t *cigar;
+            //int mapping_end_position;
+            //ksw_semi_global3(read_length + 2 * error_threshold_, reference.GetSequenceAt(rid) + verification_window_start_position, read_length, read, 5, mat, gap_open_penalties_[0], gap_extension_penalties_[0], gap_open_penalties_[1], gap_extension_penalties_[1], error_threshold_ * 2 + 1, &n_cigar, &cigar, &mapping_start_position, &mapping_end_position);
+            //mapq = GetMAPQForSingleEndRead(error_threshold_, 0, 0, mapping_end_position - mapping_start_position + 1, min_num_errors, num_best_mappings, second_min_num_errors, num_second_best_mappings);
             //uint32_t fragment_start_position = verification_window_start_position + mapping_start_position;
-            //uint16_t fragment_length = position - fragment_start_position + 1;
-            //mapq = GetMAPQForSingleEndRead(error_threshold_, 0, 0, fragment_length, min_num_errors, num_best_mappings, second_min_num_errors, num_second_best_mappings);
+            //uint16_t fragment_length = mapping_end_position - mapping_start_position + 1;
+            
+            BandedTraceback(min_num_errors, reference.GetSequenceAt(rid) + verification_window_start_position, read, read_length, &mapping_start_position);
+            uint32_t fragment_start_position = verification_window_start_position + mapping_start_position;
+            uint16_t fragment_length = position - fragment_start_position + 1;
+            mapq = GetMAPQForSingleEndRead(error_threshold_, 0, 0, fragment_length, min_num_errors, num_best_mappings, second_min_num_errors, num_second_best_mappings);
             if (output_mapping_in_PAF_) {
               EmplaceBackMappingRecord(read_id, read_name, (uint16_t)read_length, barcode_key, fragment_start_position, fragment_length, mapq, direction, is_unique, 1, &((*mappings_on_diff_ref_seqs)[rid]));
             } else {
@@ -1829,22 +1813,22 @@ void Chromap<MappingRecord>::ProcessBestMappingsForSingleEndRead(Direction mappi
             int n_cigar = 0;
             uint32_t *cigar;
             int mapping_end_position;
-            ksw_semi_global3(read_length + 2 * error_threshold_, reference.GetSequenceAt(rid) + verification_window_start_position, read_length, negative_read.data() + split_sites[mi], 5, mat, gap_open_penalties_[0], gap_extension_penalties_[0], gap_open_penalties_[1], gap_extension_penalties_[1], error_threshold_ * 2 + 1, &n_cigar, &cigar, &mapping_start_position, &mapping_end_position);
+            ksw_semi_global3(read_length + 2 * error_threshold_, reference.GetSequenceAt(rid) + verification_window_start_position, read_length, negative_read.data() + split_site, 5, mat, gap_open_penalties_[0], gap_extension_penalties_[0], gap_open_penalties_[1], gap_extension_penalties_[1], error_threshold_ * 2 + 1, &n_cigar, &cigar, &mapping_start_position, &mapping_end_position);
             mapq = GetMAPQForSingleEndRead(error_threshold_, 0, 0, mapping_end_position - mapping_start_position + 1, min_num_errors, num_best_mappings, second_min_num_errors, num_second_best_mappings);
-            EmplaceBackMappingRecord(read_id, read_name, 1, verification_window_start_position + mapping_end_position - 1, rid, flag, 0, is_unique, mapq, min_num_errors, n_cigar, cigar, &((*mappings_on_diff_ref_seqs)[rid]));
+            EmplaceBackMappingRecord(read_id, read_name, 1, verification_window_start_position + mapping_end_position, rid, flag, 0, is_unique, mapq, min_num_errors, n_cigar, cigar, &((*mappings_on_diff_ref_seqs)[rid]));
           } else {
-            int n_cigar = 0;
-            uint32_t *cigar;
-            int mapping_end_position;
-            ksw_semi_global3(read_length + 2 * error_threshold_, reference.GetSequenceAt(rid) + verification_window_start_position, read_length, negative_read.data() + split_sites[mi], 5, mat, gap_open_penalties_[0], gap_extension_penalties_[0], gap_open_penalties_[1], gap_extension_penalties_[1], error_threshold_ * 2 + 1, &n_cigar, &cigar, &mapping_start_position, &mapping_end_position);
-            mapq = GetMAPQForSingleEndRead(error_threshold_, 0, 0, mapping_end_position - mapping_start_position + 1, min_num_errors, num_best_mappings, second_min_num_errors, num_second_best_mappings);
-            uint32_t fragment_start_position = verification_window_start_position + mapping_start_position;
-            uint16_t fragment_length = mapping_end_position - mapping_start_position + 1;
-
-            //BandedTraceback(min_num_errors, reference.GetSequenceAt(rid) + verification_window_start_position, negative_read.data() + split_sites[mi], read_length, &mapping_start_position);
+            //int n_cigar = 0;
+            //uint32_t *cigar;
+            //int mapping_end_position;
+            //ksw_semi_global3(read_length + 2 * error_threshold_, reference.GetSequenceAt(rid) + verification_window_start_position, read_length, negative_read.data() + split_sites[mi], 5, mat, gap_open_penalties_[0], gap_extension_penalties_[0], gap_open_penalties_[1], gap_extension_penalties_[1], error_threshold_ * 2 + 1, &n_cigar, &cigar, &mapping_start_position, &mapping_end_position);
+            //mapq = GetMAPQForSingleEndRead(error_threshold_, 0, 0, mapping_end_position - mapping_start_position + 1, min_num_errors, num_best_mappings, second_min_num_errors, num_second_best_mappings);
             //uint32_t fragment_start_position = verification_window_start_position + mapping_start_position;
-            //uint16_t fragment_length = position - fragment_start_position + 1;
-            //mapq = GetMAPQForSingleEndRead(error_threshold_, 0, 0, fragment_length, min_num_errors, num_best_mappings, second_min_num_errors, num_second_best_mappings);
+            //uint16_t fragment_length = mapping_end_position - mapping_start_position + 1;
+
+            BandedTraceback(min_num_errors, reference.GetSequenceAt(rid) + verification_window_start_position, negative_read.data() + split_site, read_length, &mapping_start_position);
+            uint32_t fragment_start_position = verification_window_start_position + mapping_start_position;
+            uint16_t fragment_length = position - fragment_start_position + 1;
+            mapq = GetMAPQForSingleEndRead(error_threshold_, 0, 0, fragment_length, min_num_errors, num_best_mappings, second_min_num_errors, num_second_best_mappings);
             if (output_mapping_in_PAF_) {
               EmplaceBackMappingRecord(read_id, read_name, (uint16_t)read_length, barcode_key, fragment_start_position, fragment_length, mapq, direction, is_unique, 1, &((*mappings_on_diff_ref_seqs)[rid]));
             } else {
