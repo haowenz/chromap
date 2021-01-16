@@ -1761,10 +1761,10 @@ void Chromap<MappingRecord>::ProcessBestMappingsForSingleEndRead(Direction mappi
         read_length = read_batch.GetSequenceLengthAt(read_index);
         uint32_t rid = mappings[mi].second >> 32;
         uint32_t position = mappings[mi].second;
-        int split_site = 0;
+        int split_site = mapping_direction == kPositive ? 0 : read_length - 1;
         if (split_alignment_) {
-          read_length = split_sites[mi];
-          split_site =  split_sites[mi];
+          split_site =  split_sites[mi] - error_threshold_;
+          read_length = split_site;
         }
         uint32_t verification_window_start_position = position + 1 > (read_length + error_threshold_) ? position + 1 - read_length - error_threshold_ : 0;
         if (position >= reference.GetSequenceLengthAt(rid)) {
@@ -1809,11 +1809,12 @@ void Chromap<MappingRecord>::ProcessBestMappingsForSingleEndRead(Direction mappi
           }
         } else {
           uint8_t direction = 0;
+          int read_start_site = read_batch.GetSequenceLengthAt(read_index) - 1 - split_site;
           if (output_mapping_in_SAM_) {
             int n_cigar = 0;
             uint32_t *cigar;
             int mapping_end_position;
-            ksw_semi_global3(read_length + 2 * error_threshold_, reference.GetSequenceAt(rid) + verification_window_start_position, read_length, negative_read.data() + split_site, 5, mat, gap_open_penalties_[0], gap_extension_penalties_[0], gap_open_penalties_[1], gap_extension_penalties_[1], error_threshold_ * 2 + 1, &n_cigar, &cigar, &mapping_start_position, &mapping_end_position);
+            ksw_semi_global3(read_length + 2 * error_threshold_, reference.GetSequenceAt(rid) + verification_window_start_position, read_length, negative_read.data() + read_start_site, 5, mat, gap_open_penalties_[0], gap_extension_penalties_[0], gap_open_penalties_[1], gap_extension_penalties_[1], error_threshold_ * 2 + 1, &n_cigar, &cigar, &mapping_start_position, &mapping_end_position);
             mapq = GetMAPQForSingleEndRead(error_threshold_, 0, 0, mapping_end_position - mapping_start_position + 1, min_num_errors, num_best_mappings, second_min_num_errors, num_second_best_mappings);
             EmplaceBackMappingRecord(read_id, read_name, 1, verification_window_start_position + mapping_end_position, rid, flag, 0, is_unique, mapq, min_num_errors, n_cigar, cigar, &((*mappings_on_diff_ref_seqs)[rid]));
           } else {
@@ -1825,7 +1826,7 @@ void Chromap<MappingRecord>::ProcessBestMappingsForSingleEndRead(Direction mappi
             //uint32_t fragment_start_position = verification_window_start_position + mapping_start_position;
             //uint16_t fragment_length = mapping_end_position - mapping_start_position + 1;
 
-            BandedTraceback(min_num_errors, reference.GetSequenceAt(rid) + verification_window_start_position, negative_read.data() + split_site, read_length, &mapping_start_position);
+            BandedTraceback(min_num_errors, reference.GetSequenceAt(rid) + verification_window_start_position, negative_read.data() + read_start_site, read_length, &mapping_start_position);
             uint32_t fragment_start_position = verification_window_start_position + mapping_start_position;
             uint16_t fragment_length = position - fragment_start_position + 1;
             mapq = GetMAPQForSingleEndRead(error_threshold_, 0, 0, fragment_length, min_num_errors, num_best_mappings, second_min_num_errors, num_second_best_mappings);
@@ -2388,8 +2389,13 @@ void Chromap<MappingRecord>::VerifyCandidatesOnOneDirection(Direction candidate_
       } else {
         num_errors = BandedAlignPatternToTextWithDropOffFrom3End(reference.GetSequenceAt(rid) + position - error_threshold_, negative_read.data(), read_length, &mapping_end_position);
       }
-      if (mapping_end_position - error_threshold_ >= mapping_length_threshold) {
-        num_errors -= mapping_end_position;
+      if (num_errors > error_threshold_) {
+        if (mapping_end_position - error_threshold_ - num_errors >= mapping_length_threshold) {
+          mapping_end_position -= num_errors;
+          num_errors = -(mapping_end_position - error_threshold_);
+        }
+      } else {
+        num_errors = -(mapping_end_position - error_threshold_ - num_errors);
       }
     } else {
       if (candidate_direction == kPositive) {
@@ -2416,7 +2422,7 @@ void Chromap<MappingRecord>::VerifyCandidatesOnOneDirection(Direction candidate_
         mappings->emplace_back(num_errors, candidates[ci].position - error_threshold_ + mapping_end_position);
       } else {
         if (split_alignment_) {
-          mappings->emplace_back(num_errors, candidates[ci].position - read_length + 1 - error_threshold_ + read_length); 
+          mappings->emplace_back(num_errors, candidates[ci].position - read_length + 1 - error_threshold_ + read_length + error_threshold_); 
         } else {
           mappings->emplace_back(num_errors, candidates[ci].position - read_length + 1 - error_threshold_ + mapping_end_position); 
         }
