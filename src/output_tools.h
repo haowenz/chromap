@@ -214,6 +214,7 @@ struct SAMMapping {
   uint32_t is_rev:1, is_alt:1, is_unique:1, mapq:7, NM:22; // is_rev: whether on the reverse strand; mapq: mapping quality; NM: edit distance
   int n_cigar;     // number of CIGAR operations
   uint32_t *cigar; // CIGAR in the BAM encoding: opLen<<4|op; op to integer mapping: MIDSH=>01234
+  std::string MD;
   char *XA;        // alternative mappings
 
   int score, sub, alt_sc;
@@ -751,7 +752,7 @@ inline void SAMOutputTools<SAMMapping>::AppendMapping(uint32_t rid, const Sequen
   //std::string strand = (mapping.direction & 1) == 1 ? "+" : "-";
   //uint32_t mapping_end_position = mapping.fragment_start_position + mapping.fragment_length;
   const char *reference_sequence_name = (mapping.flag & BAM_FUNMAP) > 0 ? "*" : reference.GetSequenceNameAt(rid);
-  this->AppendMappingOutput(mapping.read_name + "\t" + std::to_string(mapping.flag) + "\t" + std::string(reference_sequence_name) + "\t" + std::to_string(mapping.GetStartPosition()) + "\t" + std::to_string(mapping.mapq) + "\t" + mapping.GenerateCigarString() + "\t*\t" + std::to_string(0) + "\t" + std::to_string(0) + "\t*\t*\t" + mapping.GenerateIntTagString("NM", mapping.NM) + "\n");
+  this->AppendMappingOutput(mapping.read_name + "\t" + std::to_string(mapping.flag) + "\t" + std::string(reference_sequence_name) + "\t" + std::to_string(mapping.GetStartPosition()) + "\t" + std::to_string(mapping.mapq) + "\t" + mapping.GenerateCigarString() + "\t*\t" + std::to_string(0) + "\t" + std::to_string(0) + "\t*\t*\t" + mapping.GenerateIntTagString("NM", mapping.NM) + "\tMD:Z:" + mapping.MD + "\n");
 }
 } // namespace chromap
 
