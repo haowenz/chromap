@@ -1728,12 +1728,63 @@ void Chromap<PAFMapping>::EmplaceBackMappingRecord(uint32_t read_id, const char 
 }
 
 template<typename MappingRecord>
-void Chromap<MappingRecord>::EmplaceBackMappingRecord(uint32_t read_id, const char *read_name, uint8_t num_dups, int64_t position, int rid, int flag, uint8_t direction, uint8_t is_unique, uint8_t mapq, uint32_t NM, int n_cigar, uint32_t *cigar, std::vector<MappingRecord> *mappings_on_diff_ref_seqs) {
+void Chromap<MappingRecord>::EmplaceBackMappingRecord(uint32_t read_id, const char *read_name, uint8_t num_dups, int64_t position, int rid, int flag, uint8_t direction, uint8_t is_unique, uint8_t mapq, uint32_t NM, int n_cigar, uint32_t *cigar, std::string &MD_tag, std::vector<MappingRecord> *mappings_on_diff_ref_seqs) {
 }
 
 template<>
-void Chromap<SAMMapping>::EmplaceBackMappingRecord(uint32_t read_id, const char *read_name, uint8_t num_dups, int64_t position, int rid, int flag, uint8_t direction, uint8_t is_unique, uint8_t mapq, uint32_t NM, int n_cigar, uint32_t *cigar, std::vector<SAMMapping> *mappings_on_diff_ref_seqs) {
-  mappings_on_diff_ref_seqs->emplace_back(SAMMapping{read_id, std::string(read_name), num_dups, position, rid, flag, direction, 0, is_unique, mapq, NM, n_cigar, cigar});
+void Chromap<SAMMapping>::EmplaceBackMappingRecord(uint32_t read_id, const char *read_name, uint8_t num_dups, int64_t position, int rid, int flag, uint8_t direction, uint8_t is_unique, uint8_t mapq, uint32_t NM, int n_cigar, uint32_t *cigar, std::string &MD_tag, std::vector<SAMMapping> *mappings_on_diff_ref_seqs) {
+  mappings_on_diff_ref_seqs->emplace_back(SAMMapping{read_id, std::string(read_name), num_dups, position, rid, flag, direction, 0, is_unique, mapq, NM, n_cigar, cigar, MD_tag});
+}
+
+template <typename MappingRecord>
+void Chromap<MappingRecord>::GenerateMDTag(const char *pattern, const char *text, int mapping_start_position, int n_cigar, const uint32_t *cigar, int &NM, std::string &MD_tag) {
+  int num_matches = 0;
+  const char *read = text;
+  const char *reference = pattern + mapping_start_position;
+  int read_position = 0;
+  int reference_position = 0;
+  for (int ci = 0; ci < n_cigar; ++ci) {
+    uint32_t current_cigar_uint = cigar[ci];
+    uint8_t cigar_operation = bam_cigar_op(current_cigar_uint);
+    int num_cigar_operations = bam_cigar_oplen(current_cigar_uint);
+    if (cigar_operation == BAM_CMATCH) {
+      for (int opi = 0; opi < num_cigar_operations; ++opi) {
+        if (reference[reference_position] == read[read_position]) {
+          // a match
+          ++num_matches;
+        } else {
+          //a mismatch
+          ++NM;
+          if (num_matches != 0) {
+            MD_tag.append(std::to_string(num_matches));
+            num_matches = 0;
+          }
+          MD_tag.push_back(reference[reference_position]);
+        }
+        ++reference_position;
+        ++read_position;
+      }
+    } else if (cigar_operation == BAM_CINS) {
+      NM += num_cigar_operations;
+      read_position += num_cigar_operations;
+    } else if (cigar_operation == BAM_CDEL) {
+      NM += num_cigar_operations;
+      if (num_matches != 0) {
+        MD_tag.append(std::to_string(num_matches));
+        num_matches = 0;
+      }
+      MD_tag.push_back('^');
+      for (int opi = 0; opi < num_cigar_operations; ++opi) {
+        MD_tag.push_back(reference[reference_position]);
+        ++reference_position;
+      }
+    } else {
+      std::cerr << "Unexpected cigar op: " << (int)cigar_operation << "\n";
+    }
+  }
+  if (num_matches != 0) {
+    MD_tag.append(std::to_string(num_matches));
+  }
 }
 
 template <typename MappingRecord>
@@ -1786,8 +1837,11 @@ void Chromap<MappingRecord>::ProcessBestMappingsForSingleEndRead(Direction mappi
             uint32_t *cigar;
             int mapping_end_position;
             ksw_semi_global3(read_length + 2 * error_threshold_, reference.GetSequenceAt(rid) + verification_window_start_position, read_length, read, 5, mat, gap_open_penalties_[0], gap_extension_penalties_[0], gap_open_penalties_[1], gap_extension_penalties_[1], error_threshold_ * 2 + 1, &n_cigar, &cigar, &mapping_start_position, &mapping_end_position);
+            int NM = 0;
+            std::string MD_tag = "";
+            GenerateMDTag(reference.GetSequenceAt(rid), read, verification_window_start_position + mapping_start_position + 1, n_cigar, cigar, NM, MD_tag);
             mapq = GetMAPQForSingleEndRead(error_threshold_, 0, 0, mapping_end_position - mapping_start_position + 1, min_num_errors, num_best_mappings, second_min_num_errors, num_second_best_mappings);
-            EmplaceBackMappingRecord(read_id, read_name, 1, verification_window_start_position + mapping_start_position, rid, flag, 1, is_unique, mapq, min_num_errors, n_cigar, cigar, &((*mappings_on_diff_ref_seqs)[rid]));
+            EmplaceBackMappingRecord(read_id, read_name, 1, verification_window_start_position + mapping_start_position, rid, flag, 1, is_unique, mapq, NM, n_cigar, cigar, MD_tag, &((*mappings_on_diff_ref_seqs)[rid]));
           } else {
             //int n_cigar = 0;
             //uint32_t *cigar;
@@ -1815,8 +1869,11 @@ void Chromap<MappingRecord>::ProcessBestMappingsForSingleEndRead(Direction mappi
             uint32_t *cigar;
             int mapping_end_position;
             ksw_semi_global3(read_length + 2 * error_threshold_, reference.GetSequenceAt(rid) + verification_window_start_position, read_length, negative_read.data() + read_start_site, 5, mat, gap_open_penalties_[0], gap_extension_penalties_[0], gap_open_penalties_[1], gap_extension_penalties_[1], error_threshold_ * 2 + 1, &n_cigar, &cigar, &mapping_start_position, &mapping_end_position);
+            int NM = 0;
+            std::string MD_tag = "";
+            GenerateMDTag(reference.GetSequenceAt(rid), negative_read.data() + read_start_site, verification_window_start_position + mapping_start_position + 1, n_cigar, cigar, NM, MD_tag);
             mapq = GetMAPQForSingleEndRead(error_threshold_, 0, 0, mapping_end_position - mapping_start_position + 1, min_num_errors, num_best_mappings, second_min_num_errors, num_second_best_mappings);
-            EmplaceBackMappingRecord(read_id, read_name, 1, verification_window_start_position + mapping_end_position, rid, flag, 0, is_unique, mapq, min_num_errors, n_cigar, cigar, &((*mappings_on_diff_ref_seqs)[rid]));
+            EmplaceBackMappingRecord(read_id, read_name, 1, verification_window_start_position + mapping_end_position, rid, flag, 0, is_unique, mapq, NM, n_cigar, cigar, MD_tag, &((*mappings_on_diff_ref_seqs)[rid]));
           } else {
             //int n_cigar = 0;
             //uint32_t *cigar;

@@ -588,7 +588,6 @@ int ksw_semi_global3(int qlen, const char *query, int tlen, const char *target, 
 		}
 		eh[end].h = h1; eh[end].e = MINUS_INF;
 	}
-	//score = eh[qlen].h;
 	score = eh[qlen].h;
 
   int max_score_position = qlen;
@@ -610,10 +609,10 @@ int ksw_semi_global3(int qlen, const char *query, int tlen, const char *target, 
 			//which = z[(long)i * n_col + (k - (i > w? i - w : 0))] >> (which<<1) & 3;
 			which = z[(long)i * n_col + (k - i)] >> (which<<1) & 3;
 			if (which == 0)      cigar = push_cigar(&n_cigar, &m_cigar, cigar, 0, 1), --i, --k;
-			else if (which == 1) cigar = push_cigar(&n_cigar, &m_cigar, cigar, 2, 1), --i;
-			else                 cigar = push_cigar(&n_cigar, &m_cigar, cigar, 1, 1), --k;
+			else if (which == 1) cigar = push_cigar(&n_cigar, &m_cigar, cigar, 1, 1), --i;
+			else                 cigar = push_cigar(&n_cigar, &m_cigar, cigar, 2, 1), --k;
 		}
-		if (i >= 0) cigar = push_cigar(&n_cigar, &m_cigar, cigar, 2, i + 1);
+		if (i >= 0) cigar = push_cigar(&n_cigar, &m_cigar, cigar, 1, i + 1);
     if (mapping_start_position) {
       *mapping_start_position = k;
     }
