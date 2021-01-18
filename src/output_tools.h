@@ -255,7 +255,7 @@ struct SAMMapping {
     for (int ci = 0; ci < n_cigar; ++ci) {
       uint32_t op = bam_cigar_op(cigar[ci]);
       uint32_t op_length = bam_cigar_oplen(cigar[ci]);
-      if ((bam_cigar_type(op) & 0x10) > 0) {
+      if ((bam_cigar_type(op) & 0x2) > 0) {
         alignment_length += op_length;
       }
     }
@@ -263,7 +263,7 @@ struct SAMMapping {
   }
   uint32_t GetStartPosition() const { // inclusive
     if (IsPositive()) {
-      return pos;
+      return pos + 1;
     } else {
       return pos + 1 - GetAlignmentLength();
     }

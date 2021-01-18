@@ -614,7 +614,7 @@ int ksw_semi_global3(int qlen, const char *query, int tlen, const char *target, 
 		}
 		if (i >= 0) cigar = push_cigar(&n_cigar, &m_cigar, cigar, 1, i + 1);
     if (mapping_start_position) {
-      *mapping_start_position = k;
+      *mapping_start_position = k + 1;
     }
 		//if (k >= 0) cigar = push_cigar(&n_cigar, &m_cigar, cigar, 1, k + 1);
 		for (i = 0; i < n_cigar>>1; ++i) // reverse CIGAR
