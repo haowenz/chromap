@@ -550,6 +550,7 @@ class OutputTools {
   inline void AppendMappingOutput(const std::string &line) {
     fprintf(mapping_output_file_, "%s", line.data());
   }
+  virtual void OutputHeader(uint32_t num_reference_sequences, const SequenceBatch &reference) = 0;
   virtual void AppendMapping(uint32_t rid, const SequenceBatch &reference, const MappingRecord &mapping) = 0;
   inline std::string GeneratePAFLine(const SequenceBatch &query_batch, uint32_t query_index, const int query_start, const int query_end, const char relative_strand, const SequenceBatch &target_batch, uint32_t target_index, const int target_start, const int target_end, const int num_matches, const int alignment_length, const int mapping_quality) {
     return std::string(query_batch.GetSequenceNameAt(query_index)) + "\t" + std::to_string(query_batch.GetSequenceLengthAt(query_index)) + "\t" + std::to_string(query_start) + "\t" + std::to_string(query_end) + "\t" + relative_strand + "\t" + std::string(target_batch.GetSequenceNameAt(target_index)) + "\t" + std::to_string(target_batch.GetSequenceLengthAt(target_index)) + "\t" + std::to_string(target_start) + "\t" + std::to_string(target_end) + "\t" + std::to_string(num_matches) + "\t" + std::to_string(alignment_length) + "\t" + std::to_string(mapping_quality) + "\n";
@@ -617,6 +618,8 @@ class OutputTools {
 
 template <typename MappingRecord>
 class BEDOutputTools : public OutputTools<MappingRecord> {
+  void OutputHeader(uint32_t num_reference_sequences, const SequenceBatch &reference) {
+  }
   inline void AppendMapping(uint32_t rid, const SequenceBatch &reference, const MappingRecord &mapping) {
     std::string strand = mapping.IsPositive() ? "+" : "-";
     const char *reference_sequence_name = reference.GetSequenceNameAt(rid);
@@ -635,6 +638,8 @@ inline void BEDOutputTools<MappingWithBarcode>::AppendMapping(uint32_t rid, cons
 
 template <typename MappingRecord>
 class BEDPEOutputTools : public OutputTools<MappingRecord> {
+  void OutputHeader(uint32_t num_reference_sequences, const SequenceBatch &reference) {
+  }
   inline void AppendMapping(uint32_t rid, const SequenceBatch &reference, const MappingRecord &mapping) {
     std::string strand = mapping.IsPositive() ? "+" : "-";
     const char *reference_sequence_name = reference.GetSequenceNameAt(rid);
@@ -655,6 +660,8 @@ template <>
 
 template <typename MappingRecord>
 class TagAlignOutputTools : public OutputTools<MappingRecord> {
+  void OutputHeader(uint32_t num_reference_sequences, const SequenceBatch &reference) {
+  }
   inline void AppendMapping(uint32_t rid, const SequenceBatch &reference, const MappingRecord &mapping) {
     std::string strand = mapping.IsPositive() ? "+" : "-";
     const char *reference_sequence_name = reference.GetSequenceNameAt(rid);
@@ -665,6 +672,8 @@ class TagAlignOutputTools : public OutputTools<MappingRecord> {
 
 template <typename MappingRecord>
 class PairedTagAlignOutputTools : public OutputTools<MappingRecord> {
+  void OutputHeader(uint32_t num_reference_sequences, const SequenceBatch &reference) {
+  }
   inline void AppendMapping(uint32_t rid, const SequenceBatch &reference, const MappingRecord &mapping) {
     bool positive_strand = mapping.IsPositive();
     uint32_t positive_read_end = mapping.fragment_start_position + mapping.positive_alignment_length;
@@ -685,6 +694,8 @@ inline void PairedTagAlignOutputTools<SAMMapping>::AppendMapping(uint32_t rid, c
 
 template <typename MappingRecord>
 class PAFOutputTools : public OutputTools<MappingRecord> {
+  void OutputHeader(uint32_t num_reference_sequences, const SequenceBatch &reference) {
+  }
   inline void AppendMapping(uint32_t rid, const SequenceBatch &reference, const MappingRecord &mapping) {
   }
 };
@@ -718,6 +729,8 @@ inline void PAFOutputTools<MappingWithoutBarcode>::AppendMapping(uint32_t rid, c
 
 template <typename MappingRecord>
 class PairedPAFOutputTools : public OutputTools<MappingRecord> {
+  void OutputHeader(uint32_t num_reference_sequences, const SequenceBatch &reference) {
+  }
   inline void AppendMapping(uint32_t rid, const SequenceBatch &reference, const MappingRecord &mapping) {
   }
 };
@@ -742,6 +755,13 @@ inline void PairedPAFOutputTools<PairedPAFMapping>::AppendMapping(uint32_t rid, 
 template <typename MappingRecord>
 class SAMOutputTools : public OutputTools<MappingRecord> {
   inline void AppendMapping(uint32_t rid, const SequenceBatch &reference, const MappingRecord &mapping) {
+  }
+  void OutputHeader(uint32_t num_reference_sequences, const SequenceBatch &reference) {
+    for (uint32_t rid = 0; rid < num_reference_sequences; ++rid) {
+      const char *reference_sequence_name = reference.GetSequenceNameAt(rid);
+      uint32_t reference_sequence_length = reference.GetSequenceLengthAt(rid);
+      this->AppendMappingOutput("@SQ\tSN:" + std::string(reference_sequence_name) + "\tLN:"+ std::to_string(reference_sequence_length) + "\n");
+    }
   }
 };
 
