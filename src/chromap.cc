@@ -1805,21 +1805,26 @@ void Chromap<MappingRecord>::ProcessBestMappingsForSingleEndRead(Direction mappi
   uint32_t read_length = read_batch.GetSequenceLengthAt(read_index);
   const std::string &negative_read = read_batch.GetNegativeSequenceAt(read_index);
   uint8_t is_unique = num_best_mappings == 1 ? 1 : 0;
-  //std::cerr << split_sites.size() << " " << mappings.size() << "\n";
   for (uint32_t mi = 0; mi < mappings.size(); ++mi) {
     if (mappings[mi].first == min_num_errors) {
       if (*best_mapping_index == best_mapping_indices[*num_best_mappings_reported]) {
         read_length = read_batch.GetSequenceLengthAt(read_index);
         uint32_t rid = mappings[mi].second >> 32;
         uint32_t position = mappings[mi].second;
-        int split_site = mapping_direction == kPositive ? 0 : read_length - 1;
+        int split_site = mapping_direction == kPositive ? 0 : read_length;
         if (split_alignment_) {
-          split_site =  split_sites[mi] - error_threshold_;
+          split_site = split_sites[mi];
           read_length = split_site;
         }
         uint32_t verification_window_start_position = position + 1 > (read_length + error_threshold_) ? position + 1 - read_length - error_threshold_ : 0;
         if (position >= reference.GetSequenceLengthAt(rid)) {
           verification_window_start_position = reference.GetSequenceLengthAt(rid) - error_threshold_ - read_length; 
+        }
+        if (split_alignment_) {
+          if (split_sites[mi] < (int)read_batch.GetSequenceLengthAt(read_index)) {
+            split_site -= 3 * error_threshold_;
+          } 
+          read_length = split_site;
         }
         uint32_t barcode_key = 0;
         if (!is_bulk_data_) {
@@ -1837,11 +1842,12 @@ void Chromap<MappingRecord>::ProcessBestMappingsForSingleEndRead(Direction mappi
             uint32_t *cigar;
             int mapping_end_position;
             ksw_semi_global3(read_length + 2 * error_threshold_, reference.GetSequenceAt(rid) + verification_window_start_position, read_length, read, 5, mat, gap_open_penalties_[0], gap_extension_penalties_[0], gap_open_penalties_[1], gap_extension_penalties_[1], error_threshold_ * 2 + 1, &n_cigar, &cigar, &mapping_start_position, &mapping_end_position);
+            //std::cerr << verification_window_start_position << " " << read_length << " " << split_site << " " << mapping_start_position << " " << mapping_end_position << "\n";
             int NM = 0;
             std::string MD_tag = "";
-            GenerateMDTag(reference.GetSequenceAt(rid), read, verification_window_start_position + mapping_start_position + 1, n_cigar, cigar, NM, MD_tag);
-            mapq = GetMAPQForSingleEndRead(error_threshold_, 0, 0, mapping_end_position - mapping_start_position + 1, min_num_errors, num_best_mappings, second_min_num_errors, num_second_best_mappings);
-            EmplaceBackMappingRecord(read_id, read_name, 1, verification_window_start_position + mapping_start_position, rid, flag, 1, is_unique, mapq, NM, n_cigar, cigar, MD_tag, &((*mappings_on_diff_ref_seqs)[rid]));
+            GenerateMDTag(reference.GetSequenceAt(rid), read, verification_window_start_position + mapping_start_position, n_cigar, cigar, NM, MD_tag);
+            mapq = GetMAPQForSingleEndRead(error_threshold_, 0, 0, mapping_end_position - mapping_start_position, min_num_errors, num_best_mappings, second_min_num_errors, num_second_best_mappings);
+            EmplaceBackMappingRecord(read_id, read_name, 1, verification_window_start_position + mapping_start_position, rid, flag, 0, is_unique, mapq, NM, n_cigar, cigar, MD_tag, &((*mappings_on_diff_ref_seqs)[rid]));
           } else {
             //int n_cigar = 0;
             //uint32_t *cigar;
@@ -1863,17 +1869,17 @@ void Chromap<MappingRecord>::ProcessBestMappingsForSingleEndRead(Direction mappi
           }
         } else {
           uint8_t direction = 0;
-          int read_start_site = read_batch.GetSequenceLengthAt(read_index) - 1 - split_site;
+          int read_start_site = read_batch.GetSequenceLengthAt(read_index) - split_site;
           if (output_mapping_in_SAM_) {
             int n_cigar = 0;
             uint32_t *cigar;
             int mapping_end_position;
-            ksw_semi_global3(read_length + 2 * error_threshold_, reference.GetSequenceAt(rid) + verification_window_start_position, read_length, negative_read.data() + read_start_site, 5, mat, gap_open_penalties_[0], gap_extension_penalties_[0], gap_open_penalties_[1], gap_extension_penalties_[1], error_threshold_ * 2 + 1, &n_cigar, &cigar, &mapping_start_position, &mapping_end_position);
+            ksw_semi_global3(read_length + 2 * error_threshold_, reference.GetSequenceAt(rid) + verification_window_start_position + read_start_site, read_length, negative_read.data() + read_start_site, 5, mat, gap_open_penalties_[0], gap_extension_penalties_[0], gap_open_penalties_[1], gap_extension_penalties_[1], error_threshold_ * 2 + 1, &n_cigar, &cigar, &mapping_start_position, &mapping_end_position);
             int NM = 0;
             std::string MD_tag = "";
-            GenerateMDTag(reference.GetSequenceAt(rid), negative_read.data() + read_start_site, verification_window_start_position + mapping_start_position + 1, n_cigar, cigar, NM, MD_tag);
-            mapq = GetMAPQForSingleEndRead(error_threshold_, 0, 0, mapping_end_position - mapping_start_position + 1, min_num_errors, num_best_mappings, second_min_num_errors, num_second_best_mappings);
-            EmplaceBackMappingRecord(read_id, read_name, 1, verification_window_start_position + mapping_end_position, rid, flag, 0, is_unique, mapq, NM, n_cigar, cigar, MD_tag, &((*mappings_on_diff_ref_seqs)[rid]));
+            GenerateMDTag(reference.GetSequenceAt(rid), negative_read.data() + read_start_site, verification_window_start_position + read_start_site + mapping_start_position, n_cigar, cigar, NM, MD_tag);
+            mapq = GetMAPQForSingleEndRead(error_threshold_, 0, 0, mapping_end_position - mapping_start_position, min_num_errors, num_best_mappings, second_min_num_errors, num_second_best_mappings);
+            EmplaceBackMappingRecord(read_id, read_name, 1, verification_window_start_position + read_start_site + mapping_end_position, rid, flag, 1, is_unique, mapq, NM, n_cigar, cigar, MD_tag, &((*mappings_on_diff_ref_seqs)[rid]));
           } else {
             //int n_cigar = 0;
             //uint32_t *cigar;
@@ -2446,14 +2452,18 @@ void Chromap<MappingRecord>::VerifyCandidatesOnOneDirection(Direction candidate_
       } else {
         num_errors = BandedAlignPatternToTextWithDropOffFrom3End(reference.GetSequenceAt(rid) + position - error_threshold_, negative_read.data(), read_length, &mapping_end_position);
       }
-      if (num_errors > error_threshold_) {
-        if (mapping_end_position - error_threshold_ - num_errors >= mapping_length_threshold) {
-          mapping_end_position -= num_errors;
-          num_errors = -(mapping_end_position - error_threshold_);
-        }
-      } else {
+      //std::cerr << "ne1: " << num_errors << " " << mapping_end_position << "\n";
+      //if (num_errors > 2 * error_threshold_) {
+      //  if (mapping_end_position - error_threshold_ - num_errors >= mapping_length_threshold) {
+      //    mapping_end_position -= num_errors;
+      //    num_errors = -(mapping_end_position - error_threshold_);
+      //  }
+      //} else {
+      if (mapping_end_position - error_threshold_ - num_errors >= mapping_length_threshold) {
         num_errors = -(mapping_end_position - error_threshold_ - num_errors);
       }
+      //}
+      //std::cerr << "ne2: " << num_errors << " " << mapping_end_position << "\n";
     } else {
       if (candidate_direction == kPositive) {
         num_errors = BandedAlignPatternToText(reference.GetSequenceAt(rid) + position - error_threshold_, read, read_length, &mapping_end_position);
@@ -2478,14 +2488,14 @@ void Chromap<MappingRecord>::VerifyCandidatesOnOneDirection(Direction candidate_
       if (candidate_direction == kPositive) {
         mappings->emplace_back(num_errors, candidates[ci].position - error_threshold_ + mapping_end_position);
       } else {
-        if (split_alignment_) {
-          mappings->emplace_back(num_errors, candidates[ci].position - read_length + 1 - error_threshold_ + read_length + error_threshold_); 
-        } else {
+        //if (split_alignment_) {
+        //  mappings->emplace_back(num_errors, candidates[ci].position - read_length + 1 - error_threshold_ + read_length + error_threshold_); 
+        //} else {
           mappings->emplace_back(num_errors, candidates[ci].position - read_length + 1 - error_threshold_ + mapping_end_position); 
-        }
+        //}
       }
       if (split_alignment_) {
-        split_sites->emplace_back(mapping_end_position);
+        split_sites->emplace_back(mapping_end_position - error_threshold_);
       }
     }
   }
@@ -2671,7 +2681,7 @@ int Chromap<MappingRecord>::BandedAlignPatternToTextWithDropOff(const char *patt
     VN = X & HP;
     VP = HN | ~(X | HP);
     num_errors_at_band_start_position += 1 - (D0 & lowest_bit_in_band_mask);
-    if (num_errors_at_band_start_position > 3 * error_threshold_) {
+    if (num_errors_at_band_start_position > 2 * error_threshold_) {
       //return error_threshold_ + 1;
       break;
     }
@@ -2721,7 +2731,7 @@ int Chromap<MappingRecord>::BandedAlignPatternToTextWithDropOffFrom3End(const ch
     VN = X & HP;
     VP = HN | ~(X | HP);
     num_errors_at_band_start_position += 1 - (D0 & lowest_bit_in_band_mask);
-    if (num_errors_at_band_start_position > 3 * error_threshold_) {
+    if (num_errors_at_band_start_position > 2 * error_threshold_) {
       //return error_threshold_ + 1;
       break;
     }
