@@ -1531,6 +1531,7 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
     output_tools_ = std::unique_ptr<SAMOutputTools<MappingRecord> >(new SAMOutputTools<MappingRecord>);
   }
   output_tools_->InitializeMappingOutput(mapping_output_file_path_);
+  output_tools_->OutputHeader(num_reference_sequences, reference);
   mm_cache mm_to_candidates_cache(2000003);
   mm_to_candidates_cache.SetKmerLength(kmer_size_);
   struct _mm_history *mm_history = new struct _mm_history[read_batch_size_];
