@@ -1819,7 +1819,9 @@ int Chromap<MappingRecord>::AdjustGapBeginning(Direction mapping_direction, cons
     if (*gap_beginning <= 0) {
       return ref_end_position;
     }
+    //printf("%d\n", *gap_beginning);
     for (i = read_end + 1, j = ref_end_position + 1; read[i] && ref[j]; ++i, ++j) {
+      //printf("%c %c\n", read[i], ref[j]);
       if (read[i] != ref[j] && read[i] != ref[j] - 'a' + 'A') {
         break; 
       }
@@ -1898,7 +1900,7 @@ void Chromap<MappingRecord>::ProcessBestMappingsForSingleEndRead(Direction mappi
 	      int new_ref_start_position = AdjustGapBeginning(mapping_direction, reference.GetSequenceAt(rid), 
 	        read, &gap_beginning, read_length - 1, 
 	        verification_window_start_position + mapping_start_position, 
-		verification_window_start_position + mapping_end_position, &n_cigar, &cigar);
+		verification_window_start_position + mapping_end_position - 1, &n_cigar, &cigar);
 	      mapping_start_position = new_ref_start_position - verification_window_start_position;
 	    }
             int NM = 0;
@@ -1932,13 +1934,25 @@ void Chromap<MappingRecord>::ProcessBestMappingsForSingleEndRead(Direction mappi
             int n_cigar = 0;
             uint32_t *cigar;
             int mapping_end_position;
+	    
+	    //  reversed read looks like:
+	    //
+	    //      veri_start_pos       position
+	    //  ref   --|-------------------|------------------->
+	    //  read     <-|--read_length---|--gap_beginning--
+	    //          split_site
+	    // 
+            
+	    // Is the map start/end position left close right open as in bed format?
             ksw_semi_global3(read_length + 2 * error_threshold_, reference.GetSequenceAt(rid) + verification_window_start_position + read_start_site, read_length, negative_read.data() + read_start_site, 5, mat, gap_open_penalties_[0], gap_extension_penalties_[0], gap_open_penalties_[1], gap_extension_penalties_[1], error_threshold_ * 2 + 1, &n_cigar, &cigar, &mapping_start_position, &mapping_end_position);
 	    if (gap_beginning > 0) {
+	      //printf("before adjust %d %d %d. %d %d\n", split_site, read_start_site, read_length, verification_window_start_position + mapping_start_position, verification_window_start_position + mapping_end_position);
 	      int new_ref_end_position = AdjustGapBeginning(mapping_direction, reference.GetSequenceAt(rid), 
-	        negative_read.data() + read_start_site, &gap_beginning, read_length, 
+	        negative_read.data() + read_start_site, &gap_beginning, read_length - 1, 
 	        verification_window_start_position + mapping_start_position, 
-		verification_window_start_position + mapping_end_position, &n_cigar, &cigar);
-	      mapping_end_position = new_ref_end_position - verification_window_start_position; 
+		verification_window_start_position + mapping_end_position - 1, &n_cigar, &cigar);
+	      // The returned position is right-closed, so need to plus one to match bed convention
+	      mapping_end_position = new_ref_end_position + 1 - verification_window_start_position; 
 	      read_length = split_site - gap_beginning;
 	    }
             int NM = 0;
@@ -2591,8 +2605,9 @@ void Chromap<MappingRecord>::VerifyCandidatesOnOneDirection(Direction candidate_
         //  mappings->emplace_back(num_errors, candidates[ci].position - read_length + 1 - error_threshold_ + read_length + error_threshold_); 
         //} else {
           // Need to minus gap_beginning because mapping_end_position is adjusted by it, but read_length is not.
-          mappings->emplace_back(num_errors, candidates[ci].position - read_length + 1 - error_threshold_ + mapping_end_position - gap_beginning);
-        //}
+          //printf("%d %d %d\n", candidates[ci].position, mapping_end_position, gap_beginning);
+	  mappings->emplace_back(num_errors, candidates[ci].position - read_length + 1 - error_threshold_ + mapping_end_position - gap_beginning);
+	//}
       }
       if (split_alignment_) {
         split_sites->emplace_back((gap_beginning<<16)| (mapping_end_position - error_threshold_) );
@@ -2785,6 +2800,8 @@ int Chromap<MappingRecord>::BandedAlignPatternToTextWithDropOff(const char *patt
     num_errors_at_band_start_position += 1 - (D0 & lowest_bit_in_band_mask);
     if (num_errors_at_band_start_position > 2 * error_threshold_) {
       //return error_threshold_ + 1;
+      // the min error in this band could be still less than the error_threshold, and could 
+      // but this should be fine since it does not affect the 5' end of the read.
       if (i < 4 * error_threshold_ && i < read_length / 2) {
         fail_beginning = 1;
       }
