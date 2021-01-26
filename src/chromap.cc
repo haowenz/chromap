@@ -1898,8 +1898,11 @@ void Chromap<MappingRecord>::GetRefStartEndPositionForReadFromMapping(Direction 
 	}
 	uint32_t verification_window_start_position = position + 1 > (uint32_t)(read_length + error_threshold_) ? position + 1 - read_length - error_threshold_ : 0;
 	//printf("%d %d. %d\n", position, verification_window_start_position, read_length);
-	if (position >= reference.GetSequenceLengthAt(rid)) {
+	if (position + error_threshold_ >= reference.GetSequenceLengthAt(rid)) {
 		verification_window_start_position = reference.GetSequenceLengthAt(rid) - error_threshold_ - read_length; 
+	}
+	if (verification_window_start_position < 0) {
+		verification_window_start_position = 0;
 	}
 	if (split_alignment_) {
 		if (split_site < full_read_length) {
@@ -1996,7 +1999,7 @@ void Chromap<MappingRecord>::ProcessBestMappingsForSingleEndRead(Direction mappi
 	uint8_t direction = 1;
 
 	uint32_t *cigar ;
-	int n_cigar ;
+	int n_cigar = 0;
 	int NM = 0;
 	std::string MD_tag = "" ;
 	const char *effect_read = read ;
