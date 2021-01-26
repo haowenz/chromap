@@ -768,8 +768,11 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
     output_tools_ = std::unique_ptr<PairedTagAlignOutputTools<MappingRecord> >(new PairedTagAlignOutputTools<MappingRecord>);
   } else if (output_mapping_in_PAF_) {
     output_tools_ = std::unique_ptr<PairedPAFOutputTools<MappingRecord> >(new PairedPAFOutputTools<MappingRecord>);
+  } else if (output_mapping_in_SAM_) {
+    output_tools_ = std::unique_ptr<SAMOutputTools<MappingRecord> >(new SAMOutputTools<MappingRecord>);
   }
   output_tools_->InitializeMappingOutput(mapping_output_file_path_);
+  output_tools_->OutputHeader(num_reference_sequences, reference);
   uint32_t num_mappings_in_mem = 0;
   //uint64_t max_num_mappings_in_mem = 1 * ((uint64_t)1 << 30) / sizeof(MappingRecord);
   uint64_t max_num_mappings_in_mem = 1 * ((uint64_t)1 << 28) / sizeof(MappingRecord);
@@ -853,6 +856,14 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
       positive_mappings2.reserve(max_seed_frequencies_[0]);
       negative_mappings1.reserve(max_seed_frequencies_[0]);
       negative_mappings2.reserve(max_seed_frequencies_[0]);
+      std::vector<int> positive_split_sites1;
+      std::vector<int> negative_split_sites1;
+      std::vector<int> positive_split_sites2;
+      std::vector<int> negative_split_sites2;
+      positive_split_sites1.reserve(max_seed_frequencies_[0]);
+      negative_split_sites1.reserve(max_seed_frequencies_[0]);
+      positive_split_sites2.reserve(max_seed_frequencies_[0]);
+      negative_split_sites2.reserve(max_seed_frequencies_[0]);
       std::vector<std::pair<uint32_t, uint32_t> > F1R2_best_mappings;
       std::vector<std::pair<uint32_t, uint32_t> > F2R1_best_mappings;
       F1R2_best_mappings.reserve(max_seed_frequencies_[0]);
@@ -950,59 +961,59 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
               //  std::cerr << (ci.position >> 32) << " " << (uint32_t) ci.position << " " << (int)ci.count << "\n";
               //}
               //if ((positive_candidates1.size() == 0 && negative_candidates1.size() == 0) || (positive_candidates2.size() == 0 && negative_candidates2.size() == 0)) {
-              SupplementCandidates(index, repetitive_seed_length1, repetitive_seed_length2, minimizers1, minimizers2, positive_hits1, positive_hits2, positive_candidates1, positive_candidates2, positive_candidates1_buffer, positive_candidates2_buffer, negative_hits1, negative_hits2, negative_candidates1, negative_candidates2, negative_candidates1_buffer, negative_candidates2_buffer);
-              //}
-              current_num_candidates1 = positive_candidates1.size() + negative_candidates1.size();
-              current_num_candidates2 = positive_candidates2.size() + negative_candidates2.size();
-              if (current_num_candidates1 > 0 && current_num_candidates2 > 0) {
-                positive_candidates1.swap(positive_candidates1_buffer);
-                negative_candidates1.swap(negative_candidates1_buffer);
-                positive_candidates2.swap(positive_candidates2_buffer);
-                negative_candidates2.swap(negative_candidates2_buffer);
-                positive_candidates1.clear();
-                positive_candidates2.clear();
-                negative_candidates1.clear();
-                negative_candidates2.clear();
-                // Paired-end filter
-                //std::cerr << "p1" << "\n";
-                //for (auto &ci : positive_candidates1_buffer) {
-                //  std::cerr << (ci.position >> 32) << " " << (uint32_t) ci.position << " " << (int)ci.count << "\n";
-                //}
-                //std::cerr << "n1" << "\n";
-                //for (auto &ci : negative_candidates1_buffer) {
-                //  std::cerr << (ci.position >> 32) << " " << (uint32_t) ci.position << " " << (int)ci.count << "\n";
-                //}
-                //std::cerr << "p2" << "\n";
-                //for (auto &ci : positive_candidates2_buffer) {
-                //  std::cerr << (ci.position >> 32) << " " << (uint32_t) ci.position << " " << (int)ci.count << "\n";
-                //}
-                //std::cerr << "n2" << "\n";
-                //for (auto &ci : negative_candidates2_buffer) {
-                //  std::cerr << (ci.position >> 32) << " " << (uint32_t) ci.position << " " << (int)ci.count << "\n";
-                //}
-                //std::cerr << "#pc1: " << positive_candidates1_buffer.size() << ", #nc1: " << negative_candidates1_buffer.size() << ", #pc2: " << positive_candidates2_buffer.size() << ", #nc2: " << negative_candidates2_buffer.size() << "\n";
-		if (!split_alignment_) {
-                  ReduceCandidatesForPairedEndRead(positive_candidates1_buffer, negative_candidates1_buffer, positive_candidates2_buffer, negative_candidates2_buffer, &positive_candidates1, &negative_candidates1, &positive_candidates2, &negative_candidates2);
-		}
-                //std::cerr << "p1" << "\n";
-                //for (auto &ci : positive_candidates1) {
-                //  std::cerr << (ci.position >> 32) << " " << (uint32_t) ci.position << " " << (int)ci.count << "\n";
-                //}
-                //std::cerr << "n1" << "\n";
-                //for (auto &ci : negative_candidates1) {
-                //  std::cerr << (ci.position >> 32) << " " << (uint32_t) ci.position << " " << (int)ci.count << "\n";
-                //}
-                //std::cerr << "p2" << "\n";
-                //for (auto &ci : positive_candidates2) {
-                //  std::cerr << (ci.position >> 32) << " " << (uint32_t) ci.position << " " << (int)ci.count << "\n";
-                //}
-                //std::cerr << "n2" << "\n";
-                //for (auto &ci : negative_candidates2) {
-                //  std::cerr << (ci.position >> 32) << " " << (uint32_t) ci.position << " " << (int)ci.count << "\n";
-                //}
-                //std::cerr << "After pe filter, #pc1: " << positive_candidates1.size() << ", #nc1: " << negative_candidates1.size() << ", #pc2: " << positive_candidates2.size() << ", #nc2: " << negative_candidates2.size() << "\n";
-                current_num_candidates1 = positive_candidates1.size() + negative_candidates1.size();
-                current_num_candidates2 = positive_candidates2.size() + negative_candidates2.size();
+	      if ( !split_alignment_) {
+		      SupplementCandidates(index, repetitive_seed_length1, repetitive_seed_length2, minimizers1, minimizers2, positive_hits1, positive_hits2, positive_candidates1, positive_candidates2, positive_candidates1_buffer, positive_candidates2_buffer, negative_hits1, negative_hits2, negative_candidates1, negative_candidates2, negative_candidates1_buffer, negative_candidates2_buffer);
+		      current_num_candidates1 = positive_candidates1.size() + negative_candidates1.size();
+		      current_num_candidates2 = positive_candidates2.size() + negative_candidates2.size();
+	      }
+	      if (current_num_candidates1 > 0 && current_num_candidates2 > 0 && !split_alignment_) {
+		      positive_candidates1.swap(positive_candidates1_buffer);
+		      negative_candidates1.swap(negative_candidates1_buffer);
+		      positive_candidates2.swap(positive_candidates2_buffer);
+		      negative_candidates2.swap(negative_candidates2_buffer);
+		      positive_candidates1.clear();
+		      positive_candidates2.clear();
+		      negative_candidates1.clear();
+		      negative_candidates2.clear();
+		      // Paired-end filter
+		      //std::cerr << "p1" << "\n";
+		      //for (auto &ci : positive_candidates1_buffer) {
+		      //  std::cerr << (ci.position >> 32) << " " << (uint32_t) ci.position << " " << (int)ci.count << "\n";
+		      //}
+		      //std::cerr << "n1" << "\n";
+		      //for (auto &ci : negative_candidates1_buffer) {
+		      //  std::cerr << (ci.position >> 32) << " " << (uint32_t) ci.position << " " << (int)ci.count << "\n";
+		      //}
+		      //std::cerr << "p2" << "\n";
+		      //for (auto &ci : positive_candidates2_buffer) {
+		      //  std::cerr << (ci.position >> 32) << " " << (uint32_t) ci.position << " " << (int)ci.count << "\n";
+		      //}
+		      //std::cerr << "n2" << "\n";
+		      //for (auto &ci : negative_candidates2_buffer) {
+		      //  std::cerr << (ci.position >> 32) << " " << (uint32_t) ci.position << " " << (int)ci.count << "\n";
+		      //}
+		      //std::cerr << "#pc1: " << positive_candidates1_buffer.size() << ", #nc1: " << negative_candidates1_buffer.size() << ", #pc2: " << positive_candidates2_buffer.size() << ", #nc2: " << negative_candidates2_buffer.size() << "\n";
+		      ReduceCandidatesForPairedEndRead(positive_candidates1_buffer, negative_candidates1_buffer, positive_candidates2_buffer, negative_candidates2_buffer, &positive_candidates1, &negative_candidates1, &positive_candidates2, &negative_candidates2);
+		      //std::cerr << "p1" << "\n";
+		      //for (auto &ci : positive_candidates1) {
+		      //  std::cerr << (ci.position >> 32) << " " << (uint32_t) ci.position << " " << (int)ci.count << "\n";
+		      //}
+		      //std::cerr << "n1" << "\n";
+		      //for (auto &ci : negative_candidates1) {
+		      //  std::cerr << (ci.position >> 32) << " " << (uint32_t) ci.position << " " << (int)ci.count << "\n";
+		      //}
+		      //std::cerr << "p2" << "\n";
+		      //for (auto &ci : positive_candidates2) {
+		      //  std::cerr << (ci.position >> 32) << " " << (uint32_t) ci.position << " " << (int)ci.count << "\n";
+		      //}
+		      //std::cerr << "n2" << "\n";
+		      //for (auto &ci : negative_candidates2) {
+		      //  std::cerr << (ci.position >> 32) << " " << (uint32_t) ci.position << " " << (int)ci.count << "\n";
+		      //}
+		      //std::cerr << "After pe filter, #pc1: " << positive_candidates1.size() << ", #nc1: " << negative_candidates1.size() << ", #pc2: " << positive_candidates2.size() << ", #nc2: " << negative_candidates2.size() << "\n";
+		      current_num_candidates1 = positive_candidates1.size() + negative_candidates1.size();
+		      current_num_candidates2 = positive_candidates2.size() + negative_candidates2.size();
+	      }
                 // Verify candidates
                 if (current_num_candidates1 > 0 && current_num_candidates2 > 0) {
                   thread_num_candidates += positive_candidates1.size() + positive_candidates2.size() + negative_candidates1.size() + negative_candidates2.size();
@@ -1010,13 +1021,17 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
                   positive_mappings2.clear();
                   negative_mappings1.clear();
                   negative_mappings2.clear();
+		  positive_split_sites1.clear();
+		  negative_split_sites1.clear();
+		  positive_split_sites2.clear();
+		  negative_split_sites2.clear();
                   int min_num_errors1, second_min_num_errors1;
                   int num_best_mappings1, num_second_best_mappings1;
                   int min_num_errors2, second_min_num_errors2;
                   int num_best_mappings2, num_second_best_mappings2;
-                  VerifyCandidates(read_batch1, pair_index, reference, minimizers1, positive_candidates1, negative_candidates1, &positive_mappings1, NULL, &negative_mappings1, NULL, &min_num_errors1, &num_best_mappings1, &second_min_num_errors1, &num_second_best_mappings1);
+                  VerifyCandidates(read_batch1, pair_index, reference, minimizers1, positive_candidates1, negative_candidates1, &positive_mappings1, &positive_split_sites1, &negative_mappings1, &negative_split_sites1, &min_num_errors1, &num_best_mappings1, &second_min_num_errors1, &num_second_best_mappings1);
                   uint32_t current_num_mappings1 = positive_mappings1.size() + negative_mappings1.size();
-                  VerifyCandidates(read_batch2, pair_index, reference, minimizers2, positive_candidates2, negative_candidates2, &positive_mappings2, NULL, &negative_mappings2, NULL, &min_num_errors2, &num_best_mappings2, &second_min_num_errors2, &num_second_best_mappings2);
+                  VerifyCandidates(read_batch2, pair_index, reference, minimizers2, positive_candidates2, negative_candidates2, &positive_mappings2, &positive_split_sites2, &negative_mappings2, &negative_split_sites2, &min_num_errors2, &num_best_mappings2, &second_min_num_errors2, &num_second_best_mappings2);
                   uint32_t current_num_mappings2 = positive_mappings2.size() + negative_mappings2.size();
                   if (current_num_mappings1 > 0 && current_num_mappings2 > 0) {
                     int min_sum_errors, second_min_sum_errors;
@@ -1024,11 +1039,16 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
                     F1R2_best_mappings.clear();
                     F2R1_best_mappings.clear();
                     std::vector<std::vector<MappingRecord> > &mappings_on_diff_ref_seqs = mappings_on_diff_ref_seqs_for_diff_threads[omp_get_thread_num()];
-                    std::sort(positive_mappings1.begin(), positive_mappings1.end(), [](const std::pair<int,uint64_t> &a, const std::pair<int,uint64_t> &b) { return a.second < b.second; });
-                    std::sort(positive_mappings2.begin(), positive_mappings2.end(), [](const std::pair<int,uint64_t> &a, const std::pair<int,uint64_t> &b) { return a.second < b.second; });
-                    std::sort(negative_mappings1.begin(), negative_mappings1.end(), [](const std::pair<int,uint64_t> &a, const std::pair<int,uint64_t> &b) { return a.second < b.second; });
-                    std::sort(negative_mappings2.begin(), negative_mappings2.end(), [](const std::pair<int,uint64_t> &a, const std::pair<int,uint64_t> &b) { return a.second < b.second; });
-                    GenerateBestMappingsForPairedEndRead(pair_index, positive_candidates1.size(), negative_candidates1.size(), repetitive_seed_length1, min_num_errors1, num_best_mappings1, second_min_num_errors1, num_second_best_mappings1, read_batch1, positive_mappings1, negative_mappings1, positive_candidates2.size(), negative_candidates2.size(), repetitive_seed_length2, min_num_errors2, num_best_mappings2, second_min_num_errors2, num_second_best_mappings2, read_batch2, reference, barcode_batch, positive_mappings2, negative_mappings2, &best_mapping_indices, &generator, &F1R2_best_mappings, &F2R1_best_mappings, &min_sum_errors, &num_best_mappings, &second_min_sum_errors, &num_second_best_mappings, &mappings_on_diff_ref_seqs);
+		    if (!split_alignment_) { 
+			// GenerateBestMappingsForPairedEndRead assumes the mappings are sorted by coordinate for non split alignments
+			// In split alignment, we don't want to sort and this keeps mapping and split_sites vectors consistent.
+			    std::sort(positive_mappings1.begin(), positive_mappings1.end(), [](const std::pair<int,uint64_t> &a, const std::pair<int,uint64_t> &b) { return a.second < b.second; });
+			    std::sort(positive_mappings2.begin(), positive_mappings2.end(), [](const std::pair<int,uint64_t> &a, const std::pair<int,uint64_t> &b) { return a.second < b.second; });
+			    std::sort(negative_mappings1.begin(), negative_mappings1.end(), [](const std::pair<int,uint64_t> &a, const std::pair<int,uint64_t> &b) { return a.second < b.second; });
+			    std::sort(negative_mappings2.begin(), negative_mappings2.end(), [](const std::pair<int,uint64_t> &a, const std::pair<int,uint64_t> &b) { return a.second < b.second; });
+		    }
+                    
+		    GenerateBestMappingsForPairedEndRead(pair_index, positive_candidates1.size(), negative_candidates1.size(), repetitive_seed_length1, min_num_errors1, num_best_mappings1, second_min_num_errors1, num_second_best_mappings1, read_batch1, positive_mappings1, positive_split_sites1, negative_mappings1, negative_split_sites1, positive_candidates2.size(), negative_candidates2.size(), repetitive_seed_length2, min_num_errors2, num_best_mappings2, second_min_num_errors2, num_second_best_mappings2, read_batch2, reference, barcode_batch, positive_mappings2, positive_split_sites2, negative_mappings2, negative_split_sites2, &best_mapping_indices, &generator, &F1R2_best_mappings, &F2R1_best_mappings, &min_sum_errors, &num_best_mappings, &second_min_sum_errors, &num_second_best_mappings, &mappings_on_diff_ref_seqs);
                     if (num_best_mappings == 1) {
                       ++thread_num_uniquely_mapped_reads;
                       ++thread_num_uniquely_mapped_reads;
@@ -1041,7 +1061,6 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
                     }
                   }
                 }
-              }
             }
           }
           //if (num_reads_ / 2 > initial_num_sample_barcodes_) {
@@ -1384,92 +1403,129 @@ void Chromap<PairedPAFMapping>::EmplaceBackMappingRecord(uint32_t read_id, const
 }
 
 template <typename MappingRecord>
-void Chromap<MappingRecord>::ProcessBestMappingsForPairedEndReadOnOneDirection(Direction first_read_direction, uint32_t pair_index, uint8_t mapq, int num_candidates1, uint32_t repetitive_seed_length1, int min_num_errors1, int num_best_mappings1, int second_min_num_errors1, int num_second_best_mappings1, const SequenceBatch &read_batch1, const std::vector<std::pair<int, uint64_t> > &mappings1, int num_candidates2, uint32_t repetitive_seed_length2, int min_num_errors2, int num_best_mappings2, int second_min_num_errors2, int num_second_best_mappings2, const SequenceBatch &read_batch2, const SequenceBatch &reference, const SequenceBatch &barcode_batch, const std::vector<int> &best_mapping_indices, const std::vector<std::pair<int, uint64_t> > &mappings2, const std::vector<std::pair<uint32_t, uint32_t> > &best_mappings, int min_sum_errors, int num_best_mappings, int second_min_sum_errors, int num_second_best_mappings, int *best_mapping_index, int *num_best_mappings_reported, std::vector<std::vector<MappingRecord> > *mappings_on_diff_ref_seqs) {
-  const char *read1 = read_batch1.GetSequenceAt(pair_index);
-  const char *read2 = read_batch2.GetSequenceAt(pair_index);
-  uint32_t read1_length = read_batch1.GetSequenceLengthAt(pair_index);
-  uint32_t read2_length = read_batch2.GetSequenceLengthAt(pair_index);
-  const std::string &negative_read1 = read_batch1.GetNegativeSequenceAt(pair_index);
-  const std::string &negative_read2 = read_batch2.GetNegativeSequenceAt(pair_index);
-  uint32_t read_id = read_batch1.GetSequenceIdAt(pair_index);
-  uint8_t is_unique = (num_best_mappings == 1 || num_best_mappings1 == 1 || num_best_mappings2 == 1) ? 1 : 0;
-  //uint8_t is_unique = num_best_mappings == 1 ? 1 : 0;
-  for (uint32_t mi = 0; mi < best_mappings.size(); ++mi) {
-    uint32_t i1 = best_mappings[mi].first;
-    uint32_t i2 = best_mappings[mi].second;
-    int current_sum_errors = mappings1[i1].first + mappings2[i2].first;
-    if (current_sum_errors == min_sum_errors) {
-      if (*best_mapping_index == best_mapping_indices[*num_best_mappings_reported]) {
-        uint32_t rid1 = mappings1[i1].second >> 32;
-        uint32_t position1 = mappings1[i1].second;
-        //uint32_t verification_window_start_position1 = position1 + 1 - read1_length - error_threshold_;
-        uint32_t verification_window_start_position1 = position1 + 1 > (read1_length + error_threshold_) ? position1 + 1 - read1_length - error_threshold_ : 0;
-        if (position1 >= reference.GetSequenceLengthAt(rid1)) {
-          verification_window_start_position1 = reference.GetSequenceLengthAt(rid1) - error_threshold_ - read1_length; 
-        }
-        int mapping_start_position1;
-        uint32_t rid2 = mappings2[i2].second >> 32;
-        uint32_t position2 = mappings2[i2].second;
-        //uint32_t verification_window_start_position2 = position2 + 1 - read2_length - error_threshold_;
-        uint32_t verification_window_start_position2 = position2 + 1 > (read2_length + error_threshold_) ? position2 + 1 - read2_length - error_threshold_ : 0;
-        if (position2 >= reference.GetSequenceLengthAt(rid2)) {
-          verification_window_start_position2 = reference.GetSequenceLengthAt(rid2) - error_threshold_ - read2_length; 
-        }
-        int mapping_start_position2;
-        if (first_read_direction == kPositive) {
-          BandedTraceback(mappings1[i1].first, reference.GetSequenceAt(rid1) + verification_window_start_position1, read1, read1_length, &mapping_start_position1);
-          BandedTraceback(mappings2[i2].first, reference.GetSequenceAt(rid2) + verification_window_start_position2, negative_read2.data(), read2_length, &mapping_start_position2);
-          uint32_t fragment_start_position = verification_window_start_position1 + mapping_start_position1;
-          uint16_t fragment_length = position2 - fragment_start_position + 1;
-          uint16_t positive_alignment_length = position1 + 1 - fragment_start_position;
-          uint16_t negative_alignment_length = position2 + 1 - (verification_window_start_position2 + mapping_start_position2);
-          uint8_t mapq1 = 0;
-          uint8_t mapq2 = 0;
-          mapq = GetMAPQForPairedEndRead(num_candidates1, num_candidates2, repetitive_seed_length1, repetitive_seed_length2, positive_alignment_length, negative_alignment_length, min_sum_errors, num_best_mappings, second_min_sum_errors, num_second_best_mappings, min_num_errors1, min_num_errors2, num_best_mappings1, num_best_mappings2, second_min_num_errors1, second_min_num_errors2, num_second_best_mappings1, num_second_best_mappings2, mapq1, mapq2);
-          uint8_t direction = 1;
-          //mapq |= (uint8_t)1;
-          uint32_t barcode_key = 0;
-          if (!is_bulk_data_) {
-            barcode_key = barcode_batch.GenerateSeedFromSequenceAt(pair_index, 0, barcode_batch.GetSequenceLengthAt(pair_index));
-          }
-          if (output_mapping_in_PAF_) {
-            EmplaceBackMappingRecord(read_id, read_batch1.GetSequenceNameAt(pair_index), read_batch2.GetSequenceNameAt(pair_index), (uint16_t)read_batch1.GetSequenceLengthAt(pair_index), (uint16_t)read_batch2.GetSequenceLengthAt(pair_index), barcode_key, fragment_start_position, fragment_length, mapq1, mapq2, direction, is_unique, 1, positive_alignment_length, negative_alignment_length, &((*mappings_on_diff_ref_seqs)[rid1]));
-          } else {
-            EmplaceBackMappingRecord(read_id, barcode_key, fragment_start_position, fragment_length, mapq, direction, is_unique, 1, positive_alignment_length, negative_alignment_length, &((*mappings_on_diff_ref_seqs)[rid1]));
-          }
-        } else {
-          BandedTraceback(mappings1[i1].first, reference.GetSequenceAt(rid1) + verification_window_start_position1, negative_read1.data(), read1_length, &mapping_start_position1);
-          BandedTraceback(mappings2[i2].first, reference.GetSequenceAt(rid2) + verification_window_start_position2, read2, read2_length, &mapping_start_position2);
-          uint32_t fragment_start_position = verification_window_start_position2 + mapping_start_position2;
-          uint16_t fragment_length = position1 - fragment_start_position + 1;
-          uint16_t positive_alignment_length = position2 + 1 - fragment_start_position;
-          uint16_t negative_alignment_length = position1 + 1 - (verification_window_start_position1 + mapping_start_position1);
-          uint8_t mapq1 = 0;
-          uint8_t mapq2 = 0;
-          mapq = GetMAPQForPairedEndRead(num_candidates2, num_candidates1, repetitive_seed_length2, repetitive_seed_length1, positive_alignment_length, negative_alignment_length, min_sum_errors, num_best_mappings, second_min_sum_errors, num_second_best_mappings, min_num_errors2, min_num_errors1, num_best_mappings2, num_best_mappings1, second_min_num_errors2, second_min_num_errors1, num_second_best_mappings2, num_second_best_mappings1, mapq2, mapq1);
-          uint8_t direction = 0;
-          uint32_t barcode_key = 0;
-          if (!is_bulk_data_) {
-            barcode_key = barcode_batch.GenerateSeedFromSequenceAt(pair_index, 0, barcode_batch.GetSequenceLengthAt(pair_index));
-          }
-          if (output_mapping_in_PAF_) {
-            EmplaceBackMappingRecord(read_id, read_batch1.GetSequenceNameAt(pair_index), read_batch2.GetSequenceNameAt(pair_index), (uint16_t)read_batch1.GetSequenceLengthAt(pair_index), (uint16_t)read_batch2.GetSequenceLengthAt(pair_index), barcode_key, fragment_start_position, fragment_length, mapq1, mapq2, direction, is_unique, 1, positive_alignment_length, negative_alignment_length, &((*mappings_on_diff_ref_seqs)[rid1]));
-          } else {
-            EmplaceBackMappingRecord(read_id, barcode_key, fragment_start_position, fragment_length, mapq, direction, is_unique, 1, positive_alignment_length, negative_alignment_length, &((*mappings_on_diff_ref_seqs)[rid1]));
-          }
-        }
-        (*num_best_mappings_reported)++;
-        if (*num_best_mappings_reported == std::min(max_num_best_mappings_, num_best_mappings)) {
-          break;
-        }
-      }
-      (*best_mapping_index)++;
-    }
-  }
+void Chromap<MappingRecord>::ProcessBestMappingsForPairedEndReadOnOneDirection(Direction first_read_direction, uint32_t pair_index, uint8_t mapq, int num_candidates1, uint32_t repetitive_seed_length1, int min_num_errors1, int num_best_mappings1, int second_min_num_errors1, int num_second_best_mappings1, const SequenceBatch &read_batch1, const std::vector<std::pair<int, uint64_t> > &mappings1, const std::vector<int> &split_sites1, int num_candidates2, uint32_t repetitive_seed_length2, int min_num_errors2, int num_best_mappings2, int second_min_num_errors2, int num_second_best_mappings2, const SequenceBatch &read_batch2, const SequenceBatch &reference, const SequenceBatch &barcode_batch, const std::vector<int> &best_mapping_indices, const std::vector<std::pair<int, uint64_t> > &mappings2, const std::vector<int> &split_sites2, const std::vector<std::pair<uint32_t, uint32_t> > &best_mappings, int min_sum_errors, int num_best_mappings, int second_min_sum_errors, int num_second_best_mappings, int *best_mapping_index, int *num_best_mappings_reported, std::vector<std::vector<MappingRecord> > *mappings_on_diff_ref_seqs) {
+	const char *read1 = read_batch1.GetSequenceAt(pair_index);
+	const char *read2 = read_batch2.GetSequenceAt(pair_index);
+	uint32_t read1_length = read_batch1.GetSequenceLengthAt(pair_index);
+	uint32_t read2_length = read_batch2.GetSequenceLengthAt(pair_index);
+  	const char *read1_name = read_batch1.GetSequenceNameAt(pair_index);
+  	const char *read2_name = read_batch2.GetSequenceNameAt(pair_index);
+	const std::string &negative_read1 = read_batch1.GetNegativeSequenceAt(pair_index);
+	const std::string &negative_read2 = read_batch2.GetNegativeSequenceAt(pair_index);
+	uint32_t read_id = read_batch1.GetSequenceIdAt(pair_index);
+	uint8_t is_unique = (num_best_mappings == 1 || num_best_mappings1 == 1 || num_best_mappings2 == 1) ? 1 : 0;
+	uint32_t barcode_key = 0;
+	Direction second_read_direction = kPositive;
+	if (!is_bulk_data_) {
+		barcode_key = barcode_batch.GenerateSeedFromSequenceAt(pair_index, 0, barcode_batch.GetSequenceLengthAt(pair_index));
+	}
+	if (first_read_direction == kPositive) {
+		second_read_direction = kNegative;
+	}
+
+	//uint8_t is_unique = num_best_mappings == 1 ? 1 : 0;
+	for (uint32_t mi = 0; mi < best_mappings.size(); ++mi) {
+		uint32_t i1 = best_mappings[mi].first;
+		uint32_t i2 = best_mappings[mi].second;
+		int current_sum_errors = mappings1[i1].first + mappings2[i2].first;
+		if (current_sum_errors == min_sum_errors) {
+			if (*best_mapping_index == best_mapping_indices[*num_best_mappings_reported]) {
+				uint32_t rid1 = mappings1[i1].second >> 32;
+				uint32_t rid2 = mappings2[i2].second >> 32;
+				uint32_t ref_start_position1, ref_end_position1;
+				uint32_t ref_start_position2, ref_end_position2;
+				int split_site1 = 0;
+				int split_site2 = 0;
+				const char *effect_read1 = read1 ;
+				const char *effect_read2 = negative_read2.data() ;
+				uint32_t *cigar1 , *cigar2;
+				int n_cigar1 = 0, n_cigar2 = 0;
+				int NM1 = 0, NM2 = 0;
+				std::string MD_tag1 = "", MD_tag2 = "" ;
+				uint8_t mapq1 = 0;
+				uint8_t mapq2 = 0;
+				if (first_read_direction == kNegative) {
+					effect_read1 = negative_read1.data();
+					effect_read2 = read2;
+				}
+				if (split_alignment_) {
+					split_site1 = split_sites1[i1];
+					split_site2 = split_sites2[i2];
+				}
+				GetRefStartEndPositionForReadFromMapping(first_read_direction, mappings1[i1], effect_read1, read1_length, split_site1, 
+						reference, &ref_start_position1, &ref_end_position1, &n_cigar1, &cigar1, &NM1, MD_tag1) ;
+				GetRefStartEndPositionForReadFromMapping(second_read_direction, mappings2[i2], effect_read2, read2_length, 
+						split_site2, reference, &ref_start_position2, &ref_end_position2, 
+						&n_cigar2, &cigar2, &NM2, MD_tag2) ;
+				/*if (!strcmp(read_batch1.GetSequenceNameAt(pair_index), "XXXX")) {
+				  printf("%d\n", best_mappings.size());
+				  printf("%d. %d %d\n", min_sum_errors, i1, i2);
+				  printf("%d %d %d. %d %d\n", first_read_direction, mappings1[i1].first, (int)mappings1[i1].second, split_site1 >> 16, split_site1 & 0xffff);
+				  printf("%d %d\n", ref_start_position1, ref_end_position1);
+				  printf("%d %d\n", ref_start_position2, ref_end_position2);
+				}*/
+				mapq = GetMAPQForPairedEndRead(num_candidates1, num_candidates2, repetitive_seed_length1, repetitive_seed_length2, ref_end_position1 - ref_start_position1 + 1, ref_end_position2 - ref_start_position2 + 1, min_sum_errors, num_best_mappings, second_min_sum_errors, num_second_best_mappings, min_num_errors1, min_num_errors2, num_best_mappings1, num_best_mappings2, second_min_num_errors1, second_min_num_errors2, num_second_best_mappings1, num_second_best_mappings2, mapq1, mapq2);
+				uint8_t direction = 1;
+				if (first_read_direction == kNegative) {
+					direction = 0;
+				}
+				//mapq |= (uint8_t)1;
+				if (output_mapping_in_SAM_) {
+				  uint16_t flag1 = 1;
+				  uint16_t flag2 = 1;
+				  if (first_read_direction == kPositive) {
+				  	flag1 |= BAM_FMREVERSE;
+				  	flag2 |= BAM_FREVERSE;
+				  } else {
+				  	flag1 |= BAM_FREVERSE;
+				  	flag2 |= BAM_FMREVERSE;
+				  }
+				  flag1 |= BAM_FREAD1;
+				  flag2 |= BAM_FREAD2;
+				  if (*num_best_mappings_reported >= 1) {
+				  	flag1 |= BAM_FSECONDARY;
+				  	flag2 |= BAM_FSECONDARY;
+				  }
+				//printf("%d %d\n", ref_start_position1, ref_end_position1);
+				//printf("%d %d\n", ref_start_position2, ref_end_position2);
+				  EmplaceBackMappingRecord(read_id, read1_name, 1, ref_start_position1, rid1, flag1, 0, is_unique, mapq, NM1, n_cigar1, cigar1, MD_tag1, &((*mappings_on_diff_ref_seqs)[rid1])); 
+				  EmplaceBackMappingRecord(read_id, read2_name, 1, ref_start_position2, rid2, flag2, 0, is_unique, mapq, NM2, n_cigar2, cigar2, MD_tag2, &((*mappings_on_diff_ref_seqs)[rid2])); 
+				} else if (output_mapping_in_PAF_) {
+					uint32_t fragment_start_position = ref_start_position1;
+					uint16_t fragment_length = ref_end_position2 - ref_start_position1 + 1;;
+					uint16_t positive_alignment_length = ref_end_position1 - ref_start_position1 + 1;
+					uint16_t negative_alignment_length = ref_end_position2 - ref_start_position2 + 1;
+					if (direction == 0) {
+						fragment_start_position = ref_start_position2;
+						fragment_length = ref_end_position1 - ref_start_position2 + 1;
+						positive_alignment_length = ref_end_position2 - ref_start_position2 + 1;
+						negative_alignment_length = ref_end_position1 - ref_start_position1 + 1;
+					}
+					EmplaceBackMappingRecord(read_id, read1_name, read2_name, (uint16_t)read_batch1.GetSequenceLengthAt(pair_index), (uint16_t)read_batch2.GetSequenceLengthAt(pair_index), barcode_key, fragment_start_position, fragment_length, mapq1, mapq2, direction, is_unique, 1, positive_alignment_length, negative_alignment_length, &((*mappings_on_diff_ref_seqs)[rid1]));
+				} else {
+					uint32_t fragment_start_position = ref_start_position1;
+					uint16_t fragment_length = ref_end_position2 - ref_start_position1 + 1;;
+					uint16_t positive_alignment_length = ref_end_position1 - ref_start_position1 + 1;
+					uint16_t negative_alignment_length = ref_end_position2 - ref_start_position2 + 1;
+					if (direction == 0) {
+						fragment_start_position = ref_start_position2;
+						fragment_length = ref_end_position1 - ref_start_position2 + 1;
+						positive_alignment_length = ref_end_position2 - ref_start_position2 + 1;
+						negative_alignment_length = ref_end_position1 - ref_start_position1 + 1;
+					}
+					EmplaceBackMappingRecord(read_id, barcode_key, fragment_start_position, fragment_length, mapq, direction, is_unique, 1, positive_alignment_length, negative_alignment_length, &((*mappings_on_diff_ref_seqs)[rid1]));
+				}
+			}  
+			if (*num_best_mappings_reported == std::min(max_num_best_mappings_, num_best_mappings)) {
+				break;
+			}
+		}
+		(*best_mapping_index)++;
+	}
 }
 
 template <typename MappingRecord>
-void Chromap<MappingRecord>::GenerateBestMappingsForPairedEndRead(uint32_t pair_index, int num_positive_candidates1, int num_negative_candidates1, uint32_t repetitive_seed_length1, int min_num_errors1, int num_best_mappings1, int second_min_num_errors1, int num_second_best_mappings1, const SequenceBatch &read_batch1, const std::vector<std::pair<int, uint64_t> > &positive_mappings1, const std::vector<std::pair<int, uint64_t> > &negative_mappings1, int num_positive_candidates2, int num_negative_candidates2, uint32_t repetitive_seed_length2, int min_num_errors2, int num_best_mappings2, int second_min_num_errors2, int num_second_best_mappings2, const SequenceBatch &read_batch2, const SequenceBatch &reference, const SequenceBatch &barcode_batch, const std::vector<std::pair<int, uint64_t> > &positive_mappings2, const std::vector<std::pair<int, uint64_t> > &negative_mappings2, std::vector<int> *best_mapping_indices, std::mt19937 *generator, std::vector<std::pair<uint32_t, uint32_t> > *F1R2_best_mappings, std::vector<std::pair<uint32_t, uint32_t> > *F2R1_best_mappings, int *min_sum_errors, int *num_best_mappings, int *second_min_sum_errors, int *num_second_best_mappings, std::vector<std::vector<MappingRecord> > *mappings_on_diff_ref_seqs) {
+void Chromap<MappingRecord>::GenerateBestMappingsForPairedEndRead(uint32_t pair_index, int num_positive_candidates1, int num_negative_candidates1, uint32_t repetitive_seed_length1, int min_num_errors1, int num_best_mappings1, int second_min_num_errors1, int num_second_best_mappings1, const SequenceBatch &read_batch1, const std::vector<std::pair<int, uint64_t> > &positive_mappings1, const std::vector<int> &positive_split_sites1, const std::vector<std::pair<int, uint64_t> > &negative_mappings1, const std::vector<int> &negative_split_sites1, int num_positive_candidates2, int num_negative_candidates2, uint32_t repetitive_seed_length2, int min_num_errors2, int num_best_mappings2, int second_min_num_errors2, int num_second_best_mappings2, const SequenceBatch &read_batch2, const SequenceBatch &reference, const SequenceBatch &barcode_batch, const std::vector<std::pair<int, uint64_t> > &positive_mappings2, const std::vector<int> &positive_split_sites2, const std::vector<std::pair<int, uint64_t> > &negative_mappings2, const std::vector<int> &negative_split_sites2, std::vector<int> *best_mapping_indices, std::mt19937 *generator, std::vector<std::pair<uint32_t, uint32_t> > *F1R2_best_mappings, std::vector<std::pair<uint32_t, uint32_t> > *F2R1_best_mappings, int *min_sum_errors, int *num_best_mappings, int *second_min_sum_errors, int *num_second_best_mappings, std::vector<std::vector<MappingRecord> > *mappings_on_diff_ref_seqs) {
   *min_sum_errors = 2 * error_threshold_ + 1;
   *num_best_mappings = 0;
   *second_min_sum_errors = *min_sum_errors;
@@ -1506,9 +1562,9 @@ void Chromap<MappingRecord>::GenerateBestMappingsForPairedEndRead(uint32_t pair_
     }
     int best_mapping_index = 0;
     int num_best_mappings_reported = 0;
-    ProcessBestMappingsForPairedEndReadOnOneDirection(kPositive, pair_index, mapq, num_positive_candidates1, repetitive_seed_length1, min_num_errors1, num_best_mappings1, second_min_num_errors1, num_second_best_mappings1, read_batch1, positive_mappings1, num_negative_candidates2, repetitive_seed_length2, min_num_errors2, num_best_mappings2, second_min_num_errors2, num_second_best_mappings2, read_batch2, reference, barcode_batch, *best_mapping_indices, negative_mappings2, *F1R2_best_mappings, *min_sum_errors, *num_best_mappings, *second_min_sum_errors, *num_second_best_mappings, &best_mapping_index, &num_best_mappings_reported, mappings_on_diff_ref_seqs);
+    ProcessBestMappingsForPairedEndReadOnOneDirection(kPositive, pair_index, mapq, num_positive_candidates1, repetitive_seed_length1, min_num_errors1, num_best_mappings1, second_min_num_errors1, num_second_best_mappings1, read_batch1, positive_mappings1, positive_split_sites1, num_negative_candidates2, repetitive_seed_length2, min_num_errors2, num_best_mappings2, second_min_num_errors2, num_second_best_mappings2, read_batch2, reference, barcode_batch, *best_mapping_indices, negative_mappings2, negative_split_sites2, *F1R2_best_mappings, *min_sum_errors, *num_best_mappings, *second_min_sum_errors, *num_second_best_mappings, &best_mapping_index, &num_best_mappings_reported, mappings_on_diff_ref_seqs);
     if (num_best_mappings_reported != std::min(max_num_best_mappings_, *num_best_mappings)) {
-      ProcessBestMappingsForPairedEndReadOnOneDirection(kNegative, pair_index, mapq, num_negative_candidates1, repetitive_seed_length1, min_num_errors1, num_best_mappings1, second_min_num_errors1, num_second_best_mappings1, read_batch1, negative_mappings1, num_positive_candidates2, repetitive_seed_length2, min_num_errors2, num_best_mappings2, second_min_num_errors2, num_second_best_mappings2, read_batch2, reference, barcode_batch, *best_mapping_indices, positive_mappings2, *F2R1_best_mappings, *min_sum_errors, *num_best_mappings, *second_min_sum_errors, *num_second_best_mappings, &best_mapping_index, &num_best_mappings_reported, mappings_on_diff_ref_seqs);
+      ProcessBestMappingsForPairedEndReadOnOneDirection(kNegative, pair_index, mapq, num_negative_candidates1, repetitive_seed_length1, min_num_errors1, num_best_mappings1, second_min_num_errors1, num_second_best_mappings1, read_batch1, negative_mappings1, negative_split_sites1, num_positive_candidates2, repetitive_seed_length2, min_num_errors2, num_best_mappings2, second_min_num_errors2, num_second_best_mappings2, read_batch2, reference, barcode_batch, *best_mapping_indices, positive_mappings2, positive_split_sites2, *F2R1_best_mappings, *min_sum_errors, *num_best_mappings, *second_min_sum_errors, *num_second_best_mappings, &best_mapping_index, &num_best_mappings_reported, mappings_on_diff_ref_seqs);
     }
   }
 }
@@ -1949,6 +2005,10 @@ void Chromap<MappingRecord>::GetRefStartEndPositionForReadFromMapping(Direction 
 			// 
 
 			// Is the map start/end position left close right open as in bed format?
+			/*if (read_start_site + read_length > full_read_length || read_start_site < 0 
+			  || verification_window_start_position + read_start_site + read_length + 2 * error_threshold_ > reference.GetSequenceLengthAt(rid)) {
+			  printf("ERROR! %d %d %d %d\n", full_read_length, split_site, gap_beginning, read_length);
+			}*/
 			ksw_semi_global3(read_length + 2 * error_threshold_, reference.GetSequenceAt(rid) + verification_window_start_position + read_start_site, read_length, read + read_start_site, 5, mat, gap_open_penalties_[0], gap_extension_penalties_[0], gap_open_penalties_[1], gap_extension_penalties_[1], error_threshold_ * 2 + 1, n_cigar, cigar, &mapping_start_position, &mapping_end_position);
 			if (gap_beginning > 0) {
 				//printf("before adjust %d %d %d. %d %d\n", split_site, read_start_site, read_length, verification_window_start_position + mapping_start_position, verification_window_start_position + mapping_end_position);
@@ -2585,7 +2645,7 @@ void Chromap<MappingRecord>::VerifyCandidatesOnOneDirection(Direction candidate_
         num_errors = BandedAlignPatternToTextWithDropOff(reference.GetSequenceAt(rid) + position - error_threshold_, read, read_length, &mapping_end_position);
 	if (mapping_end_position < 0 && allow_gap_beginning > 0) {
 	  int backup_num_errors = num_errors;
-	  int backup_mapping_end_position = mapping_end_position;
+	  int backup_mapping_end_position = -mapping_end_position;
           num_errors = BandedAlignPatternToTextWithDropOff(reference.GetSequenceAt(rid) + position - error_threshold_ + allow_gap_beginning, read + allow_gap_beginning, read_length - allow_gap_beginning, &mapping_end_position);
 	  if (num_errors > error_threshold_ || mapping_end_position < 0) {
 	    num_errors = backup_num_errors;
@@ -2602,7 +2662,7 @@ void Chromap<MappingRecord>::VerifyCandidatesOnOneDirection(Direction candidate_
         num_errors = BandedAlignPatternToTextWithDropOffFrom3End(reference.GetSequenceAt(rid) + position - error_threshold_, negative_read.data(), read_length, &mapping_end_position);
 	if (mapping_end_position < 0 && allow_gap_beginning > 0) {
 	  int backup_num_errors = num_errors;
-	  int backup_mapping_end_position = mapping_end_position;
+	  int backup_mapping_end_position = -mapping_end_position;
           num_errors = BandedAlignPatternToTextWithDropOffFrom3End(reference.GetSequenceAt(rid) + position - error_threshold_, negative_read.data(), read_length - allow_gap_beginning, &mapping_end_position);
 	  if (num_errors > error_threshold_ || mapping_end_position < 0) {
 	    num_errors = backup_num_errors;
@@ -2623,6 +2683,8 @@ void Chromap<MappingRecord>::VerifyCandidatesOnOneDirection(Direction candidate_
       //} else {
       if (mapping_end_position - error_threshold_ - num_errors >= mapping_length_threshold) {
         num_errors = -(mapping_end_position - error_threshold_ - num_errors);
+      } else {
+      	num_errors = error_threshold_ + 1;
       }
       //}
       //std::cerr << "ne2: " << num_errors << " " << mapping_end_position << "\n";
@@ -2659,7 +2721,13 @@ void Chromap<MappingRecord>::VerifyCandidatesOnOneDirection(Direction candidate_
 	//}
       }
       if (split_alignment_) {
-        split_sites->emplace_back((gap_beginning<<16)| (mapping_end_position - error_threshold_) );
+        /*if (mapping_end_position - error_threshold_ < 0 || mapping_end_position - error_threshold_ > 200 || mapping_end_position - error_threshold_ < 20) {
+		printf("ERROR! %d %d %d %d %d\n", mapping_end_position, error_threshold_, read_length,(int)candidates[ci].position, gap_beginning);
+	}*/
+	if (mapping_end_position - error_threshold_ > (int)read_length)
+	  //printf("??? %d %d\n", mapping_end_position, gap_beginning);
+	  mapping_end_position = read_length + error_threshold_;
+	split_sites->emplace_back((gap_beginning<<16)| (mapping_end_position - error_threshold_) );
       }
     }
   }
