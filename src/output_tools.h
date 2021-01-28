@@ -312,6 +312,57 @@ struct PairedSAMMapping {
   //}
 };
 
+// Format for pairtools for HiC data.
+struct PairsMapping {  
+	uint32_t read_id;
+	std::string read_name;
+	uint32_t cell_barcode;
+	int rid1;
+	int rid2;
+	uint32_t pos1; 
+	uint32_t pos2; 
+	int direction1; // 1-positive. 0-negative
+	int direction2;
+	uint16_t mapq:8, is_unique:1, num_dups:7;
+
+	bool operator<(const PairsMapping& m) const {
+		return std::tie(rid1, rid2, pos1, pos2, mapq) < std::tie(m.rid1, m.rid2, m.pos1, m.pos2, mapq);
+	}
+	bool operator==(const PairsMapping& m) const {
+		return std::tie(rid1, pos1, rid2, pos2) == std::tie(m.rid1, m.pos1, m.rid2, m.pos2);
+		//return std::tie(pos1, pos2, rid1, rid2, is_rev1, is_rev2) == std::tie(m.pos1, m.pos2, m.rid1, m.rid2, m.is_rev1, m.is_rev2);
+	}
+	void Tn5Shift() {
+		// We don't support Tn5 shift in SAM format because it has other fields that depend mapping position.
+	}
+
+	int GetPosition(int idx) const {
+		if (idx == 2) {
+			return pos2 + 1;
+		}
+		return pos1 + 1;
+	}
+
+	char GetDirection(int idx) const {
+		int d = direction1 ;
+		if (idx == 2) {
+			d = direction2 ;
+		}
+		return d > 0 ? '+' : '-' ;
+	}
+	
+	bool IsPositive() const {
+		return direction1 > 0 ? true : false;
+	}
+	uint32_t GetStartPosition() const { // inclusive
+		return pos1;
+	}
+	uint32_t GetEndPosition() const { // exclusive
+		return pos2;
+	}
+} ;
+
+
 struct MappingWithBarcode {
   uint32_t read_id;
   uint32_t cell_barcode;
@@ -692,6 +743,10 @@ template <>
 inline void PairedTagAlignOutputTools<SAMMapping>::AppendMapping(uint32_t rid, const SequenceBatch &reference, const SAMMapping &mapping) {
 }
 
+template <>
+inline void PairedTagAlignOutputTools<PairsMapping>::AppendMapping(uint32_t rid, const SequenceBatch &reference, const PairsMapping &mapping) {
+}
+
 template <typename MappingRecord>
 class PAFOutputTools : public OutputTools<MappingRecord> {
   void OutputHeader(uint32_t num_reference_sequences, const SequenceBatch &reference) {
@@ -774,6 +829,27 @@ inline void SAMOutputTools<SAMMapping>::AppendMapping(uint32_t rid, const Sequen
   const char *reference_sequence_name = (mapping.flag & BAM_FUNMAP) > 0 ? "*" : reference.GetSequenceNameAt(rid);
   this->AppendMappingOutput(mapping.read_name + "\t" + std::to_string(mapping.flag) + "\t" + std::string(reference_sequence_name) + "\t" + std::to_string(mapping.GetStartPosition()) + "\t" + std::to_string(mapping.mapq) + "\t" + mapping.GenerateCigarString() + "\t*\t" + std::to_string(0) + "\t" + std::to_string(0) + "\t*\t*\t" + mapping.GenerateIntTagString("NM", mapping.NM) + "\tMD:Z:" + mapping.MD + "\n");
 }
-} // namespace chromap
 
+template <typename MappingRecord>
+class PairsOutputTools : public OutputTools<MappingRecord> {
+  inline void AppendMapping(uint32_t rid, const SequenceBatch &reference, const MappingRecord &mapping) {
+  }
+  void OutputHeader(uint32_t num_reference_sequences, const SequenceBatch &reference) {
+    this->AppendMappingOutput("## pairs format v1.0.0\n#shape: upper triangle\n");
+    for (uint32_t rid = 0; rid < num_reference_sequences; ++rid) {
+      const char *reference_sequence_name = reference.GetSequenceNameAt(rid);
+      uint32_t reference_sequence_length = reference.GetSequenceLengthAt(rid);
+      this->AppendMappingOutput("#chromsize: " + std::string(reference_sequence_name) + " " + std::to_string(reference_sequence_length) + "\n");
+    }
+  }
+};
+
+template <>
+inline void PairsOutputTools<PairsMapping>::AppendMapping(uint32_t rid, const SequenceBatch &reference, const PairsMapping &mapping) {
+  const char *reference_sequence_name1 = reference.GetSequenceNameAt(mapping.rid1);
+  const char *reference_sequence_name2 = reference.GetSequenceNameAt(mapping.rid2);
+  this->AppendMappingOutput(mapping.read_name + "\t" + std::string(reference_sequence_name1) + "\t" + std::to_string(mapping.GetPosition(1)) + "\t" + std::string(reference_sequence_name2) + "\t" + std::to_string(mapping.GetPosition(2)) + "\t" + std::string(1, mapping.GetDirection(1)) + "\t" + std::string(1, mapping.GetDirection(2)) + "\tUU\n");
+}
+
+} // namespace chromap
 #endif // OUTPUTTOOLS_H_
