@@ -2000,7 +2000,7 @@ void Chromap<MappingRecord>::GetRefStartEndPositionForReadFromMapping(Direction 
 	}
 	int mapping_start_position;
 	if (mapping_direction == kPositive) { 
-		if (output_mapping_in_SAM_) {
+		if (output_mapping_in_pairs_ || output_mapping_in_SAM_) {
 			*n_cigar = 0;
 			int mapping_end_position;
 			ksw_semi_global3(read_length + 2 * error_threshold_, reference.GetSequenceAt(rid) + verification_window_start_position, read_length, read + gap_beginning, 5, mat, gap_open_penalties_[0], gap_extension_penalties_[0], gap_open_penalties_[1], gap_extension_penalties_[1], error_threshold_ * 2 + 1, n_cigar, cigar, &mapping_start_position, &mapping_end_position);
@@ -2018,13 +2018,20 @@ void Chromap<MappingRecord>::GetRefStartEndPositionForReadFromMapping(Direction 
 			*ref_end_position = verification_window_start_position + mapping_end_position - 1;
 		} else {
 			BandedTraceback(min_num_errors, reference.GetSequenceAt(rid) + verification_window_start_position, read, read_length, &mapping_start_position);
+			/*if (gap_beginning > 0) {
+				int new_ref_start_position = AdjustGapBeginning(mapping_direction, reference.GetSequenceAt(rid), 
+						read, &gap_beginning, read_length - 1, 
+						verification_window_start_position + mapping_start_position, 
+						position, n_cigar, cigar);
+				mapping_start_position = new_ref_start_position - verification_window_start_position;
+			}*/
 
 			*ref_start_position = verification_window_start_position + mapping_start_position;
 			*ref_end_position = position;
 		}
 	} else { // reverse strand
 		int read_start_site = full_read_length - split_site;
-		if (output_mapping_in_SAM_) {
+		if (output_mapping_in_pairs_ || output_mapping_in_SAM_) {
 			*n_cigar = 0;
 			int mapping_end_position;
 
@@ -2064,8 +2071,20 @@ void Chromap<MappingRecord>::GetRefStartEndPositionForReadFromMapping(Direction 
 			//uint32_t fragment_start_position = verification_window_start_position + mapping_start_position;
 			//uint16_t fragment_length = mapping_end_position - mapping_start_position + 1;
 			BandedTraceback(min_num_errors, reference.GetSequenceAt(rid) + verification_window_start_position, read + read_start_site, read_length, &mapping_start_position);
+			/*int mapping_end_position = position;
+			if (gap_beginning > 0) {
+				//printf("before adjust %d %d %d. %d %d\n", split_site, read_start_site, read_length, verification_window_start_position + mapping_start_position, verification_window_start_position + mapping_end_position);
+				int new_ref_end_position = AdjustGapBeginning(mapping_direction, reference.GetSequenceAt(rid), 
+						read + read_start_site, &gap_beginning, read_length - 1, 
+						verification_window_start_position + mapping_start_position, 
+						position, n_cigar, cigar);
+				// The returned position is right-closed, so need to plus one to match bed convention
+				mapping_end_position = new_ref_end_position + 1 - verification_window_start_position; 
+				read_length = split_site - gap_beginning;
+			}*/
 			*ref_start_position = verification_window_start_position + mapping_start_position;
 			*ref_end_position = position;
+			//*ref_end_position = verification_window_start_position + mapping_end_position - 1;
 		}
 	}
 }
