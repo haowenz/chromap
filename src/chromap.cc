@@ -1329,19 +1329,10 @@ void Chromap<MappingRecord>::GenerateBestMappingsForPairedEndReadOnOneDirection(
 #endif
   
   if (split_alignment_) {
-    // For split alignment, selecting the pairs whose both single-end are the best.
-    if (min_num_errors1 + min_num_errors2 < *min_sum_errors) {
-	*num_best_mappings = 0;
-    	*min_sum_errors = min_num_errors1 + min_num_errors2;
-	*second_min_sum_errors = min_num_errors1 + min_num_errors2 + 1;
-	best_mappings->clear();
-    } else if (min_num_errors1 + min_num_errors2 > *min_sum_errors) {
-    	return;
-    }
     if (mappings1.size() == 0 || mappings2.size() == 0) {
       return;
     }
-    
+    // For split alignment, selecting the pairs whose both single-end are the best.
     for (i1 = 0; i1 < mappings1.size(); ++i1) {
       if (mappings1[i1].first != min_num_errors1) {
         continue;
@@ -1351,6 +1342,8 @@ void Chromap<MappingRecord>::GenerateBestMappingsForPairedEndReadOnOneDirection(
 	  continue;
 	}
         best_mappings->emplace_back(i1, i2);
+    	*min_sum_errors = min_num_errors1 + min_num_errors2;
+	*second_min_sum_errors = min_num_errors1 + min_num_errors2 + 1;
 	(*num_best_mappings)++;
       }
     }
@@ -2079,12 +2072,12 @@ void Chromap<MappingRecord>::GetRefStartEndPositionForReadFromMapping(Direction 
 						verification_window_start_position + mapping_start_position, 
 						verification_window_start_position + mapping_end_position - 1, n_cigar, cigar);
 				// The returned position is right-closed, so need to plus one to match bed convention
-				mapping_end_position = new_ref_end_position + 1 - verification_window_start_position; 
+				mapping_end_position = new_ref_end_position + 1 - verification_window_start_position - read_start_site; 
 				read_length = split_site - gap_beginning;
 			}
 			GenerateMDTag(reference.GetSequenceAt(rid), read + read_start_site, verification_window_start_position + read_start_site + mapping_start_position, *n_cigar, *cigar, *NM, MD_tag);
 			*ref_start_position = verification_window_start_position + read_start_site + mapping_start_position;
-			*ref_end_position = verification_window_start_position + mapping_end_position - 1;
+			*ref_end_position = verification_window_start_position + read_start_site + mapping_end_position - 1;
 		} else {
 			//int n_cigar = 0;
 			//uint32_t *cigar;

@@ -326,7 +326,7 @@ struct PairsMapping {
 	uint16_t mapq:8, is_unique:1, num_dups:7;
 
 	bool operator<(const PairsMapping& m) const {
-		return std::tie(rid1, rid2, pos1, pos2, mapq) < std::tie(m.rid1, m.rid2, m.pos1, m.pos2, mapq);
+		return std::tie(rid1, pos1, rid2, pos2, mapq) < std::tie(m.rid1, m.pos1, m.rid2, m.pos2, mapq);
 	}
 	bool operator==(const PairsMapping& m) const {
 		return std::tie(rid1, pos1, rid2, pos2) == std::tie(m.rid1, m.pos1, m.rid2, m.pos2);
