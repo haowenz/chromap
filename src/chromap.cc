@@ -3509,8 +3509,10 @@ uint8_t Chromap<MappingRecord>::GetMAPQForPairedEndRead(int num_positive_candida
   mapq1 = GetMAPQForSingleEndRead(error_threshold_, num_positive_candidates, repetitive_seed_length1, positive_alignment_length, min_num_errors1, num_best_mappings1, second_min_num_errors1, num_second_best_mappings1);
   mapq2 = GetMAPQForSingleEndRead(error_threshold_, num_negative_candidates, repetitive_seed_length2, negative_alignment_length, min_num_errors2, num_best_mappings2, second_min_num_errors2, num_second_best_mappings2);
   //std::cerr << " 1:" << (int)mapq1 << " 2:" << (int)mapq2 << "\n";
-  mapq1 = mapq1 > mapq_pe ? mapq1 : mapq_pe < mapq1 + 40? mapq_pe : mapq1 + 40;
-  mapq2 = mapq2 > mapq_pe ? mapq2 : mapq_pe < mapq2 + 40? mapq_pe : mapq2 + 40;
+  if (!split_alignment_) {
+    mapq1 = mapq1 > mapq_pe ? mapq1 : mapq_pe < mapq1 + 40? mapq_pe : mapq1 + 40;
+    mapq2 = mapq2 > mapq_pe ? mapq2 : mapq_pe < mapq2 + 40? mapq_pe : mapq2 + 40;
+  }
   //std::cerr << " 1:" << (int)mapq1 << " 2:" << (int)mapq2 << "\n";
   //if (second_min_num_errors1 > error_threshold_) {
   //  second_min_num_errors1 = 2 * error_threshold_ + 1;
