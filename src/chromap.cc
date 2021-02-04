@@ -1552,12 +1552,13 @@ void Chromap<MappingRecord>::ProcessBestMappingsForPairedEndReadOnOneDirection(D
 					}
 					EmplaceBackMappingRecord(read_id, barcode_key, fragment_start_position, fragment_length, mapq, direction, is_unique, 1, positive_alignment_length, negative_alignment_length, &((*mappings_on_diff_ref_seqs)[rid1]));
 				}
+				(*num_best_mappings_reported)++;
+				if (*num_best_mappings_reported == std::min(max_num_best_mappings_, num_best_mappings)) {
+					break;
+				}
 			}  
-			if (*num_best_mappings_reported == std::min(max_num_best_mappings_, num_best_mappings)) {
-				break;
-			}
+			(*best_mapping_index)++;
 		}
-		(*best_mapping_index)++;
 	}
 }
 
