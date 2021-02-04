@@ -1463,8 +1463,11 @@ void Chromap<MappingRecord>::ProcessBestMappingsForPairedEndReadOnOneDirection(D
           split_site1 = split_sites1[i1];
           split_site2 = split_sites2[i2];
         }
-        GetRefStartEndPositionForReadFromMapping(first_read_direction, mappings1[i1], effect_read1, read1_length, split_site1, reference, &ref_start_position1, &ref_end_position1, &n_cigar1, &cigar1, &NM1, MD_tag1);
-        GetRefStartEndPositionForReadFromMapping(second_read_direction, mappings2[i2], effect_read2, read2_length, split_site2, reference, &ref_start_position2, &ref_end_position2, &n_cigar2, &cigar2, &NM2, MD_tag2);
+        GetRefStartEndPositionForReadFromMapping(first_read_direction, mappings1[i1], effect_read1, read1_length, split_site1, 
+            reference, &ref_start_position1, &ref_end_position1, &n_cigar1, &cigar1, &NM1, MD_tag1) ;
+        GetRefStartEndPositionForReadFromMapping(second_read_direction, mappings2[i2], effect_read2, read2_length, 
+            split_site2, reference, &ref_start_position2, &ref_end_position2, 
+            &n_cigar2, &cigar2, &NM2, MD_tag2) ;
         /*if (!strcmp(read_batch1.GetSequenceNameAt(pair_index), "XXXX")) {
           printf("%d\n", best_mappings.size());
           printf("%d. %d %d\n", min_sum_errors, i1, i2);
@@ -1513,13 +1516,17 @@ void Chromap<MappingRecord>::ProcessBestMappingsForPairedEndReadOnOneDirection(D
           }
 
           if (rid1 < rid2 || (rid1 == rid2 && position1 < position2)) {
-            EmplaceBackMappingRecord(read_id, read1_name, barcode_key, rid1, rid2, position1, position2, direction, direction2, mapq, is_unique, 1, &((*mappings_on_diff_ref_seqs)[rid1]));
+            EmplaceBackMappingRecord(read_id, read1_name, barcode_key, 
+                rid1, rid2, position1, position2, direction, direction2, mapq, is_unique, 1,
+                &((*mappings_on_diff_ref_seqs)[rid1])) ;
           } else {
-            EmplaceBackMappingRecord(read_id, read1_name, barcode_key, rid2, rid1, position2, position1, direction2, direction, mapq, is_unique, 1, &((*mappings_on_diff_ref_seqs)[rid2]));
+            EmplaceBackMappingRecord(read_id, read1_name, barcode_key, 
+                rid2, rid1, position2, position1, direction2, direction, mapq, is_unique, 1,
+                &((*mappings_on_diff_ref_seqs)[rid2])) ;
           }
         } else if (output_mapping_in_PAF_) {
           uint32_t fragment_start_position = ref_start_position1;
-          uint16_t fragment_length = ref_end_position2 - ref_start_position1 + 1;
+          uint16_t fragment_length = ref_end_position2 - ref_start_position1 + 1;;
           uint16_t positive_alignment_length = ref_end_position1 - ref_start_position1 + 1;
           uint16_t negative_alignment_length = ref_end_position2 - ref_start_position2 + 1;
           if (direction == 0) {
@@ -1542,12 +1549,13 @@ void Chromap<MappingRecord>::ProcessBestMappingsForPairedEndReadOnOneDirection(D
           }
           EmplaceBackMappingRecord(read_id, barcode_key, fragment_start_position, fragment_length, mapq, direction, is_unique, 1, positive_alignment_length, negative_alignment_length, &((*mappings_on_diff_ref_seqs)[rid1]));
         }
-      }
-      if (*num_best_mappings_reported == std::min(max_num_best_mappings_, num_best_mappings)) {
-        break;
-      }
+        (*num_best_mappings_reported)++;
+        if (*num_best_mappings_reported == std::min(max_num_best_mappings_, num_best_mappings)) {
+          break;
+        }
+      }  
+      (*best_mapping_index)++;
     }
-    (*best_mapping_index)++;
   }
 }
 
