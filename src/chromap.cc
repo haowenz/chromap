@@ -1343,7 +1343,7 @@ void Chromap<MappingRecord>::GenerateBestMappingsForPairedEndReadOnOneDirection(
 	}
         best_mappings->emplace_back(i1, i2);
     	*min_sum_errors = min_num_errors1 + min_num_errors2;
-	*second_min_sum_errors = min_num_errors1 + min_num_errors2 + 1;
+	//*second_min_sum_errors = min_num_errors1 + min_num_errors2 + 1;
 	(*num_best_mappings)++;
       }
     }
@@ -2749,8 +2749,8 @@ void Chromap<MappingRecord>::VerifyCandidatesOnOneDirection(Direction candidate_
       //    num_errors = -(mapping_end_position - error_threshold_);
       //  }
       //} else {
-      if (mapping_end_position - error_threshold_ - num_errors >= mapping_length_threshold) {
-        num_errors = -(mapping_end_position - error_threshold_ - num_errors);
+      if (mapping_end_position - error_threshold_ - num_errors - gap_beginning >= mapping_length_threshold) {
+        num_errors = -(mapping_end_position - error_threshold_ - num_errors - gap_beginning);
       } else {
       	num_errors = error_threshold_ + 1;
       }
@@ -3013,7 +3013,7 @@ int Chromap<MappingRecord>::BandedAlignPatternToTextWithDropOff(const char *patt
       *mapping_end_position = band_start_position + 1 + i;
     }
   }
-  if (fail_beginning) {
+  if (fail_beginning || (read_length > 60 && *mapping_end_position - error_threshold_ - min_num_errors < 30)) {
     *mapping_end_position = -*mapping_end_position;
   }
   return min_num_errors;
@@ -3039,6 +3039,7 @@ int Chromap<MappingRecord>::BandedAlignPatternToTextWithDropOffFrom3End(const ch
   int i = 0;
   int fail_beginning = 0; // the alignment failed at the beginning part
   for (; i < read_length; i++) {
+    //printf("%c %c %d\n", pattern[read_length - 1 - i], pattern[read_length - 1 - i + error_threshold_], text[read_length - 1 - i]);
     uint8_t pattern_base = SequenceBatch::CharToUint8(pattern[read_length - 1 - i]);
     Peq[pattern_base] = Peq[pattern_base] | highest_bit_in_band_mask;
     X = Peq[SequenceBatch::CharToUint8(text[read_length - 1 - i])] | VN;
@@ -3072,7 +3073,7 @@ int Chromap<MappingRecord>::BandedAlignPatternToTextWithDropOffFrom3End(const ch
       *mapping_end_position = band_start_position + (1 + i);
     }
   }
-  if (fail_beginning) {
+  if (fail_beginning || (read_length > 60 && *mapping_end_position - error_threshold_ - min_num_errors < 30) ) {
     *mapping_end_position = -*mapping_end_position;
   }
   return min_num_errors;
