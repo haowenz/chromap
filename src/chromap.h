@@ -180,7 +180,7 @@ class Chromap {
   void BuildAugmentedTreeForPeaks(uint32_t ref_id);
   void OutputMappingsInVector(uint8_t mapq_threshold, uint32_t num_reference_sequences, const SequenceBatch &reference, const std::vector<std::vector<MappingRecord> > &mappings);
   void OutputMappings(uint32_t num_reference_sequences, const SequenceBatch &reference, const std::vector<std::vector<MappingRecord> > &mappings);
-  int AdjustGapBeginning(Direction mapping_direction, const char *ref, const char *read, int *gap_beginning, int read_end, int ref_start_position, int ref_end_position, int *n_cigar, uint32_t **cigar);
+  int AdjustGapBeginning(Direction mapping_direction, const char *ref, const char *read, int *read5_start_position, int read_end, int ref_start_position, int ref_end_position, int *n_cigar, uint32_t **cigar);
   void GetRefStartEndPositionForReadFromMapping(Direction mapping_direction, const std::pair<int, uint64_t> &mapping, const char *read, int read_length, int in_split_site, const SequenceBatch &reference, uint32_t *ref_start_position, uint32_t *ref_end_position, int *n_cigar, uint32_t **cigar, int *NM, std::string &MD_TAG);
 
   inline static double GetRealTime() {

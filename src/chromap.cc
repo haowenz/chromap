@@ -1447,12 +1447,12 @@ void Chromap<MappingRecord>::ProcessBestMappingsForPairedEndReadOnOneDirection(D
         uint32_t ref_start_position2, ref_end_position2;
         int split_site1 = 0;
         int split_site2 = 0;
-        const char *effect_read1 = read1 ;
-        const char *effect_read2 = read2 ;
+        const char *effect_read1 = read1;
+        const char *effect_read2 = read2;
         uint32_t *cigar1 , *cigar2;
         int n_cigar1 = 0, n_cigar2 = 0;
         int NM1 = 0, NM2 = 0;
-        std::string MD_tag1 = "", MD_tag2 = "" ;
+        std::string MD_tag1 = "", MD_tag2 = "";
         uint8_t mapq1 = 0;
         uint8_t mapq2 = 0;
         if (first_read_direction == kNegative) {
@@ -1465,11 +1465,8 @@ void Chromap<MappingRecord>::ProcessBestMappingsForPairedEndReadOnOneDirection(D
           split_site1 = split_sites1[i1];
           split_site2 = split_sites2[i2];
         }
-        GetRefStartEndPositionForReadFromMapping(first_read_direction, mappings1[i1], effect_read1, read1_length, split_site1, 
-            reference, &ref_start_position1, &ref_end_position1, &n_cigar1, &cigar1, &NM1, MD_tag1) ;
-        GetRefStartEndPositionForReadFromMapping(second_read_direction, mappings2[i2], effect_read2, read2_length, 
-            split_site2, reference, &ref_start_position2, &ref_end_position2, 
-            &n_cigar2, &cigar2, &NM2, MD_tag2) ;
+        GetRefStartEndPositionForReadFromMapping(first_read_direction, mappings1[i1], effect_read1, read1_length, split_site1, reference, &ref_start_position1, &ref_end_position1, &n_cigar1, &cigar1, &NM1, MD_tag1);
+        GetRefStartEndPositionForReadFromMapping(second_read_direction, mappings2[i2], effect_read2, read2_length, split_site2, reference, &ref_start_position2, &ref_end_position2, &n_cigar2, &cigar2, &NM2, MD_tag2);
         /*if (!strcmp(read_batch1.GetSequenceNameAt(pair_index), "XXXX")) {
           printf("%d\n", best_mappings.size());
           printf("%d. %d %d\n", min_sum_errors, i1, i2);
@@ -1518,13 +1515,9 @@ void Chromap<MappingRecord>::ProcessBestMappingsForPairedEndReadOnOneDirection(D
           }
 
           if (rid1 < rid2 || (rid1 == rid2 && position1 < position2)) {
-            EmplaceBackMappingRecord(read_id, read1_name, barcode_key, 
-                rid1, rid2, position1, position2, direction, direction2, mapq, is_unique, 1,
-                &((*mappings_on_diff_ref_seqs)[rid1])) ;
+            EmplaceBackMappingRecord(read_id, read1_name, barcode_key, rid1, rid2, position1, position2, direction, direction2, mapq, is_unique, 1, &((*mappings_on_diff_ref_seqs)[rid1]));
           } else {
-            EmplaceBackMappingRecord(read_id, read1_name, barcode_key, 
-                rid2, rid1, position2, position1, direction2, direction, mapq, is_unique, 1,
-                &((*mappings_on_diff_ref_seqs)[rid2])) ;
+            EmplaceBackMappingRecord(read_id, read1_name, barcode_key, rid2, rid1, position2, position1, direction2, direction, mapq, is_unique, 1, &((*mappings_on_diff_ref_seqs)[rid2]));
           }
         } else if (output_mapping_in_PAF_) {
           uint32_t fragment_start_position = ref_start_position1;
@@ -1540,7 +1533,7 @@ void Chromap<MappingRecord>::ProcessBestMappingsForPairedEndReadOnOneDirection(D
           EmplaceBackMappingRecord(read_id, read1_name, read2_name, (uint16_t)read_batch1.GetSequenceLengthAt(pair_index), (uint16_t)read_batch2.GetSequenceLengthAt(pair_index), barcode_key, fragment_start_position, fragment_length, mapq1, mapq2, direction, is_unique, 1, positive_alignment_length, negative_alignment_length, &((*mappings_on_diff_ref_seqs)[rid1]));
         } else {
           uint32_t fragment_start_position = ref_start_position1;
-          uint16_t fragment_length = ref_end_position2 - ref_start_position1 + 1;;
+          uint16_t fragment_length = ref_end_position2 - ref_start_position1 + 1;
           uint16_t positive_alignment_length = ref_end_position1 - ref_start_position1 + 1;
           uint16_t negative_alignment_length = ref_end_position2 - ref_start_position2 + 1;
           if (direction == 0) {
@@ -1570,6 +1563,7 @@ void Chromap<MappingRecord>::GenerateBestMappingsForPairedEndRead(uint32_t pair_
   GenerateBestMappingsForPairedEndReadOnOneDirection(kPositive, pair_index, num_positive_candidates1, min_num_errors1, num_best_mappings1, second_min_num_errors1, num_second_best_mappings1, read_batch1, positive_mappings1, num_negative_candidates2, min_num_errors2, num_best_mappings2, second_min_num_errors2, num_second_best_mappings2, read_batch2, reference, negative_mappings2, F1R2_best_mappings, min_sum_errors, num_best_mappings, second_min_sum_errors, num_second_best_mappings);
   GenerateBestMappingsForPairedEndReadOnOneDirection(kNegative, pair_index, num_negative_candidates1, min_num_errors1, num_best_mappings1, second_min_num_errors1, num_second_best_mappings1, read_batch1, negative_mappings1, num_positive_candidates2, min_num_errors2, num_best_mappings2, second_min_num_errors2, num_second_best_mappings2, read_batch2, reference, positive_mappings2, F2R1_best_mappings, min_sum_errors, num_best_mappings, second_min_sum_errors, num_second_best_mappings);
   if (split_alignment_) {
+    // Two mappings in the same direction
     GenerateBestMappingsForPairedEndReadOnOneDirection(kPositive, pair_index, num_positive_candidates1, min_num_errors1, num_best_mappings1, second_min_num_errors1, num_second_best_mappings1, read_batch1, positive_mappings1, num_positive_candidates2, min_num_errors2, num_best_mappings2, second_min_num_errors2, num_second_best_mappings2, read_batch2, reference, positive_mappings2, F1F2_best_mappings, min_sum_errors, num_best_mappings, second_min_sum_errors, num_second_best_mappings);
     GenerateBestMappingsForPairedEndReadOnOneDirection(kNegative, pair_index, num_negative_candidates1, min_num_errors1, num_best_mappings1, second_min_num_errors1, num_second_best_mappings1, read_batch1, negative_mappings1, num_negative_candidates2, min_num_errors2, num_best_mappings2, second_min_num_errors2, num_second_best_mappings2, read_batch2, reference, negative_mappings2, R1R2_best_mappings, min_sum_errors, num_best_mappings, second_min_sum_errors, num_second_best_mappings);
   }
@@ -1924,20 +1918,20 @@ void Chromap<MappingRecord>::GenerateMDTag(const char *pattern, const char *text
 
 // return: newly adjust reference start/end position (kPositive for start, kNegative for end)
 template <typename MappingRecord>
-int Chromap<MappingRecord>::AdjustGapBeginning(Direction mapping_direction, const char *ref, const char *read, int *gap_beginning, int read_end, int ref_start_position, int ref_end_position, int *n_cigar, uint32_t **cigar) {
+int Chromap<MappingRecord>::AdjustGapBeginning(Direction mapping_direction, const char *ref, const char *read, int *read5_start_position, int read_end, int ref_start_position, int ref_end_position, int *n_cigar, uint32_t **cigar) {
   int i, j;
   if (mapping_direction == kPositive) {
-    if (*gap_beginning <= 0) {
+    if (*read5_start_position <= 0) {
       return ref_start_position;
     }
-    //printf("%d\n", *gap_beginning);
-    for (i = *gap_beginning - 1, j = ref_start_position - 1 ; i >= 0 && j >= 0 ; --i, --j) {
+    //printf("%d\n", *read5_start_position);
+    for (i = *read5_start_position - 1, j = ref_start_position - 1 ; i >= 0 && j >= 0 ; --i, --j) {
       //printf("%c %c\n", read[i], ref[j]);
       if (read[i] != ref[j] && read[i] != ref[j] - 'a' + 'A') {
         break;   
       }
     }
-    *gap_beginning = i + 1;
+    *read5_start_position = i + 1;
     //TODO: add soft clip in cigar
     if (n_cigar && *n_cigar > 0) {
       if (((*cigar)[0] & 0xf) == BAM_CMATCH) {
@@ -1946,10 +1940,10 @@ int Chromap<MappingRecord>::AdjustGapBeginning(Direction mapping_direction, cons
     }
     return j + 1;
   } else {
-    if (*gap_beginning <= 0) {
+    if (*read5_start_position <= 0) {
       return ref_end_position;
     }
-    //printf("%d\n", *gap_beginning);
+    //printf("%d\n", *read5_start_position);
     /*char *tmp = new char[255] ;
     strncpy(tmp, ref + ref_start_position, ref_end_position - ref_start_position + 1 + 10) ;
     printf("%s %d. %d %d\n", tmp, strlen(tmp), ref_end_position - ref_start_position + 1 + 10, strlen(ref)) ;
@@ -1960,7 +1954,7 @@ int Chromap<MappingRecord>::AdjustGapBeginning(Direction mapping_direction, cons
         break; 
       }
     }
-    *gap_beginning = *gap_beginning + i - (read_end + 1);
+    *read5_start_position = *read5_start_position + i - (read_end + 1);
     if (n_cigar && *n_cigar > 0) {
       if (((*cigar)[*n_cigar-1] & 0xf) == BAM_CMATCH) {
         (*cigar)[*n_cigar-1] += (j - (ref_end_position + 1)) << 4;
@@ -1989,66 +1983,97 @@ void Chromap<MappingRecord>::GetRefStartEndPositionForReadFromMapping(Direction 
   uint32_t position = mapping.second;
   int full_read_length = read_length;
   int min_num_errors = mapping.first;
-  int split_site = mapping_direction == kPositive ? 0 : read_length;
-  int gap_beginning = 0;
+  //int split_site = mapping_direction == kPositive ? 0 : read_length;
+  int read5_start_position = 0;
   int actual_num_errors = 0;
   if (split_alignment_) {
-    split_site = in_split_site & 0xffff;
-    gap_beginning = (in_split_site>>16)&0xff ; // beginning means the 5' end of the read
+    //split_site = in_split_site & 0xffff;
+    read_length = in_split_site & 0xffff;
+    read5_start_position = (in_split_site>>16)&0xff ; // beginning means the 5' end of the read
     actual_num_errors = (in_split_site>>24)&0xff; // in split alignment, -num_errors is the number of matches.
-    read_length = split_site - gap_beginning;
+    //read_length = split_site - read5_start_position;
   }
+  //if (split_alignment_) {
+  //  if (read_length < full_read_length && output_mapping_in_SAM_ && read_length > 3 * error_threshold_ && mapping_direction == kNegative) {
+  //    read_length -= 3 * error_threshold_;
+  //  }
+  //  //if (split_site < full_read_length && output_mapping_in_SAM_ && split_site > 3 * error_threshold_) {
+  //  //  split_site -= 3 * error_threshold_;
+  //  //} 
+  //  //read_length = split_site - read5_start_position;
+  //}
+
   uint32_t verification_window_start_position = position + 1 > (uint32_t)(read_length + error_threshold_) ? position + 1 - read_length - error_threshold_ : 0;
-  //printf("ne4: %d %d. %d %d %d %d.\n", position, verification_window_start_position, read_length, split_site, gap_beginning, actual_num_errors);
-  if (position + error_threshold_ >= reference.GetSequenceLengthAt(rid)) {
-    verification_window_start_position = reference.GetSequenceLengthAt(rid) - error_threshold_ - read_length; 
-  }
-  if (verification_window_start_position < 0) {
-    verification_window_start_position = 0;
-  }
+  //printf("ne4: %d %d. %d %d %d %d.\n", position, verification_window_start_position, read_length, split_site, read5_start_position, actual_num_errors);
   if (split_alignment_) {
-    if (split_site < full_read_length && output_mapping_in_SAM_ && split_site > 3 * error_threshold_) {
-      split_site -= 3 * error_threshold_;
-    } 
-    read_length = split_site - gap_beginning;
+    if (mapping_direction == kNegative) {
+      verification_window_start_position = position + actual_num_errors;// - error_threshold_;
+      read_length -= actual_num_errors;
+      //if (read_length > 2 * error_threshold_ && read_length < full_read_length) {
+      //  verification_window_start_position += 2 * error_threshold_;
+      //  read_length -= 2 * error_threshold_;
+      //}
+    } else {
+      read_length -= actual_num_errors;
+      //if (read_length > 2 * error_threshold_ && (read_length < full_read_length || read_length + actual_num_errors > full_read_length)) {
+      //  read_length -= 2 * error_threshold_;
+      //} 
+    }
+    if (verification_window_start_position >= reference.GetSequenceLengthAt(rid)) {
+      verification_window_start_position = reference.GetSequenceLengthAt(rid) - error_threshold_ - read_length; 
+    }
+    if (verification_window_start_position < 0) {
+      verification_window_start_position = 0;
+    }
   }
+  //if (position + error_threshold_ >= reference.GetSequenceLengthAt(rid)) {
+
+  //if (split_alignment_) {
+  //  if (mapping_direction == kNegative) {
+  //    verification_window_start_position = position + error_threshold_;
+  //    read_length -= error_threshold_;
+  //  }
+  //}
+  //if (split_alignment_) {
+  //  //if (read_length < full_read_length && output_mapping_in_SAM_ && read_length > 3 * error_threshold_ && mapping_direction == kPositive) {
+  //  if (read_length < full_read_length && output_mapping_in_SAM_ && read_length > 3 * error_threshold_) {
+  //    read_length -= 3 * error_threshold_;
+  //  }
+  //  //if (split_site < full_read_length && output_mapping_in_SAM_ && split_site > 3 * error_threshold_) {
+  //  //  split_site -= 3 * error_threshold_;
+  //  //} 
+  //  //read_length = split_site - read5_start_position;
+  //}
   int mapping_start_position;
   if (mapping_direction == kPositive) { 
     if (output_mapping_in_SAM_) {
       *n_cigar = 0;
       int mapping_end_position;
-      ksw_semi_global3(read_length + 2 * error_threshold_, reference.GetSequenceAt(rid) + verification_window_start_position, read_length, read + gap_beginning, 5, mat, gap_open_penalties_[0], gap_extension_penalties_[0], gap_open_penalties_[1], gap_extension_penalties_[1], error_threshold_ * 2 + 1, n_cigar, cigar, &mapping_start_position, &mapping_end_position);
+      ksw_semi_global3(read_length + 2 * error_threshold_, reference.GetSequenceAt(rid) + verification_window_start_position, read_length, read + read5_start_position, 5, mat, gap_open_penalties_[0], gap_extension_penalties_[0], gap_open_penalties_[1], gap_extension_penalties_[1], error_threshold_ * 2 + 1, n_cigar, cigar, &mapping_start_position, &mapping_end_position);
       //std::cerr << verification_window_start_position << " " << read_length << " " << split_site << " " << mapping_start_position << " " << mapping_end_position << "\n";
-      if (gap_beginning > 0) {
-        int new_ref_start_position = AdjustGapBeginning(mapping_direction, reference.GetSequenceAt(rid), 
-            read, &gap_beginning, read_length - 1, 
-            verification_window_start_position + mapping_start_position, 
-            verification_window_start_position + mapping_end_position - 1, n_cigar, cigar);
+      if (read5_start_position > 0) {
+        int new_ref_start_position = AdjustGapBeginning(mapping_direction, reference.GetSequenceAt(rid), read, &read5_start_position, read_length - 1, verification_window_start_position + mapping_start_position, verification_window_start_position + mapping_end_position - 1, n_cigar, cigar);
         mapping_start_position = new_ref_start_position - verification_window_start_position;
       }
-      GenerateMDTag(reference.GetSequenceAt(rid), read + gap_beginning, verification_window_start_position + mapping_start_position, *n_cigar, *cigar, *NM, MD_tag);
-
+      GenerateMDTag(reference.GetSequenceAt(rid), read + read5_start_position, verification_window_start_position + mapping_start_position, *n_cigar, *cigar, *NM, MD_tag);
       *ref_start_position = verification_window_start_position + mapping_start_position;
       *ref_end_position = verification_window_start_position + mapping_end_position - 1;
     } else {
       if (!split_alignment_) {
         BandedTraceback(min_num_errors, reference.GetSequenceAt(rid) + verification_window_start_position, read, read_length, &mapping_start_position);
       } else {
-        BandedTraceback(actual_num_errors, reference.GetSequenceAt(rid) + verification_window_start_position, read + gap_beginning, read_length, &mapping_start_position);
+        BandedTraceback(actual_num_errors, reference.GetSequenceAt(rid) + verification_window_start_position, read + read5_start_position, read_length, &mapping_start_position);
       }
-      if (gap_beginning > 0) {
-        int new_ref_start_position = AdjustGapBeginning(mapping_direction, reference.GetSequenceAt(rid), 
-            read, &gap_beginning, read_length - 1, 
-            verification_window_start_position + mapping_start_position, 
-            position, n_cigar, cigar);
+      if (read5_start_position > 0) {
+        int new_ref_start_position = AdjustGapBeginning(mapping_direction, reference.GetSequenceAt(rid), read, &read5_start_position, read_length - 1, verification_window_start_position + mapping_start_position, position, n_cigar, cigar);
         mapping_start_position = new_ref_start_position - verification_window_start_position;
       }
-
       *ref_start_position = verification_window_start_position + mapping_start_position;
       *ref_end_position = position;
     }
   } else { // reverse strand
-    int read_start_site = full_read_length - split_site;
+    //int read_start_site = full_read_length - split_site;
+    int read_start_site = full_read_length - read_length;
     if (output_mapping_in_SAM_) {
       *n_cigar = 0;
       int mapping_end_position;
@@ -2057,29 +2082,31 @@ void Chromap<MappingRecord>::GetRefStartEndPositionForReadFromMapping(Direction 
       //
       //      veri_start_pos       position
       //  ref   --|-------------------|------------------->
-      //  read     <-|--read_length---|--gap_beginning--
+      //  read     <-|--read_length---|--read5_start_position--
       //          split_site
       // 
 
       // Is the map start/end position left close right open as in bed format?
       /*if (read_start_site + read_length > full_read_length || read_start_site < 0 
         || verification_window_start_position + read_start_site + read_length + 2 * error_threshold_ > reference.GetSequenceLengthAt(rid)) {
-        printf("ERROR! %d %d %d %d\n", full_read_length, split_site, gap_beginning, read_length);
+        printf("ERROR! %d %d %d %d\n", full_read_length, split_site, read5_start_position, read_length);
         }*/
-      ksw_semi_global3(read_length + 2 * error_threshold_, reference.GetSequenceAt(rid) + verification_window_start_position + read_start_site, read_length, read + read_start_site, 5, mat, gap_open_penalties_[0], gap_extension_penalties_[0], gap_open_penalties_[1], gap_extension_penalties_[1], error_threshold_ * 2 + 1, n_cigar, cigar, &mapping_start_position, &mapping_end_position);
-      if (gap_beginning > 0) {
+      //ksw_semi_global3(read_length + 2 * error_threshold_, reference.GetSequenceAt(rid) + verification_window_start_position + read_start_site, read_length, read + read_start_site, 5, mat, gap_open_penalties_[0], gap_extension_penalties_[0], gap_open_penalties_[1], gap_extension_penalties_[1], error_threshold_ * 2 + 1, n_cigar, cigar, &mapping_start_position, &mapping_end_position);
+      ksw_semi_global3(read_length + 2 * error_threshold_, reference.GetSequenceAt(rid) + verification_window_start_position, read_length, read + read_start_site, 5, mat, gap_open_penalties_[0], gap_extension_penalties_[0], gap_open_penalties_[1], gap_extension_penalties_[1], error_threshold_ * 2 + 1, n_cigar, cigar, &mapping_start_position, &mapping_end_position);
+      if (read5_start_position > 0) {
         //printf("before adjust %d %d %d. %d %d\n", split_site, read_start_site, read_length, verification_window_start_position + mapping_start_position, verification_window_start_position + mapping_end_position);
-        int new_ref_end_position = AdjustGapBeginning(mapping_direction, reference.GetSequenceAt(rid), 
-            read + read_start_site, &gap_beginning, read_length - 1, 
-            verification_window_start_position + mapping_start_position, 
-            verification_window_start_position + mapping_end_position - 1, n_cigar, cigar);
+        //int new_ref_end_position = AdjustGapBeginning(mapping_direction, reference.GetSequenceAt(rid), read + read_start_site, &read5_start_position, read_length - 1, verification_window_start_position + mapping_start_position, verification_window_start_position + mapping_end_position - 1, n_cigar, cigar);
+        int new_ref_end_position = AdjustGapBeginning(mapping_direction, reference.GetSequenceAt(rid), read + read_start_site, &read5_start_position, read_length - 1, verification_window_start_position + mapping_start_position, verification_window_start_position + mapping_end_position - 1, n_cigar, cigar);
         // The returned position is right-closed, so need to plus one to match bed convention
         mapping_end_position = new_ref_end_position + 1 - verification_window_start_position - read_start_site; 
-        read_length = split_site - gap_beginning;
+        //read_length = split_site - read5_start_position;
       }
-      GenerateMDTag(reference.GetSequenceAt(rid), read + read_start_site, verification_window_start_position + read_start_site + mapping_start_position, *n_cigar, *cigar, *NM, MD_tag);
-      *ref_start_position = verification_window_start_position + read_start_site + mapping_start_position;
-      *ref_end_position = verification_window_start_position + read_start_site + mapping_end_position - 1;
+      //GenerateMDTag(reference.GetSequenceAt(rid), read + read_start_site, verification_window_start_position + read_start_site + mapping_start_position, *n_cigar, *cigar, *NM, MD_tag);
+      GenerateMDTag(reference.GetSequenceAt(rid), read + read_start_site, verification_window_start_position + mapping_start_position, *n_cigar, *cigar, *NM, MD_tag);
+      //*ref_start_position = verification_window_start_position + read_start_site + mapping_start_position;
+      //*ref_end_position = verification_window_start_position + read_start_site + mapping_end_position - 1;
+      *ref_start_position = verification_window_start_position + mapping_start_position;
+      *ref_end_position = verification_window_start_position + mapping_end_position - 1;
     } else {
       //int n_cigar = 0;
       //uint32_t *cigar;
@@ -2094,15 +2121,13 @@ void Chromap<MappingRecord>::GetRefStartEndPositionForReadFromMapping(Direction 
         BandedTracebackToEnd(actual_num_errors, reference.GetSequenceAt(rid) + verification_window_start_position, read + read_start_site, read_length, &mapping_end_position);
       }
       //int mapping_end_position = (int)position;
-      if (gap_beginning > 0) {
+      if (read5_start_position > 0) {
         //printf("before adjust %d %d %d. %d %d\n", split_site, read_start_site, read_length, verification_window_start_position + mapping_start_position, verification_window_start_position + mapping_end_position);
-        int new_ref_end_position = AdjustGapBeginning(mapping_direction, reference.GetSequenceAt(rid), 
-            read + read_start_site, &gap_beginning, read_length - 1, 
-            verification_window_start_position + mapping_start_position, 
-            verification_window_start_position + mapping_end_position, n_cigar, cigar);
+        //int new_ref_end_position = AdjustGapBeginning(mapping_direction, reference.GetSequenceAt(rid), read + read_start_site, &read5_start_position, read_length - 1, verification_window_start_position + mapping_start_position, verification_window_start_position + mapping_end_position, n_cigar, cigar);
+        int new_ref_end_position = AdjustGapBeginning(mapping_direction, reference.GetSequenceAt(rid), read + read_start_site, &read5_start_position, read_length - 1, verification_window_start_position + mapping_start_position, verification_window_start_position + mapping_end_position, n_cigar, cigar);
         // The returned position is right-closed, so need to plus one to match bed convention
         mapping_end_position = new_ref_end_position - verification_window_start_position + 1; 
-        read_length = split_site - gap_beginning;
+        //read_length = split_site - read5_start_position;
         //position = new_ref_end_position;
       }
       *ref_start_position = verification_window_start_position + mapping_start_position;
@@ -2700,82 +2725,93 @@ void Chromap<MappingRecord>::VerifyCandidatesOnOneDirection(Direction candidate_
     if (candidates[ci].count < candidate_count_threshold)
     	break;
     uint32_t rid = candidates[ci].position >> 32;
-    uint32_t position = candidates[ci].position;
+    uint32_t candidate_position = candidates[ci].position;
     if (candidate_direction == kNegative) {
-      position = position - read_length + 1;
+      candidate_position = candidate_position - read_length + 1;
     }
-    if (position < (uint32_t)error_threshold_ || position >= reference.GetSequenceLengthAt(rid) || position + read_length + error_threshold_ >= reference.GetSequenceLengthAt(rid)) {
+    if (candidate_position < (uint32_t)error_threshold_ || candidate_position >= reference.GetSequenceLengthAt(rid) || candidate_position + read_length + error_threshold_ >= reference.GetSequenceLengthAt(rid)) {
       continue;
     }
-    int mapping_end_position = read_length;
-    int gap_beginning = 0;
+    // For all alignments
+    int ref_mapping_end_position = read_length;
     int num_errors;
-    int allow_gap_beginning_ = 20;
+    // For split alignment only
+    int read5_start_position = 0;
+    int max_read5_start_position_ = 20; // inclusive
     int mapping_length_threshold = 30;
-    int allow_gap_beginning = allow_gap_beginning_ - error_threshold_;
+    int max_read5_start_position = max_read5_start_position_ - error_threshold_;
     int actual_num_errors = 0;
     int read_mapping_length = 0;
     
     if (split_alignment_) {
       if (candidate_direction == kPositive) {
-        num_errors = BandedAlignPatternToTextWithDropOff(reference.GetSequenceAt(rid) + position - error_threshold_, read, read_length, &mapping_end_position, &read_mapping_length);
-        if (mapping_end_position < 0 && allow_gap_beginning > 0) {
+        num_errors = BandedAlignPatternToTextWithDropOff(reference.GetSequenceAt(rid) + candidate_position - error_threshold_, read, read_length, &ref_mapping_end_position, &read_mapping_length);
+        if (ref_mapping_end_position < 0 && max_read5_start_position > 0 && (int)read_length - max_read5_start_position > mapping_length_threshold - error_threshold_) {
           int backup_num_errors = num_errors;
-          int backup_mapping_end_position = -mapping_end_position;
+          int backup_ref_mapping_end_position = -ref_mapping_end_position;
           int backup_read_mapping_length = read_mapping_length;
-          num_errors = BandedAlignPatternToTextWithDropOff(reference.GetSequenceAt(rid) + position - error_threshold_ + allow_gap_beginning, read + allow_gap_beginning, read_length - allow_gap_beginning, &mapping_end_position, &read_mapping_length);
-          if (num_errors > error_threshold_ || mapping_end_position < 0) {
+          num_errors = BandedAlignPatternToTextWithDropOff(reference.GetSequenceAt(rid) + candidate_position - error_threshold_ + max_read5_start_position, read + max_read5_start_position, read_length - max_read5_start_position, &ref_mapping_end_position, &read_mapping_length);
+          if (num_errors > error_threshold_ || ref_mapping_end_position < 0) {
             num_errors = backup_num_errors;
-            mapping_end_position = backup_mapping_end_position;
+            ref_mapping_end_position = backup_ref_mapping_end_position;
             read_mapping_length = backup_read_mapping_length;
+            //ref_mapping_end_position = read_mapping_length + error_threshold_;
           } else {
-            gap_beginning = allow_gap_beginning;
-            mapping_end_position += gap_beginning; // realign the mapping end position as it is the alignment from the whole read
+            read5_start_position = max_read5_start_position;
+            ref_mapping_end_position += read5_start_position; // realign the mapping end position as it is the alignment from the whole read
             // I use this adjustment since "position" is based on the whole read,
             // and it will be more consistent with no gap beginning case
-            read_mapping_length += gap_beginning;
+            //read_mapping_length += read5_start_position;
+            read_mapping_length -= read5_start_position;
+            //ref_mapping_end_position = read_mapping_length + error_threshold_ + read5_start_position;
           }
+        } else {
+          //ref_mapping_end_position = read_mapping_length + error_threshold_;
         }
       } else {
-        num_errors = BandedAlignPatternToTextWithDropOffFrom3End(reference.GetSequenceAt(rid) + position - error_threshold_, negative_read.data(), read_length, &mapping_end_position, &read_mapping_length);
-        if (mapping_end_position < 0 && allow_gap_beginning > 0) {
+        num_errors = BandedAlignPatternToTextWithDropOffFrom3End(reference.GetSequenceAt(rid) + candidate_position - error_threshold_, negative_read.data(), read_length, &ref_mapping_end_position, &read_mapping_length);
+        if (ref_mapping_end_position < 0 && max_read5_start_position > 0 && (int)read_length - max_read5_start_position > mapping_length_threshold - error_threshold_) {
           int backup_num_errors = num_errors;
-          int backup_mapping_end_position = -mapping_end_position;
+          int backup_ref_mapping_end_position = -ref_mapping_end_position;
           int backup_read_mapping_length = read_mapping_length;
-          num_errors = BandedAlignPatternToTextWithDropOffFrom3End(reference.GetSequenceAt(rid) + position - error_threshold_, negative_read.data(), read_length - allow_gap_beginning, &mapping_end_position, &read_mapping_length);
-          if (num_errors > error_threshold_ || mapping_end_position < 0) {
+          num_errors = BandedAlignPatternToTextWithDropOffFrom3End(reference.GetSequenceAt(rid) + candidate_position - error_threshold_, negative_read.data(), read_length - max_read5_start_position, &ref_mapping_end_position, &read_mapping_length);
+          if (num_errors > error_threshold_ || ref_mapping_end_position < 0) {
             num_errors = backup_num_errors;
-            mapping_end_position = backup_mapping_end_position;
+            ref_mapping_end_position = backup_ref_mapping_end_position;
+            //ref_mapping_end_position = read_length + error_threshold_;
             read_mapping_length = backup_read_mapping_length;
+          } else {
+            read5_start_position = max_read5_start_position;
+            //ref_mapping_end_position = read_length + error_threshold_ - read5_start_position;
+            ref_mapping_end_position += read5_start_position; 
+            //read_mapping_length += read5_start_position;
+            read_mapping_length -= read5_start_position;
           }
-          else {
-            gap_beginning = allow_gap_beginning;
-            mapping_end_position += gap_beginning; 
-            read_mapping_length += gap_beginning;
-          }
+        } else {
+          //ref_mapping_end_position = read_length + error_threshold_;
         }
-      }  
-      //std::cerr << "ne1: " << num_errors << " " << mapping_end_position << "\n";
-      //if (num_errors > 2 * error_threshold_) {
-      //  if (mapping_end_position - error_threshold_ - num_errors >= mapping_length_threshold) {
-      //    mapping_end_position -= num_errors;
-      //    num_errors = -(mapping_end_position - error_threshold_);
-      //  }
-      //} else {
-      if (mapping_end_position - error_threshold_ - num_errors - gap_beginning >= mapping_length_threshold) {
-	actual_num_errors = num_errors;
-        num_errors = -(mapping_end_position - error_threshold_ - num_errors - gap_beginning);
-      } else {
-      	num_errors = error_threshold_ + 1;
-	actual_num_errors = error_threshold_ + 1;
       }
+      //std::cerr << "ne1: " << num_errors << " " << mapping_end_position << "\n";
+      if (read_mapping_length - num_errors >= mapping_length_threshold && read_mapping_length >= 3 * num_errors) {
+        actual_num_errors = num_errors;
+        num_errors = -(read_mapping_length - num_errors);
+      } else {
+        num_errors = error_threshold_ + 1;
+        actual_num_errors = error_threshold_ + 1;
+      }
+      //if (ref_mapping_end_position - error_threshold_ - num_errors - read5_start_position >= mapping_length_threshold) {
+      //  actual_num_errors = num_errors;
+      //  num_errors = -(ref_mapping_end_position - error_threshold_ - num_errors - read5_start_position);
+      //} else {
+      //  num_errors = error_threshold_ + 1;
+      //  actual_num_errors = error_threshold_ + 1;
       //}
       //std::cerr << "ne2: " << num_errors << " " << mapping_end_position << "\n";
     } else {
       if (candidate_direction == kPositive) {
-        num_errors = BandedAlignPatternToText(reference.GetSequenceAt(rid) + position - error_threshold_, read, read_length, &mapping_end_position);
+        num_errors = BandedAlignPatternToText(reference.GetSequenceAt(rid) + candidate_position - error_threshold_, read, read_length, &ref_mapping_end_position);
       } else {
-        num_errors = BandedAlignPatternToText(reference.GetSequenceAt(rid) + position - error_threshold_, negative_read.data(), read_length, &mapping_end_position);
+        num_errors = BandedAlignPatternToText(reference.GetSequenceAt(rid) + candidate_position - error_threshold_, negative_read.data(), read_length, &ref_mapping_end_position);
       }
     }
 
@@ -2786,7 +2822,7 @@ void Chromap<MappingRecord>::VerifyCandidatesOnOneDirection(Direction candidate_
         *num_second_best_mappings = *num_best_mappings;
         *min_num_errors = num_errors;
         *num_best_mappings = 1;
-        if (split_alignment_) {
+        if (split_alignment_) { // TODO(Haowen): check this stop early heuristic
           if (candidates.size() > 50) {
             candidate_count_threshold = candidates[ci].count;
           } else {
@@ -2795,7 +2831,7 @@ void Chromap<MappingRecord>::VerifyCandidatesOnOneDirection(Direction candidate_
         }
       } else if (num_errors == *min_num_errors) {
         (*num_best_mappings)++;
-        if (split_alignment_ && candidates.size() > 50) {
+        if (split_alignment_ && candidates.size() > 50) { // TODO(Haowen): check this stop early heuristic
           candidate_count_threshold = candidates[ci].count + 1;
         }
       } else if (num_errors == *second_min_num_errors) {
@@ -2805,21 +2841,23 @@ void Chromap<MappingRecord>::VerifyCandidatesOnOneDirection(Direction candidate_
         *second_min_num_errors = num_errors;
       }
       if (candidate_direction == kPositive) {
-        mappings->emplace_back(num_errors, candidates[ci].position - error_threshold_ + mapping_end_position);
+        mappings->emplace_back(num_errors, candidates[ci].position - error_threshold_ + ref_mapping_end_position);
       } else {
-        if (split_alignment_ && !output_mapping_in_SAM_) {
-          mappings->emplace_back(num_errors, candidates[ci].position + error_threshold_ - 1 - mapping_end_position + read_mapping_length - 1 - gap_beginning); 
+        //if (split_alignment_ && !output_mapping_in_SAM_) {
+        if (split_alignment_) {
+          //mappings->emplace_back(num_errors, candidates[ci].position + error_threshold_ - 1 - ref_mapping_end_position + read_mapping_length - 1 - read5_start_position); 
+          mappings->emplace_back(num_errors, candidates[ci].position - ref_mapping_end_position);
         } else {
-          // Need to minus gap_beginning because mapping_end_position is adjusted by it, but read_length is not.
-          //printf("%d %d %d\n", candidates[ci].position, mapping_end_position, gap_beginning);
-          mappings->emplace_back(num_errors, candidates[ci].position - read_length + 1 - error_threshold_ + mapping_end_position);
+          // Need to minus read5_start_position because mapping_end_position is adjusted by it, but read_length is not.
+          //printf("%d %d %d\n", candidates[ci].position, mapping_end_position, read5_start_position);
+          mappings->emplace_back(num_errors, candidates[ci].position - read_length + 1 - error_threshold_ + ref_mapping_end_position);
         }
       }
       if (split_alignment_) {
         /*if (mapping_end_position - error_threshold_ < 0 || mapping_end_position - error_threshold_ > 200 || mapping_end_position - error_threshold_ < 20) {
-          printf("ERROR! %d %d %d %d %d\n", mapping_end_position, error_threshold_, read_length,(int)candidates[ci].position, gap_beginning);
+          printf("ERROR! %d %d %d %d %d\n", mapping_end_position, error_threshold_, read_length,(int)candidates[ci].position, read5_start_position);
           }*/
-        split_sites->emplace_back( ((actual_num_errors&0xff)<<24) | ((gap_beginning&0xff)<<16) | (read_mapping_length&0xffff) );
+        split_sites->emplace_back( ((actual_num_errors&0xff)<<24) | ((read5_start_position&0xff)<<16) | (read_mapping_length&0xffff) ); // TODO(Haowen): change split_sites data structure
       }
     }
   }
@@ -2831,7 +2869,7 @@ void Chromap<MappingRecord>::VerifyCandidates(const SequenceBatch &read_batch, u
   *num_best_mappings = 0;
   *second_min_num_errors = error_threshold_ + 1;
   *num_second_best_mappings = 0;
-   
+
   if (!split_alignment_) {
   // Directly obtain the mapping in ideal case.
   uint32_t i;
@@ -3457,7 +3495,7 @@ void Chromap<MappingRecord>::BandedTracebackToEnd(int min_num_errors, const char
   uint32_t HP = 0;
   int num_errors_at_band_start_position = 0;
   for (int i = 0; i < read_length; i++) {
-    uint8_t pattern_base = SequenceBatch::CharToUint8(pattern[i + 2*error_threshold_]);
+    uint8_t pattern_base = SequenceBatch::CharToUint8(pattern[i + 2 * error_threshold_]);
     Peq[pattern_base] = Peq[pattern_base] | highest_bit_in_band_mask;
     X = Peq[SequenceBatch::CharToUint8(text[i])] | VN;
     D0 = ((VP + (X & VP)) ^ VP) | X;
