@@ -238,6 +238,7 @@ class Chromap {
   int multi_mapping_allocation_seed_;
   int drop_repetitive_reads_; // Read with more than this number of mappings will be dropped.
   int max_mapping_start_position_on_read5_ = 20; // inclusive
+  int error_weight_ = 5;
   bool trim_adapters_;
   bool remove_pcr_duplicates_;
   bool is_bulk_data_;
