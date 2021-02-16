@@ -1494,8 +1494,8 @@ void Chromap<MappingRecord>::ProcessBestMappingsForPairedEndReadOnOneDirection(D
         uint32_t rid2 = split_alignment_ ? split_mappings2[i2].mapping_start_position_on_ref >> 32 : mappings2[i2].second >> 32;
         uint32_t ref_start_position1, ref_end_position1;
         uint32_t ref_start_position2, ref_end_position2;
-        int split_site1 = 0;
-        int split_site2 = 0;
+        //int split_site1 = 0;
+        //int split_site2 = 0;
         const char *effect_read1 = read1;
         const char *effect_read2 = read2;
         uint32_t *cigar1 , *cigar2;
@@ -1517,11 +1517,18 @@ void Chromap<MappingRecord>::ProcessBestMappingsForPairedEndReadOnOneDirection(D
           ref_end_position1 = split_mappings1[i1].mapping_start_position_on_ref + split_mappings1[i1].mapping_length_on_ref;
           ref_start_position2 = split_mappings2[i2].mapping_start_position_on_ref;
           ref_end_position2 = split_mappings2[i2].mapping_start_position_on_ref + split_mappings2[i2].mapping_length_on_ref;
+          std::pair<int, uint64_t> mapping1;
+          std::pair<int, uint64_t> mapping2;
+          GetRefStartEndPositionForReadFromMapping(first_read_direction, mapping1, effect_read1, read1_length, split_mappings1[i1], reference, &ref_start_position1, &ref_end_position1, &n_cigar1, &cigar1, &NM1, MD_tag1);
+          GetRefStartEndPositionForReadFromMapping(second_read_direction, mapping2, effect_read2, read2_length, split_mappings2[i2], reference, &ref_start_position2, &ref_end_position2, &n_cigar2, &cigar2, &NM2, MD_tag2);
+
         } else {
-          split_site1 = read1_length;
-          split_site2 = read2_length;
-          GetRefStartEndPositionForReadFromMapping(first_read_direction, mappings1[i1], effect_read1, read1_length, split_site1, reference, &ref_start_position1, &ref_end_position1, &n_cigar1, &cigar1, &NM1, MD_tag1);
-          GetRefStartEndPositionForReadFromMapping(second_read_direction, mappings2[i2], effect_read2, read2_length, split_site2, reference, &ref_start_position2, &ref_end_position2, &n_cigar2, &cigar2, &NM2, MD_tag2);
+          //split_site1 = read1_length;
+          //split_site2 = read2_length;
+          SplitMapping sm1;
+          SplitMapping sm2;
+          GetRefStartEndPositionForReadFromMapping(first_read_direction, mappings1[i1], effect_read1, read1_length, sm1, reference, &ref_start_position1, &ref_end_position1, &n_cigar1, &cigar1, &NM1, MD_tag1);
+          GetRefStartEndPositionForReadFromMapping(second_read_direction, mappings2[i2], effect_read2, read2_length, sm2, reference, &ref_start_position2, &ref_end_position2, &n_cigar2, &cigar2, &NM2, MD_tag2);
         }
         /*if (!strcmp(read_batch1.GetSequenceNameAt(pair_index), "XXXX")) {
           printf("%d\n", best_mappings.size());
@@ -1553,6 +1560,7 @@ void Chromap<MappingRecord>::ProcessBestMappingsForPairedEndReadOnOneDirection(D
             flag1 |= BAM_FSECONDARY;
             flag2 |= BAM_FSECONDARY;
           }
+
           //printf("%d %d\n", ref_start_position1, ref_end_position1);
           //printf("%d %d\n", ref_start_position2, ref_end_position2);
           EmplaceBackMappingRecord(read_id, read1_name, 1, ref_start_position1, rid1, flag1, 0, is_unique, mapq, NM1, n_cigar1, cigar1, MD_tag1, &((*mappings_on_diff_ref_seqs)[rid1])); 
@@ -2128,7 +2136,7 @@ int Chromap<MappingRecord>::AdjustGapBeginning(Direction mapping_direction, cons
 
 // The returned coordinate is left closed and right closed, and is without chrom id.
 template <typename MappingRecord>
-void Chromap<MappingRecord>::GetRefStartEndPositionForReadFromMapping(Direction mapping_direction, const std::pair<int, uint64_t> &mapping, const char *read, int read_length, int in_split_site, const SequenceBatch &reference, uint32_t *ref_start_position, uint32_t *ref_end_position, int *n_cigar, uint32_t **cigar, int *NM, std::string &MD_tag)
+void Chromap<MappingRecord>::GetRefStartEndPositionForReadFromMapping(Direction mapping_direction, const std::pair<int, uint64_t> &mapping, const char *read, int read_length, const SplitMapping &split_mapping, const SequenceBatch &reference, uint32_t *ref_start_position, uint32_t *ref_end_position, int *n_cigar, uint32_t **cigar, int *NM, std::string &MD_tag)
 {
   int8_t mat[25];
   //if (output_mapping_in_SAM_) {
@@ -2141,8 +2149,10 @@ void Chromap<MappingRecord>::GetRefStartEndPositionForReadFromMapping(Direction 
   for (j = 0; j < 5; ++j) mat[k++] = 0;
   //}
 
-  uint32_t rid = mapping.second >> 32;
-  uint32_t position = mapping.second;
+  //uint32_t rid = mapping.second >> 32;
+  //uint32_t position = mapping.second;
+  uint32_t rid = split_alignment_ ? split_mapping.mapping_start_position_on_ref >> 32 : mapping.second >> 32;
+  uint32_t position = split_alignment_ ? split_mapping.mapping_start_position_on_ref : mapping.second >> 32;
   int full_read_length = read_length;
   int min_num_errors = mapping.first;
   //int split_site = mapping_direction == kPositive ? 0 : read_length;
@@ -2150,9 +2160,9 @@ void Chromap<MappingRecord>::GetRefStartEndPositionForReadFromMapping(Direction 
   int actual_num_errors = 0;
   if (split_alignment_) {
     //split_site = in_split_site & 0xffff;
-    read_length = in_split_site & 0xffff;
-    read5_start_position = (in_split_site>>16)&0xff ; // beginning means the 5' end of the read
-    actual_num_errors = (in_split_site>>24)&0xff; // in split alignment, -num_errors is the number of matches.
+    read_length = split_mapping.mapping_length_on_read; //in_split_site & 0xffff;
+    read5_start_position = split_mapping.mapping_start_position_on_read5;//(in_split_site>>16)&0xff ; // beginning means the 5' end of the read
+    actual_num_errors = split_mapping.num_errors;//(in_split_site>>24)&0xff; // in split alignment, -num_errors is the number of matches.
     //read_length = split_site - read5_start_position;
   }
   //if (split_alignment_) {
@@ -2329,15 +2339,16 @@ void Chromap<MappingRecord>::ProcessBestMappingsForSingleEndRead(Direction mappi
         }
         uint32_t rid = mappings[mi].second >> 32;
 
-        int split_site = 0;
+        //int split_site = 0;
         if (split_alignment_) {
           ref_start_position = split_mappings[mi].mapping_start_position_on_ref;
           ref_end_position = split_mappings[mi].mapping_start_position_on_ref + split_mappings[mi].mapping_length_on_ref;
         } else {
           //split_site = split_sites[mi];
-          split_site = read_length;
+          //split_site = read_length;
         //printf("%d %d\n", split_site, read_length);
-        GetRefStartEndPositionForReadFromMapping(mapping_direction, mappings[mi], effect_read, read_length, split_site, reference, &ref_start_position, &ref_end_position, &n_cigar, &cigar, &NM, MD_tag);
+        SplitMapping sm;
+        GetRefStartEndPositionForReadFromMapping(mapping_direction, mappings[mi], effect_read, read_length, sm, reference, &ref_start_position, &ref_end_position, &n_cigar, &cigar, &NM, MD_tag);
         mapq = GetMAPQForSingleEndRead(error_threshold_, num_candidates, repetitive_seed_length, ref_end_position - ref_start_position + 1, min_num_errors, num_best_mappings, second_min_num_errors, num_second_best_mappings);
         }
 
