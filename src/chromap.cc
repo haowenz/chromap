@@ -1,6 +1,7 @@
 #include "chromap.h"
 
 #include <assert.h>
+#include <bitset>
 #include <fstream>
 #include <iomanip>
 #include <iostream> 
@@ -1491,7 +1492,7 @@ void Chromap<MappingRecord>::ProcessBestMappingsForPairedEndReadOnOneDirection(D
     }
     if (current_sum_errors == min_sum_errors) {
       if (*best_mapping_index == best_mapping_indices[*num_best_mappings_reported]) {
-        std::cerr << std::string(read1_name) << "\n";
+        //std::cerr << std::string(read1_name) << "\n";
         uint32_t rid1 = split_alignment_ ? split_mappings1[i1].mapping_start_position_on_ref >> 32 : mappings1[i1].second >> 32;
         uint32_t rid2 = split_alignment_ ? split_mappings2[i2].mapping_start_position_on_ref >> 32 : mappings2[i2].second >> 32;
         uint32_t ref_start_position1, ref_end_position1;
@@ -3000,9 +3001,16 @@ void Chromap<MappingRecord>::VerifyCandidatesWithDropOffOnOneDirection(Direction
 
 
             //mapping.mapping_start_position_on_ref = mapping.mapping_start_position_on_ref + read_length + 2 * error_threshold_ - mapping.mapping_length_on_ref - error_threshold_ / 2;
-            mapping.mapping_start_position_on_ref = mapping.mapping_start_position_on_ref + read_length + 2 * error_threshold_ - mapping.mapping_length_on_ref;
-            mapping.mapping_start_position_on_read5 = read_length - mapping.mapping_length_on_read + error_threshold_;
-            mapping.mapping_length_on_read -= error_threshold_;
+            mapping.mapping_start_position_on_ref = mapping.mapping_start_position_on_ref + read_length + 2 * error_threshold_ - mapping.mapping_length_on_ref - error_threshold_;
+            mapping.mapping_start_position_on_read5 = read_length - mapping.mapping_length_on_read + error_threshold_ - error_threshold_;
+            //mapping.mapping_length_on_read -= error_threshold_;
+
+            //mapping.mapping_start_position_on_ref = mapping.mapping_start_position_on_ref + read_length + 2 * error_threshold_ - mapping.mapping_length_on_ref + 2 * error_threshold_;
+            //mapping.mapping_start_position_on_read5 = read_length - mapping.mapping_length_on_read + error_threshold_ + 2 * error_threshold_;
+            //mapping.mapping_length_on_read -= 3 * error_threshold_;
+            //if (mapping.mapping_length_on_read <= 0) {
+            //  continue;
+            //}
 
 
 
@@ -3011,7 +3019,7 @@ void Chromap<MappingRecord>::VerifyCandidatesWithDropOffOnOneDirection(Direction
 
 
 
-          FixSplitMappingRightEnd(reference.GetSequenceAt(rid) + mapping.mapping_start_position_on_ref, negative_read.data() + mapping.mapping_start_position_on_read5, mapping.mapping_length_on_read, &mapping);
+          //FixSplitMappingRightEnd(reference.GetSequenceAt(rid) + mapping.mapping_start_position_on_ref, negative_read.data() + mapping.mapping_start_position_on_read5, mapping.mapping_length_on_read, &mapping);
 
 
 
@@ -3021,10 +3029,15 @@ void Chromap<MappingRecord>::VerifyCandidatesWithDropOffOnOneDirection(Direction
           
 
 
-          mapping.mapping_start_position_on_ref -= error_threshold_;
-          mapping.mapping_start_position_on_read5 -= error_threshold_;
-          mapping.mapping_length_on_read += error_threshold_;
-          mapping.mapping_length_on_ref += error_threshold_;
+          //mapping.mapping_start_position_on_ref -= error_threshold_;
+          //mapping.mapping_start_position_on_read5 -= error_threshold_;
+          //mapping.mapping_length_on_read += error_threshold_;
+          //mapping.mapping_length_on_ref += error_threshold_;
+
+          //mapping.mapping_start_position_on_ref -= 3 * error_threshold_;
+          //mapping.mapping_start_position_on_read5 -= 3 * error_threshold_;
+          //mapping.mapping_length_on_read += 3 * error_threshold_;
+          //mapping.mapping_length_on_ref += 3 * error_threshold_;
 
 
 
@@ -3043,10 +3056,6 @@ void Chromap<MappingRecord>::VerifyCandidatesWithDropOffOnOneDirection(Direction
 
         //}
 
-
-
-
-
       }
       //std::cerr << "N4: ne:" << (int)(mapping.num_errors) << " reads: " << mapping.mapping_start_position_on_read5 << " readl:" << mapping.mapping_length_on_read << " ms:" << mapping.estimated_mapping_score << " fs:" << mapping.mapping_start_position_on_ref << " mf:" << mapping.mapping_length_on_ref << "\n";
       //mapping.mapping_start_position_on_read5 = mapping.mapping_start_position_on_read5 + mapping.mapping_length_on_read - 1;
@@ -3055,7 +3064,8 @@ void Chromap<MappingRecord>::VerifyCandidatesWithDropOffOnOneDirection(Direction
     //std::cerr << "F: " << (int)(mapping.num_errors) << " reads: " << mapping.mapping_start_position_on_read5 << " readl:" << mapping.mapping_length_on_read << " ms:" << mapping.estimated_mapping_score << " fs:" << mapping.mapping_start_position_on_ref << " mf:" << mapping.mapping_length_on_ref << "\n";
     mapping.estimated_mapping_score = -mapping.estimated_mapping_score;
 
-    if (mapping.mapping_length_on_read >= min_read_mapping_length && mapping.num_errors <= error_threshold_) {
+    if (mapping.mapping_length_on_read >= min_read_mapping_length && mapping.num_errors < error_threshold_) {
+    //if (mapping.mapping_length_on_read >= min_read_mapping_length && mapping.num_errors < error_threshold_) {
     //std::cerr << "F1: " << (int)(mapping.num_errors) << " reads: " << mapping.mapping_start_position_on_read5 << " readl:" << mapping.mapping_length_on_read << " ms:" << mapping.estimated_mapping_score << " fs:" << mapping.mapping_start_position_on_ref << " mf:" << mapping.mapping_length_on_ref << "\n";
       if (mapping.estimated_mapping_score < *best_mapping_score) {
         *second_best_mapping_score = *best_mapping_score;
@@ -3151,7 +3161,18 @@ void Chromap<MappingRecord>::FixSplitMappingRightEnd(const char *pattern, const 
     VN = X & HP;
     VP = HN | ~(X | HP);
     num_errors_at_band_start_position += 1 - (D0 & lowest_bit_in_band_mask);
+    if (num_errors_at_band_start_position > 2 * error_threshold_) {
+      break;
+    }
     int current_num_errors_in_band = num_errors_at_band_start_position;
+    int current_estimated_mapping_score = i + 1 - error_weight_ * current_num_errors_in_band;
+    if (current_estimated_mapping_score >= mapping->estimated_mapping_score) {
+      mapping->estimated_mapping_score = current_estimated_mapping_score;
+      mapping->num_errors = current_num_errors_in_band;
+      mapping->mapping_length_on_read = i + 1; 
+      mapping->mapping_length_on_ref = i + 1;
+    }
+    //std::cerr << "VP: " << std::bitset<32>(VP) << " VN: " << std::bitset<32>(VN) << " D0: " << std::bitset<32>(D0) << "\n";
     for (int ei = 0; ei < 2 * error_threshold_; ei++) {
     //for (int ei = 1; ei < 2 * error_threshold_; ei++) {
       current_num_errors_in_band = current_num_errors_in_band + ((VP >> ei) & (uint32_t) 1);
@@ -3181,6 +3202,17 @@ void Chromap<MappingRecord>::FixSplitMappingLeftEnd(const char *pattern, const c
     //uint8_t base = SequenceBatch::CharToUint8(pattern[i]);
     Peq[base] = Peq[base] | (1 << i);
   }
+  //std::cerr << "read: ";
+  //for (int i = 0; i < read_length; i++) {
+  //  std::cerr << text[read_length - 1 - i];
+  //}
+  //std::cerr << "\n";
+  //std::cerr << "ref: ";
+  //for (int i = 0; i < read_length + 2 * error_threshold_; i++) {
+  //  std::cerr << pattern[read_length - 1 - i];
+  //}
+  //std::cerr << "\n";
+
   uint32_t highest_bit_in_band_mask = 1 << (2 * error_threshold_);
   uint32_t lowest_bit_in_band_mask = 1;
   uint32_t VP = 0;
@@ -3209,7 +3241,25 @@ void Chromap<MappingRecord>::FixSplitMappingLeftEnd(const char *pattern, const c
     VN = X & HP;
     VP = HN | ~(X | HP);
     num_errors_at_band_start_position += 1 - (D0 & lowest_bit_in_band_mask);
+    if (num_errors_at_band_start_position > 2 * error_threshold_) {
+      break;
+    }
     int current_num_errors_in_band = num_errors_at_band_start_position;
+    int current_estimated_mapping_score = i + 1 - error_weight_ * current_num_errors_in_band;
+    if (current_estimated_mapping_score >= best_mapping.estimated_mapping_score) {
+      best_mapping.estimated_mapping_score = current_estimated_mapping_score;
+      best_mapping.num_errors = current_num_errors_in_band;
+      best_mapping.mapping_start_position_on_read5 = mapping->mapping_start_position_on_read5 + mapping->mapping_length_on_read - (i + 1); 
+      //best_mapping.mapping_start_position_on_ref = mapping->mapping_start_position_on_ref + (mapping->mapping_length_on_ref - (i + 1 + ei));
+      best_mapping.mapping_start_position_on_ref = mapping->mapping_start_position_on_ref + (read_length + 2 * error_threshold_ - (i + 1));
+      //best_mapping.mapping_start_position_on_ref = mapping->mapping_start_position_on_ref + (read_length + 2 * error_threshold_ - (i + 1 + ei));
+      best_mapping.mapping_length_on_read = i + 1; 
+      //best_mapping.mapping_length_on_ref = i + 1 + ei;
+      best_mapping.mapping_length_on_ref = mapping->mapping_length_on_ref - (read_length + 2 * error_threshold_ - (i + 1));
+      //best_mapping.mapping_length_on_ref = mapping->mapping_length_on_ref - (read_length + 2 * error_threshold_ - (i + 1 + ei));
+      //std::cerr << ei << " i:" << i << " refs:" << best_mapping.mapping_start_position_on_ref << "\n";
+    }
+    //std::cerr << "VP: " << std::bitset<32>(VP) << " VN: " << std::bitset<32>(VN) << " D0: " << std::bitset<32>(D0) << "\n";
     for (int ei = 0; ei < 2 * error_threshold_; ei++) {
     //for (int ei = 1; ei < 2 * error_threshold_; ei++) {
       current_num_errors_in_band = current_num_errors_in_band + ((VP >> ei) & (uint32_t) 1);
