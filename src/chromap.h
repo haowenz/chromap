@@ -158,6 +158,7 @@ class Chromap {
   void ProcessBestSplitMappingsForSingleEndRead(Direction mapping_direction, uint8_t mapq, int num_candidates, uint32_t repetitive_seed_length, int max_mapping_score, int num_best_mappings, int second_max_mapping_score, int num_second_best_mappings, const SequenceBatch &read_batch, uint32_t read_index, const SequenceBatch &reference, const SequenceBatch &barcode_batch, const std::vector<int> &best_mapping_indices, const std::vector<SplitMapping> &mappings, int *best_mapping_index, int *num_best_mappings_reported, std::vector<std::vector<MappingRecord> > *mappings_on_diff_ref_seqs);
   void FixSplitMappingRightEnd(const char *pattern, const char *text, const int read_length, SplitMapping *mapping);
   void FixSplitMappingLeftEnd(const char *pattern, const char *text, const int read_length, SplitMapping *mapping);
+  int GenerateCigarUsingEditDistance(const char *pattern, const char *text, int read_length, int mapping_edit_distance, int mapping_end_position, std::vector<uint32_t> &cigar);
 
   // Supportive functions
   void ConstructIndex();
