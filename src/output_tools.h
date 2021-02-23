@@ -314,52 +314,52 @@ struct PairedSAMMapping {
 
 // Format for pairtools for HiC data.
 struct PairsMapping {  
-  uint32_t read_id;
-  std::string read_name;
-  uint32_t cell_barcode;
-  int rid1;
-  int rid2;
-  uint32_t pos1; 
-  uint32_t pos2; 
-  int direction1; // 1-positive. 0-negative
-  int direction2;
-  uint16_t mapq:8, is_unique:1, num_dups:7;
+	uint32_t read_id;
+	std::string read_name;
+	uint32_t cell_barcode;
+	int rid1;
+	int rid2;
+	uint32_t pos1; 
+	uint32_t pos2; 
+	int direction1; // 1-positive. 0-negative
+	int direction2;
+	uint16_t mapq:8, is_unique:1, num_dups:7;
 
-  bool operator<(const PairsMapping& m) const {
-    return std::tie(rid1, pos1, rid2, pos2, mapq) < std::tie(m.rid1, m.pos1, m.rid2, m.pos2, mapq);
-  }
-  bool operator==(const PairsMapping& m) const {
-    return std::tie(rid1, pos1, rid2, pos2) == std::tie(m.rid1, m.pos1, m.rid2, m.pos2);
-    //return std::tie(pos1, pos2, rid1, rid2, is_rev1, is_rev2) == std::tie(m.pos1, m.pos2, m.rid1, m.rid2, m.is_rev1, m.is_rev2);
-  }
-  void Tn5Shift() {
-    // We don't support Tn5 shift in SAM format because it has other fields that depend mapping position.
-  }
+	bool operator<(const PairsMapping& m) const {
+		return std::tie(rid1, pos1, rid2, pos2, mapq) < std::tie(m.rid1, m.pos1, m.rid2, m.pos2, mapq);
+	}
+	bool operator==(const PairsMapping& m) const {
+		return std::tie(rid1, pos1, rid2, pos2) == std::tie(m.rid1, m.pos1, m.rid2, m.pos2);
+		//return std::tie(pos1, pos2, rid1, rid2, is_rev1, is_rev2) == std::tie(m.pos1, m.pos2, m.rid1, m.rid2, m.is_rev1, m.is_rev2);
+	}
+	void Tn5Shift() {
+		// We don't support Tn5 shift in SAM format because it has other fields that depend mapping position.
+	}
 
-  int GetPosition(int idx) const {
-    if (idx == 2) {
-      return pos2 + 1;
-    }
-    return pos1 + 1;
-  }
+	int GetPosition(int idx) const {
+		if (idx == 2) {
+			return pos2 + 1;
+		}
+		return pos1 + 1;
+	}
 
-  char GetDirection(int idx) const {
-    int d = direction1 ;
-    if (idx == 2) {
-      d = direction2 ;
-    }
-    return d > 0 ? '+' : '-' ;
-  }
+	char GetDirection(int idx) const {
+		int d = direction1 ;
+		if (idx == 2) {
+			d = direction2 ;
+		}
+		return d > 0 ? '+' : '-' ;
+	}
 
-  bool IsPositive() const {
-    return direction1 > 0 ? true : false;
-  }
-  uint32_t GetStartPosition() const { // inclusive
-    return pos1;
-  }
-  uint32_t GetEndPosition() const { // exclusive
-    return pos2;
-  }
+	bool IsPositive() const {
+		return direction1 > 0 ? true : false;
+	}
+	uint32_t GetStartPosition() const { // inclusive
+		return pos1;
+	}
+	uint32_t GetEndPosition() const { // exclusive
+		return pos2;
+	}
 };
 
 
