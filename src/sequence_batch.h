@@ -63,6 +63,9 @@ class SequenceBatch {
   inline const std::string & GetNegativeSequenceAt(uint32_t sequence_index) const {
     return negative_sequence_batch_[sequence_index];
   }
+	inline int GetSequenceBatchSize() const {
+		return sequence_batch_.size();
+	}
 //  inline char GetReverseComplementBaseOfSequenceAt(uint32_t sequence_index, uint32_t position) {
 //    kseq_t *sequence = sequence_batch_[sequence_index];
 //    return Uint8ToChar(((uint8_t)3) ^ (CharToUint8((sequence->seq.s)[sequence->seq.l - position - 1])));
@@ -142,6 +145,21 @@ class SequenceBatch {
     }
     return seed;
   }
+
+	inline void ReorderSequences(const std::vector<int> &rid_rank) {
+		std::vector<kseq_t *> tmp_sequence_batch_ = sequence_batch_;
+		std::vector<std::string> tmp_negative_sequence_batch_ = negative_sequence_batch_;
+		int i;
+		int sequence_size = sequence_batch_.size();
+		for (i = 0; i < sequence_size; ++i) {
+			sequence_batch_[rid_rank[i]] = tmp_sequence_batch_[i];
+		}
+		if (negative_sequence_batch_.size() > 0) {
+			for (i = 0; i < sequence_size; ++i) {
+				negative_sequence_batch_[rid_rank[i]] = tmp_negative_sequence_batch_[i];
+			}
+		}
+	}
 
  protected:
   uint32_t num_loaded_sequences_ = 0;
