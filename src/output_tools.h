@@ -655,7 +655,12 @@ class OutputTools {
     fclose(peak_output_file_);
     fclose(barcode_output_file_);
   }
+	
+	inline void SetPairsCustomRidRank(const std::vector<int> &custom_rid_rank) {
+		custom_rid_rank_ = custom_rid_rank;	
+	}
 
+	std::vector<int> custom_rid_rank_; // for pairs
  protected:
   std::string mapping_output_file_path_; 
   FILE *mapping_output_file_;
@@ -665,6 +670,7 @@ class OutputTools {
   FILE *peak_output_file_;
   FILE *barcode_output_file_;
   FILE *matrix_output_file_;
+
 };
 
 template <typename MappingRecord>
@@ -835,8 +841,15 @@ class PairsOutputTools : public OutputTools<MappingRecord> {
   inline void AppendMapping(uint32_t rid, const SequenceBatch &reference, const MappingRecord &mapping) {
   }
   void OutputHeader(uint32_t num_reference_sequences, const SequenceBatch &reference) {
+		std::vector<uint32_t> rid_order;
+		rid_order.resize(num_reference_sequences);
+		uint32_t i;
+		for (i = 0; i < num_reference_sequences; ++i) {
+			rid_order[ this->custom_rid_rank_[i] ] = i;
+		}
     this->AppendMappingOutput("## pairs format v1.0.0\n#shape: upper triangle\n");
-    for (uint32_t rid = 0; rid < num_reference_sequences; ++rid) {
+    for (i = 0; i < num_reference_sequences; ++i) {
+			uint32_t rid = rid_order[i];
       const char *reference_sequence_name = reference.GetSequenceNameAt(rid);
       uint32_t reference_sequence_length = reference.GetSequenceLengthAt(rid);
       this->AppendMappingOutput("#chromsize: " + std::string(reference_sequence_name) + " " + std::to_string(reference_sequence_length) + "\n");
