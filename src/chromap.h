@@ -60,11 +60,13 @@ struct BarcodeWithQual {
 
 struct SplitMapping {
   uint8_t num_errors;
-  int16_t estimated_mapping_score;
   uint64_t mapping_start_position_on_ref;
   uint16_t mapping_length_on_ref;
   uint16_t has_soft_clip_at_read5 : 1, mapping_start_position_on_read5 : 15;
   uint16_t mapping_length_on_read;
+  int GetEstimatedMappingScore(int error_weight) const {
+    return mapping_length_on_read - error_weight * num_errors;
+  }
 };
 
 #define SortMappingWithoutBarcode(m) (((((m).fragment_start_position<<16)|(m).fragment_length)<<8)|(m).mapq)
