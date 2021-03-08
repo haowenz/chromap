@@ -804,7 +804,7 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
 		GetRidRank(custom_rid_order_path_, reference, custom_rid_rank_);
 		reference.ReorderSequences(custom_rid_rank_);
 	}
-	if (pairs_custom_rid_order_path_.length() > 0) {
+	if (output_mapping_in_pairs_) {
 		GetRidRank(pairs_custom_rid_order_path_, reference, pairs_custom_rid_rank_);
 	}
 
