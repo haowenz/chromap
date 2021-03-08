@@ -3745,15 +3745,21 @@ uint8_t Chromap<MappingRecord>::GetMAPQForSingleEndRead(int error_threshold, int
 		}
 		mapq = mapq * (1 - frac_rep / 2) + 0.499;
 	} 
-	/*if (split_alignment_ && alignment_length < read_length - error_threshold_) {
-		if (repetitive_seed_length >= alignment_length)
+	if (split_alignment_ && alignment_length < read_length - error_threshold_) {
+		if (repetitive_seed_length >= alignment_length && repetitive_seed_length < (uint32_t)read_length) {
+			mapq = 0;
+		}
+
 		if ( second_min_num_errors - min_num_errors <= error_threshold_ * 3 / 4 && num_candidates >= 5) {
 			mapq -= (num_candidates/5);
+		}
+		if (mapq < 0) {
+			mapq = 0 ;
 		}
 		if (num_second_best_mappings > 0 && second_min_num_errors - min_num_errors < error_threshold_ * 3 / 4) {
 			mapq /= (num_second_best_mappings + 1);
 		}
-	}*/
+	}
   //mapq <<= 1;
   return (uint8_t)mapq;
 }
