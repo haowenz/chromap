@@ -660,9 +660,9 @@ void Chromap<MappingRecord>::PostProcessingInLowMemory(uint32_t num_mappings_in_
       }
     }
     // Append current min to mappings if not a duplicate
-    if (min_handle_index != temp_mapping_file_handles_.size()) {
+    if (!remove_pcr_duplicates_ || min_handle_index != temp_mapping_file_handles_.size()) {
       MappingRecord &current_min_mapping = temp_mapping_file_handles_[min_handle_index].mappings[temp_mapping_file_handles_[min_handle_index].current_mapping_index];
-      if (last_rid == min_rid && current_min_mapping == last_mapping) {
+      if (remove_pcr_duplicates_ && last_rid == min_rid && current_min_mapping == last_mapping) {
         ++dup_count;
       } else {
         if (dup_count > 0) {
@@ -724,7 +724,11 @@ void Chromap<MappingRecord>::PostProcessingInLowMemory(uint32_t num_mappings_in_
     temp_mapping_file_handles_[hi].FinalizeTempMappingLoading();
     remove(temp_mapping_file_handles_[hi].file_path.c_str());
   }
-  std::cerr << "Sorted, deduped and outputed mappings in " << Chromap<>::GetRealTime() - sort_and_dedupe_start_time << "s.\n";
+  if (remove_pcr_duplicates_) {
+    std::cerr << "Sorted, deduped and outputed mappings in " << Chromap<>::GetRealTime() - sort_and_dedupe_start_time << "s.\n";
+  } else {
+    std::cerr << "Sorted and outputed mappings in " << Chromap<>::GetRealTime() - sort_and_dedupe_start_time << "s.\n";
+  }
   std::cerr << "# uni-mappings: " << num_uni_mappings << ", # multi-mappings: " << num_multi_mappings << ", total: " << num_uni_mappings + num_multi_mappings << ".\n";
   std::cerr << "Number of output mappings (passed filters): " << num_mappings_passing_filters << "\n";
 }
