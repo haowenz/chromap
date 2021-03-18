@@ -2820,6 +2820,8 @@ void Chromap<MappingRecord>::VerifyCandidatesOnOneDirection(Direction candidate_
     int allow_gap_beginning = allow_gap_beginning_ - error_threshold_;
     int actual_num_errors = 0;
     int read_mapping_length = 0;
+		int best_mapping_longest_match = 0;
+		int longest_match = 0;
     
     if (split_alignment_) {
 			if (candidate_direction == kPositive) {
@@ -2870,6 +2872,14 @@ void Chromap<MappingRecord>::VerifyCandidatesOnOneDirection(Direction candidate_
 			if (mapping_end_position + 1 - error_threshold_ - num_errors - gap_beginning >= mapping_length_threshold) {
 				actual_num_errors = num_errors;
 				num_errors = -(mapping_end_position - error_threshold_ - num_errors - gap_beginning);
+				
+				if (candidates.size() > 200) {
+					if (candidate_direction == kPositive) {
+						longest_match = GetLongestMatchLength(reference.GetSequenceAt(rid) + position, read, read_length);
+					} else {
+						longest_match = GetLongestMatchLength(reference.GetSequenceAt(rid) + position, negative_read.data(), read_length);
+					}
+				}
 			} else {
 				num_errors = error_threshold_ + 1;
 				actual_num_errors = error_threshold_ + 1;
@@ -2897,7 +2907,12 @@ void Chromap<MappingRecord>::VerifyCandidatesOnOneDirection(Direction candidate_
 					} else {
 						candidate_count_threshold = candidates[ci].count / 2;
 					}
+					if (*second_min_num_errors < *min_num_errors + error_threshold_ / 2 
+							&& best_mapping_longest_match > longest_match && candidates.size() > 200) {
+						*second_min_num_errors = *min_num_errors;
+					}
 				}
+				best_mapping_longest_match = longest_match;
 			} else if (num_errors == *min_num_errors) {
 				(*num_best_mappings)++;
 				/*if (split_alignment_ && candidates.size() > 50) {
@@ -2926,6 +2941,11 @@ void Chromap<MappingRecord>::VerifyCandidatesOnOneDirection(Direction candidate_
 				/*if (mapping_end_position - error_threshold_ < 0 || mapping_end_position - error_threshold_ > 200 || mapping_end_position - error_threshold_ < 20) {
 					printf("ERROR! %d %d %d %d %d\n", mapping_end_position, error_threshold_, read_length,(int)candidates[ci].position, gap_beginning);
 					}*/
+				if (num_errors < *min_num_errors + error_threshold_ / 2 && num_errors > *min_num_errors 
+						&& longest_match > best_mapping_longest_match && candidates.size() > 200) {
+					(*num_second_best_mappings)++;
+					*second_min_num_errors = *min_num_errors;
+				}
 				split_sites->emplace_back( ((actual_num_errors&0xff)<<24) 
 						| ((gap_beginning&0xff)<<16) 
 						| (read_mapping_length&0xffff) );
@@ -3028,6 +3048,24 @@ void Chromap<MappingRecord>::VerifyCandidates(const SequenceBatch &read_batch, u
       //VerifyCandidatesOnOneDirectionUsingSIMD(kNegative, read_batch, read_index, reference, negative_candidates, negative_mappings, min_num_errors, num_best_mappings, second_min_num_errors, num_second_best_mappings);
     }
   }
+}
+
+template <typename MappingRecord>
+int Chromap<MappingRecord>::GetLongestMatchLength(const char *pattern, const char *text, const int read_length)
+{
+	int max_match = 0;
+	int tmp = 0;
+	for (int i = 0 ; i < read_length ; ++i) {
+		if (SequenceBatch::CharToUint8(pattern[i]) == SequenceBatch::CharToUint8(text[i])) {
+			++tmp;
+		} else if (tmp > max_match) {
+			max_match = tmp;
+		}
+	}
+	if (tmp > max_match) {
+		max_match = tmp;
+	}
+	return max_match;
 }
 
 template <typename MappingRecord>
