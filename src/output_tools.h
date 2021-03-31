@@ -158,6 +158,46 @@ struct PAFMapping {
   uint32_t GetEndPosition() const { // exclusive
     return fragment_start_position + fragment_length;
   }
+  uint16_t GetStructSize() const {
+    return 2 * sizeof(uint32_t) + 2 * sizeof(uint16_t) + 2 * sizeof(uint8_t) + read_name.length() * sizeof(char);
+  }
+  size_t WriteToFile(FILE *temp_mapping_output_file) const {
+    size_t num_written_bytes = 0;
+    num_written_bytes += fwrite(&read_id, sizeof(uint32_t), 1, temp_mapping_output_file);
+    uint16_t read_name_length = read_name.length();
+    num_written_bytes += fwrite(&read_name_length, sizeof(uint16_t), 1, temp_mapping_output_file);
+    num_written_bytes += fwrite(read_name.data(), sizeof(char), read_name_length, temp_mapping_output_file);
+    num_written_bytes += fwrite(&fragment_start_position, sizeof(uint32_t), 1, temp_mapping_output_file);
+    num_written_bytes += fwrite(&fragment_length, sizeof(uint16_t), 1, temp_mapping_output_file);
+    uint8_t mapq_direction_is_unique = (mapq << 2) | (direction << 1) | is_unique;
+    num_written_bytes += fwrite(&mapq_direction_is_unique, sizeof(uint8_t), 1, temp_mapping_output_file);
+    num_written_bytes += fwrite(&num_dups, sizeof(uint8_t), 1, temp_mapping_output_file);
+    return num_written_bytes;
+  }
+  size_t LoadFromFile(FILE *temp_mapping_output_file) {
+    size_t num_read_bytes = 0;
+    num_read_bytes += fread(&read_id, sizeof(uint32_t), 1, temp_mapping_output_file);
+    std::cerr << num_read_bytes << "\n";
+    uint16_t read_name_length = 0;
+    num_read_bytes += fread(&read_name_length, sizeof(uint16_t), 1, temp_mapping_output_file);
+    std::cerr << num_read_bytes << "\n";
+    read_name = std::string(read_name_length, '\0');
+    num_read_bytes += fread(&(read_name[0]), sizeof(char), read_name_length, temp_mapping_output_file);
+    std::cerr << num_read_bytes << "\n";
+    num_read_bytes += fread(&fragment_start_position, sizeof(uint32_t), 1, temp_mapping_output_file);
+    std::cerr << num_read_bytes << "\n";
+    num_read_bytes += fread(&fragment_length, sizeof(uint16_t), 1, temp_mapping_output_file);
+    std::cerr << num_read_bytes << "\n";
+    uint8_t mapq_direction_is_unique = 0;
+    num_read_bytes += fread(&mapq_direction_is_unique, sizeof(uint8_t), 1, temp_mapping_output_file);
+    std::cerr << num_read_bytes << "\n";
+    mapq = (mapq_direction_is_unique >> 2);
+    direction = (mapq_direction_is_unique >> 1) & 1;
+    is_unique = mapq_direction_is_unique & 1;
+    num_read_bytes += fread(&num_dups, sizeof(uint8_t), 1, temp_mapping_output_file);
+    std::cerr << num_read_bytes << "\n";
+    return num_read_bytes;
+  }
 };
 
 struct PairedPAFMapping {
@@ -195,6 +235,9 @@ struct PairedPAFMapping {
   uint32_t GetEndPosition() const { // exclusive
     return fragment_start_position + fragment_length;
   }
+  uint16_t GetStructSize() const {
+    return 2 * sizeof(uint32_t) + 6 * sizeof(uint16_t) + 2 * sizeof(uint8_t) + (read1_name.length() + read2_name.length()) * sizeof(char);
+  }
 };
 
 struct SAMMapping {
@@ -215,9 +258,8 @@ struct SAMMapping {
   int n_cigar;     // number of CIGAR operations
   uint32_t *cigar; // CIGAR in the BAM encoding: opLen<<4|op; op to integer mapping: MIDSH=>01234
   std::string MD;
-  char *XA;        // alternative mappings
-
-  int score, sub, alt_sc;
+  //char *XA;        // alternative mappings
+  //int score, sub, alt_sc;
   bool operator<(const SAMMapping& m) const {
     return std::tie(rid, pos, mapq) < std::tie(m.rid, pos, mapq);
   }
@@ -275,93 +317,190 @@ struct SAMMapping {
       return pos + 1;
     }
   }
+  uint16_t GetStructSize() const {
+    return 2 * sizeof(uint32_t) + 2 * sizeof(uint16_t) + 2 * sizeof(uint8_t) + (read_name.length() + MD.length()) * sizeof(char) + n_cigar * sizeof(uint32_t);
+  }
+  size_t WriteToFile(FILE *temp_mapping_output_file) const {
+    size_t num_written_bytes = 0;
+    num_written_bytes += fwrite(&read_id, sizeof(uint32_t), 1, temp_mapping_output_file);
+    uint16_t read_name_length = read_name.length();
+    num_written_bytes += fwrite(&read_name_length, sizeof(uint16_t), 1, temp_mapping_output_file);
+    num_written_bytes += fwrite(read_name.data(), sizeof(char), read_name_length, temp_mapping_output_file);
+    num_written_bytes += fwrite(&num_dups, sizeof(uint8_t), 1, temp_mapping_output_file);
+    num_written_bytes += fwrite(&pos, sizeof(int64_t), 1, temp_mapping_output_file);
+    num_written_bytes += fwrite(&rid, sizeof(int), 1, temp_mapping_output_file);
+    num_written_bytes += fwrite(&flag, sizeof(int), 1, temp_mapping_output_file);
+    uint32_t rev_alt_unique_mapq_NM = (is_rev << 31) | (is_alt << 30) | (is_unique << 29) | (mapq << 22) | NM;
+    num_written_bytes += fwrite(&rev_alt_unique_mapq_NM, sizeof(uint32_t), 1, temp_mapping_output_file);
+    num_written_bytes += fwrite(&n_cigar, sizeof(int), 1, temp_mapping_output_file);
+    if (n_cigar > 0) {
+      num_written_bytes += fwrite(cigar, sizeof(uint32_t), n_cigar, temp_mapping_output_file);
+    }
+    uint16_t MD_length = MD.length();
+    num_written_bytes += fwrite(&MD_length, sizeof(uint16_t), 1, temp_mapping_output_file);
+    if (MD_length > 0) {
+      num_written_bytes += fwrite(MD.data(), sizeof(char), MD_length, temp_mapping_output_file);
+    }
+    return num_written_bytes;
+  }
+  size_t LoadFromFile(FILE *temp_mapping_output_file) {
+    int num_read_bytes = 0;
+    num_read_bytes += fread(&read_id, sizeof(uint32_t), 1, temp_mapping_output_file);
+    uint16_t read_name_length = 0;
+    num_read_bytes += fread(&read_name_length, sizeof(uint16_t), 1, temp_mapping_output_file);
+    read_name = std::string(read_name_length, '\0');
+    num_read_bytes += fread(&(read_name[0]), sizeof(char), read_name_length, temp_mapping_output_file);
+    num_read_bytes += fread(&num_dups, sizeof(uint8_t), 1, temp_mapping_output_file);
+    num_read_bytes += fread(&pos, sizeof(int64_t), 1, temp_mapping_output_file);
+    num_read_bytes += fread(&rid, sizeof(int), 1, temp_mapping_output_file);
+    num_read_bytes += fread(&flag, sizeof(int), 1, temp_mapping_output_file);
+    uint32_t rev_alt_unique_mapq_NM = 0;
+    num_read_bytes += fread(&rev_alt_unique_mapq_NM, sizeof(uint32_t), 1, temp_mapping_output_file);
+    is_rev = (rev_alt_unique_mapq_NM >> 31);
+    is_alt = (rev_alt_unique_mapq_NM >> 30) & 1;
+    is_unique = (rev_alt_unique_mapq_NM >> 29) & 1;
+    mapq = ((rev_alt_unique_mapq_NM << 3) >> 25);
+    NM = ((rev_alt_unique_mapq_NM << 10) >> 10);
+    num_read_bytes += fread(&n_cigar, sizeof(int), 1, temp_mapping_output_file);
+    if (n_cigar > 0) {
+      cigar = new uint32_t[n_cigar]; 
+      num_read_bytes += fread(cigar, sizeof(uint32_t), n_cigar, temp_mapping_output_file);
+    }
+    uint16_t MD_length = 0;
+    num_read_bytes += fread(&MD_length, sizeof(uint16_t), 1, temp_mapping_output_file);
+    if (MD_length > 0) {
+      MD = std::string(MD_length, '\0');
+      num_read_bytes += fread(&(MD[0]), sizeof(char), MD_length, temp_mapping_output_file);
+    }
+    return num_read_bytes;
+  }
 };
 
-struct PairedSAMMapping {
-  int64_t pos1;     // forward strand 5'-end mapping position
-  int64_t pos2;     // forward strand 5'-end mapping position
-  int rid1;         // reference sequence index in bntseq_t; <0 for unmapped
-  int rid2;         // reference sequence index in bntseq_t; <0 for unmapped
-  int flag1;        // extra flag
-  int flag2;        // extra flag
-  uint32_t is_rev1:1, is_alt1:1, mapq1:8, NM1:22; // is_rev: whether on the reverse strand; mapq: mapping quality; NM: edit distance
-  uint32_t is_rev2:1, is_alt2:1, mapq2:8, NM2:22; // is_rev: whether on the reverse strand; mapq: mapping quality; NM: edit distance
-  int n_cigar1;     // number of CIGAR operations
-  int n_cigar2;     // number of CIGAR operations
-  uint32_t *cigar1; // CIGAR in the BAM encoding: opLen<<4|op; op to integer mapping: MIDSH=>01234
-  uint32_t *cigar2; // CIGAR in the BAM encoding: opLen<<4|op; op to integer mapping: MIDSH=>01234
-  char *XA1;        // alternative mappings
-  char *XA2;        // alternative mappings
+//struct PairedSAMMapping {
+//  int64_t pos1;     // forward strand 5'-end mapping position
+//  int64_t pos2;     // forward strand 5'-end mapping position
+//  int rid1;         // reference sequence index in bntseq_t; <0 for unmapped
+//  int rid2;         // reference sequence index in bntseq_t; <0 for unmapped
+//  int flag1;        // extra flag
+//  int flag2;        // extra flag
+//  uint32_t is_rev1:1, is_alt1:1, mapq1:8, NM1:22; // is_rev: whether on the reverse strand; mapq: mapping quality; NM: edit distance
+//  uint32_t is_rev2:1, is_alt2:1, mapq2:8, NM2:22; // is_rev: whether on the reverse strand; mapq: mapping quality; NM: edit distance
+//  int n_cigar1;     // number of CIGAR operations
+//  int n_cigar2;     // number of CIGAR operations
+//  uint32_t *cigar1; // CIGAR in the BAM encoding: opLen<<4|op; op to integer mapping: MIDSH=>01234
+//  uint32_t *cigar2; // CIGAR in the BAM encoding: opLen<<4|op; op to integer mapping: MIDSH=>01234
+//  char *XA1;        // alternative mappings
+//  char *XA2;        // alternative mappings
+//
+//  int score1, sub1, alt_sc1;
+//  int score2, sub2, alt_sc2;
+//  bool operator<(const PairedSAMMapping& m) const {
+//    return std::tie(rid1, rid2, pos1, pos2, mapq1, mapq2) < std::tie(m.rid1, m.rid2, pos1, pos2, mapq1, mapq2);
+//  }
+//  bool operator==(const PairedSAMMapping& m) const {
+//    return std::tie(pos1, pos2, rid1, rid2, is_rev1, is_rev2) == std::tie(m.pos1, m.pos2, m.rid1, m.rid2, m.is_rev1, m.is_rev2);
+//  }
+//  void Tn5Shift() {
+//    // We don't support Tn5 shift in SAM format because it has other fields that depend mapping position.
+//  }
+//  //uint32_t GetStartPosition() const { // inclusive
+//  //  return fragment_start_position;
+//  //}
+//  //uint32_t GetEndPosition() const { // exclusive
+//  //  return fragment_start_position + fragment_length;
+//  //}
+//};
 
-  int score1, sub1, alt_sc1;
-  int score2, sub2, alt_sc2;
-  bool operator<(const PairedSAMMapping& m) const {
-    return std::tie(rid1, rid2, pos1, pos2, mapq1, mapq2) < std::tie(m.rid1, m.rid2, pos1, pos2, mapq1, mapq2);
+// Format for pairtools for HiC data.
+struct PairsMapping {  
+  uint32_t read_id;
+  std::string read_name;
+  uint32_t cell_barcode;
+  int rid1;
+  int rid2;
+  uint32_t pos1; 
+  uint32_t pos2; 
+  int direction1; // 1-positive. 0-negative
+  int direction2;
+  uint16_t mapq:8, is_unique:1, num_dups:7;
+
+  bool operator<(const PairsMapping& m) const {
+    return std::tie(rid1, rid2, pos1, pos2, mapq) < std::tie(m.rid1, m.rid2, m.pos1, m.pos2, mapq);
   }
-  bool operator==(const PairedSAMMapping& m) const {
-    return std::tie(pos1, pos2, rid1, rid2, is_rev1, is_rev2) == std::tie(m.pos1, m.pos2, m.rid1, m.rid2, m.is_rev1, m.is_rev2);
+  bool operator==(const PairsMapping& m) const {
+    return std::tie(rid1, pos1, rid2, pos2) == std::tie(m.rid1, m.pos1, m.rid2, m.pos2);
+    //return std::tie(pos1, pos2, rid1, rid2, is_rev1, is_rev2) == std::tie(m.pos1, m.pos2, m.rid1, m.rid2, m.is_rev1, m.is_rev2);
   }
   void Tn5Shift() {
     // We don't support Tn5 shift in SAM format because it has other fields that depend mapping position.
   }
-  //uint32_t GetStartPosition() const { // inclusive
-  //  return fragment_start_position;
-  //}
-  //uint32_t GetEndPosition() const { // exclusive
-  //  return fragment_start_position + fragment_length;
-  //}
+
+  int GetPosition(int idx) const {
+    if (idx == 2) {
+      return pos2 + 1;
+    }
+    return pos1 + 1;
+  }
+
+  char GetDirection(int idx) const {
+    int d = direction1 ;
+    if (idx == 2) {
+      d = direction2 ;
+    }
+    return d > 0 ? '+' : '-' ;
+  }
+
+  bool IsPositive() const {
+    return direction1 > 0 ? true : false;
+  }
+  uint32_t GetStartPosition() const { // inclusive
+    return pos1;
+  }
+  uint32_t GetEndPosition() const { // exclusive
+    return pos2;
+  }
+  uint16_t GetStructSize() const {
+    return 5 * sizeof(uint32_t) + 1 * sizeof(uint16_t) + 4 * sizeof(int) + read_name.length() * sizeof(char);
+  }
+  size_t WriteToFile(FILE *temp_mapping_output_file) const {
+    size_t num_written_bytes = 0;
+    num_written_bytes += fwrite(&read_id, sizeof(uint32_t), 1, temp_mapping_output_file);
+    uint16_t read_name_length = read_name.length();
+    num_written_bytes += fwrite(&read_name_length, sizeof(uint16_t), 1, temp_mapping_output_file);
+    num_written_bytes += fwrite(read_name.data(), sizeof(char), read_name_length, temp_mapping_output_file);
+    num_written_bytes += fwrite(&cell_barcode, sizeof(uint32_t), 1, temp_mapping_output_file);
+    num_written_bytes += fwrite(&rid1, sizeof(int), 1, temp_mapping_output_file);
+    num_written_bytes += fwrite(&rid2, sizeof(int), 1, temp_mapping_output_file);
+    num_written_bytes += fwrite(&pos1, sizeof(uint32_t), 1, temp_mapping_output_file);
+    num_written_bytes += fwrite(&pos2, sizeof(uint32_t), 1, temp_mapping_output_file);
+    num_written_bytes += fwrite(&direction1, sizeof(int), 1, temp_mapping_output_file);
+    num_written_bytes += fwrite(&direction2, sizeof(int), 1, temp_mapping_output_file);
+    uint16_t mapq_unique_dups = (mapq << 8) | (is_unique << 7) | num_dups;
+    num_written_bytes += fwrite(&mapq_unique_dups, sizeof(uint16_t), 1, temp_mapping_output_file);
+    return num_written_bytes;
+  }
+  size_t LoadFromFile(FILE *temp_mapping_output_file) {
+    size_t num_read_bytes = 0;
+    num_read_bytes += fread(&read_id, sizeof(uint32_t), 1, temp_mapping_output_file);
+    uint16_t read_name_length = 0;
+    num_read_bytes += fread(&read_name_length, sizeof(uint16_t), 1, temp_mapping_output_file);
+    read_name = std::string(read_name_length, '\0');
+    num_read_bytes += fread(&(read_name[0]), sizeof(char), read_name_length, temp_mapping_output_file);
+    num_read_bytes += fread(&cell_barcode, sizeof(uint32_t), 1, temp_mapping_output_file);
+    num_read_bytes += fread(&rid1, sizeof(int), 1, temp_mapping_output_file);
+    num_read_bytes += fread(&rid2, sizeof(int), 1, temp_mapping_output_file);
+    num_read_bytes += fread(&pos1, sizeof(uint32_t), 1, temp_mapping_output_file);
+    num_read_bytes += fread(&pos2, sizeof(uint32_t), 1, temp_mapping_output_file);
+    num_read_bytes += fread(&direction1, sizeof(int), 1, temp_mapping_output_file);
+    num_read_bytes += fread(&direction2, sizeof(int), 1, temp_mapping_output_file);
+    uint16_t mapq_unique_dups = 0;
+    num_read_bytes += fread(&mapq_unique_dups, sizeof(uint16_t), 1, temp_mapping_output_file);
+    mapq = (mapq_unique_dups >> 8);
+    is_unique = (mapq_unique_dups >> 7) & 1;
+    num_dups = ((mapq_unique_dups << 9) >> 9);
+    return num_read_bytes;
+  }
 };
-
-// Format for pairtools for HiC data.
-struct PairsMapping {  
-	uint32_t read_id;
-	std::string read_name;
-	uint32_t cell_barcode;
-	int rid1;
-	int rid2;
-	uint32_t pos1; 
-	uint32_t pos2; 
-	int direction1; // 1-positive. 0-negative
-	int direction2;
-	uint16_t mapq:8, is_unique:1, num_dups:7;
-
-	bool operator<(const PairsMapping& m) const {
-		return std::tie(rid1, rid2, pos1, pos2, mapq) < std::tie(m.rid1, m.rid2, m.pos1, m.pos2, mapq);
-	}
-	bool operator==(const PairsMapping& m) const {
-		return std::tie(rid1, pos1, rid2, pos2) == std::tie(m.rid1, m.pos1, m.rid2, m.pos2);
-		//return std::tie(pos1, pos2, rid1, rid2, is_rev1, is_rev2) == std::tie(m.pos1, m.pos2, m.rid1, m.rid2, m.is_rev1, m.is_rev2);
-	}
-	void Tn5Shift() {
-		// We don't support Tn5 shift in SAM format because it has other fields that depend mapping position.
-	}
-
-	int GetPosition(int idx) const {
-		if (idx == 2) {
-			return pos2 + 1;
-		}
-		return pos1 + 1;
-	}
-
-	char GetDirection(int idx) const {
-		int d = direction1 ;
-		if (idx == 2) {
-			d = direction2 ;
-		}
-		return d > 0 ? '+' : '-' ;
-	}
-
-	bool IsPositive() const {
-		return direction1 > 0 ? true : false;
-	}
-	uint32_t GetStartPosition() const { // inclusive
-		return pos1;
-	}
-	uint32_t GetEndPosition() const { // exclusive
-		return pos2;
-	}
-};
-
 
 struct MappingWithBarcode {
   uint32_t read_id;
@@ -557,12 +696,90 @@ struct TempMappingFileHandle {
   }
 };
 
+template <>
+inline void TempMappingFileHandle<SAMMapping>::LoadTempMappingBlock(uint32_t num_reference_sequences) {
+  num_mappings = 0;
+  while (num_mappings == 0) {
+    // Only keep mappings on one ref seq, which means # mappings in buffer can be less than block size
+    // Two cases: current ref seq has remainings or not
+    if (num_loaded_mappings_on_current_rid < num_mappings_on_current_rid) {
+      // Check if # remains larger than block size
+      uint32_t num_mappings_to_load_on_current_rid = num_mappings_on_current_rid - num_loaded_mappings_on_current_rid;
+      if (num_mappings_to_load_on_current_rid > block_size) {
+        num_mappings_to_load_on_current_rid = block_size;
+      }
+      //std::cerr << num_mappings_to_load_on_current_rid << " " << num_loaded_mappings_on_current_rid << " " << num_mappings_on_current_rid << "\n";
+      //std::cerr << mappings.size() << "\n";
+      for (size_t mi = 0; mi < num_mappings_to_load_on_current_rid; ++mi) {
+        mappings[mi].LoadFromFile(file);
+      }
+      //fread(mappings.data(), sizeof(MappingRecord), num_mappings_to_load_on_current_rid, file);
+      //std::cerr << "Load mappings\n";
+      num_loaded_mappings_on_current_rid += num_mappings_to_load_on_current_rid;
+      num_mappings = num_mappings_to_load_on_current_rid;
+    } else {
+      // Move to next rid
+      ++current_rid;
+      if (current_rid < num_reference_sequences) {
+        //std::cerr << "Load size\n";
+        fread(&num_mappings_on_current_rid, sizeof(size_t), 1, file);
+        //std::cerr << "Load size " << num_mappings_on_current_rid << "\n";
+        num_loaded_mappings_on_current_rid = 0;
+      } else {
+        all_loaded = true;
+        break;
+      }
+    }
+  }
+  current_mapping_index = 0;
+}
+
+template <>
+inline void TempMappingFileHandle<PairsMapping>::LoadTempMappingBlock(uint32_t num_reference_sequences) {
+  num_mappings = 0;
+  while (num_mappings == 0) {
+    // Only keep mappings on one ref seq, which means # mappings in buffer can be less than block size
+    // Two cases: current ref seq has remainings or not
+    if (num_loaded_mappings_on_current_rid < num_mappings_on_current_rid) {
+      // Check if # remains larger than block size
+      uint32_t num_mappings_to_load_on_current_rid = num_mappings_on_current_rid - num_loaded_mappings_on_current_rid;
+      if (num_mappings_to_load_on_current_rid > block_size) {
+        num_mappings_to_load_on_current_rid = block_size;
+      }
+      //std::cerr << num_mappings_to_load_on_current_rid << " " << num_loaded_mappings_on_current_rid << " " << num_mappings_on_current_rid << "\n";
+      //std::cerr << mappings.size() << "\n";
+      for (size_t mi = 0; mi < num_mappings_to_load_on_current_rid; ++mi) {
+        mappings[mi].LoadFromFile(file);
+      }
+      //fread(mappings.data(), sizeof(MappingRecord), num_mappings_to_load_on_current_rid, file);
+      //std::cerr << "Load mappings\n";
+      num_loaded_mappings_on_current_rid += num_mappings_to_load_on_current_rid;
+      num_mappings = num_mappings_to_load_on_current_rid;
+    } else {
+      // Move to next rid
+      ++current_rid;
+      if (current_rid < num_reference_sequences) {
+        //std::cerr << "Load size\n";
+        fread(&num_mappings_on_current_rid, sizeof(size_t), 1, file);
+        //std::cerr << "Load size " << num_mappings_on_current_rid << "\n";
+        num_loaded_mappings_on_current_rid = 0;
+      } else {
+        all_loaded = true;
+        break;
+      }
+    }
+  }
+  current_mapping_index = 0;
+}
+
+
+
 template <typename MappingRecord>
 class OutputTools {
  public:
   OutputTools() {}
   virtual ~OutputTools() {}
-  inline void OutputTempMapping(const std::string &temp_mapping_output_file_path, uint32_t num_reference_sequences, const std::vector<std::vector<MappingRecord> > &mappings) {
+  inline virtual void OutputTempMapping(const std::string &temp_mapping_output_file_path, uint32_t num_reference_sequences, const std::vector<std::vector<MappingRecord> > &mappings) {
     FILE *temp_mapping_output_file = fopen(temp_mapping_output_file_path.c_str(), "wb");
     assert(temp_mapping_output_file != NULL);
     for (size_t ri = 0; ri < num_reference_sequences; ++ri) {
@@ -575,7 +792,7 @@ class OutputTools {
     }
     fclose(temp_mapping_output_file);
   }
-  inline void LoadBinaryTempMapping(const std::string &temp_mapping_file_path, uint32_t num_reference_sequences, std::vector<std::vector<MappingRecord> > &mappings) {
+  inline virtual void LoadBinaryTempMapping(const std::string &temp_mapping_file_path, uint32_t num_reference_sequences, std::vector<std::vector<MappingRecord> > &mappings) {
     FILE *temp_mapping_file = fopen(temp_mapping_file_path.c_str(), "rb");
     assert(temp_mapping_file != NULL);
     for (size_t ri = 0; ri < num_reference_sequences; ++ri) {
@@ -583,7 +800,8 @@ class OutputTools {
       fread(&num_mappings, sizeof(size_t), 1, temp_mapping_file);
       if (num_mappings > 0) {
         mappings.emplace_back(std::vector<MappingRecord>(num_mappings));
-        fread(&(mappings[ri].data()), sizeof(MappingRecord), num_mappings, temp_mapping_file);
+        //fread(&(mappings[ri].data()), sizeof(MappingRecord), num_mappings, temp_mapping_file);
+        fread(mappings[ri].data(), sizeof(MappingRecord), num_mappings, temp_mapping_file);
       } else {
         mappings.emplace_back(std::vector<MappingRecord>());
       }
@@ -759,6 +977,10 @@ class PAFOutputTools : public OutputTools<MappingRecord> {
   }
   inline void AppendMapping(uint32_t rid, const SequenceBatch &reference, const MappingRecord &mapping) {
   }
+  inline void OutputTempMapping(const std::string &temp_mapping_output_file_path, uint32_t num_reference_sequences, const std::vector<std::vector<MappingRecord> > &mappings) {
+  }
+  inline void LoadBinaryTempMapping(const std::string &temp_mapping_file_path, uint32_t num_reference_sequences, std::vector<std::vector<MappingRecord> > &mappings) {
+  }
 };
 
 template <>
@@ -768,6 +990,46 @@ inline void PAFOutputTools<PAFMapping>::AppendMapping(uint32_t rid, const Sequen
   std::string strand = mapping.IsPositive() ? "+" : "-";
   uint32_t mapping_end_position = mapping.fragment_start_position + mapping.fragment_length;
   this->AppendMappingOutput(mapping.read_name + "\t" + std::to_string(mapping.read_length) + "\t" + std::to_string(0) + "\t" + std::to_string(mapping.read_length) + "\t" + strand + "\t" + std::string(reference_sequence_name) + "\t" + std::to_string(reference_sequence_length) + "\t" + std::to_string(mapping.fragment_start_position) + "\t" + std::to_string(mapping_end_position) + "\t" + std::to_string(mapping.read_length) + "\t" + std::to_string(mapping.fragment_length) + "\t" + std::to_string(mapping.mapq) + "\n");
+}
+
+template <>
+inline void PAFOutputTools<PAFMapping>::OutputTempMapping(const std::string &temp_mapping_output_file_path, uint32_t num_reference_sequences, const std::vector<std::vector<PAFMapping> > &mappings) {
+  FILE *temp_mapping_output_file = fopen(temp_mapping_output_file_path.c_str(), "wb");
+  assert(temp_mapping_output_file != NULL);
+  for (size_t ri = 0; ri < num_reference_sequences; ++ri) {
+    // make sure mappings[ri] exists even if its size is 0
+    size_t num_mappings = mappings[ri].size();
+    fwrite(&num_mappings, sizeof(size_t), 1, temp_mapping_output_file);
+    if (mappings[ri].size() > 0) {
+      for (size_t mi = 0; mi < num_mappings; ++mi) {
+        mappings[ri][mi].WriteToFile(temp_mapping_output_file);
+      }
+      //fwrite(mappings[ri].data(), sizeof(MappingRecord), mappings[ri].size(), temp_mapping_output_file);
+    }
+  }
+  fclose(temp_mapping_output_file);
+}
+
+template <>
+inline void PAFOutputTools<PAFMapping>::LoadBinaryTempMapping(const std::string &temp_mapping_file_path, uint32_t num_reference_sequences, std::vector<std::vector<PAFMapping> > &mappings) {
+  FILE *temp_mapping_file = fopen(temp_mapping_file_path.c_str(), "rb");
+  assert(temp_mapping_file != NULL);
+  for (size_t ri = 0; ri < num_reference_sequences; ++ri) {
+    size_t num_mappings = 0;
+    fread(&num_mappings, sizeof(size_t), 1, temp_mapping_file);
+    if (num_mappings > 0) {
+      mappings.emplace_back(std::vector<PAFMapping>(num_mappings));
+      for (size_t mi = 0; mi < num_mappings; ++mi) {
+        mappings[ri][mi].LoadFromFile(temp_mapping_file);
+      }
+      //mappings.emplace_back(std::vector<MappingRecord>(num_mappings));
+      //fread(&(mappings[ri].data()), sizeof(MappingRecord), num_mappings, temp_mapping_file);
+      //fread(mappings[ri].data(), sizeof(MappingRecord), num_mappings, temp_mapping_file);
+    } else {
+      mappings.emplace_back(std::vector<PAFMapping>());
+    }
+  }
+  fclose(temp_mapping_file);
 }
 
 template <>
@@ -824,6 +1086,10 @@ class SAMOutputTools : public OutputTools<MappingRecord> {
       this->AppendMappingOutput("@SQ\tSN:" + std::string(reference_sequence_name) + "\tLN:"+ std::to_string(reference_sequence_length) + "\n");
     }
   }
+  inline void OutputTempMapping(const std::string &temp_mapping_output_file_path, uint32_t num_reference_sequences, const std::vector<std::vector<MappingRecord> > &mappings) {
+  }
+  inline void LoadBinaryTempMapping(const std::string &temp_mapping_file_path, uint32_t num_reference_sequences, std::vector<std::vector<MappingRecord> > &mappings) {
+  }
 };
 
 template <>
@@ -836,25 +1102,70 @@ inline void SAMOutputTools<SAMMapping>::AppendMapping(uint32_t rid, const Sequen
   this->AppendMappingOutput(mapping.read_name + "\t" + std::to_string(mapping.flag) + "\t" + std::string(reference_sequence_name) + "\t" + std::to_string(mapping.GetStartPosition()) + "\t" + std::to_string(mapping.mapq) + "\t" + mapping.GenerateCigarString() + "\t*\t" + std::to_string(0) + "\t" + std::to_string(0) + "\t*\t*\t" + mapping.GenerateIntTagString("NM", mapping.NM) + "\tMD:Z:" + mapping.MD + "\n");
 }
 
+template <>
+inline void SAMOutputTools<SAMMapping>::OutputTempMapping(const std::string &temp_mapping_output_file_path, uint32_t num_reference_sequences, const std::vector<std::vector<SAMMapping> > &mappings) {
+  FILE *temp_mapping_output_file = fopen(temp_mapping_output_file_path.c_str(), "wb");
+  assert(temp_mapping_output_file != NULL);
+  for (size_t ri = 0; ri < num_reference_sequences; ++ri) {
+    // make sure mappings[ri] exists even if its size is 0
+    size_t num_mappings = mappings[ri].size();
+    fwrite(&num_mappings, sizeof(size_t), 1, temp_mapping_output_file);
+    if (mappings[ri].size() > 0) {
+      for (size_t mi = 0; mi < num_mappings; ++mi) {
+        mappings[ri][mi].WriteToFile(temp_mapping_output_file);
+      }
+      //fwrite(mappings[ri].data(), sizeof(MappingRecord), mappings[ri].size(), temp_mapping_output_file);
+    }
+  }
+  fclose(temp_mapping_output_file);
+}
+
+template <>
+inline void SAMOutputTools<SAMMapping>::LoadBinaryTempMapping(const std::string &temp_mapping_file_path, uint32_t num_reference_sequences, std::vector<std::vector<SAMMapping> > &mappings) {
+  FILE *temp_mapping_file = fopen(temp_mapping_file_path.c_str(), "rb");
+  assert(temp_mapping_file != NULL);
+  for (size_t ri = 0; ri < num_reference_sequences; ++ri) {
+    size_t num_mappings = 0;
+    fread(&num_mappings, sizeof(size_t), 1, temp_mapping_file);
+    if (num_mappings > 0) {
+      mappings.emplace_back(std::vector<SAMMapping>(num_mappings));
+      for (size_t mi = 0; mi < num_mappings; ++mi) {
+        mappings[ri][mi].LoadFromFile(temp_mapping_file);
+      }
+      //mappings.emplace_back(std::vector<MappingRecord>(num_mappings));
+      //fread(&(mappings[ri].data()), sizeof(MappingRecord), num_mappings, temp_mapping_file);
+      //fread(mappings[ri].data(), sizeof(MappingRecord), num_mappings, temp_mapping_file);
+    } else {
+      mappings.emplace_back(std::vector<SAMMapping>());
+    }
+  }
+  fclose(temp_mapping_file);
+}
+
+
 template <typename MappingRecord>
 class PairsOutputTools : public OutputTools<MappingRecord> {
   inline void AppendMapping(uint32_t rid, const SequenceBatch &reference, const MappingRecord &mapping) {
   }
   void OutputHeader(uint32_t num_reference_sequences, const SequenceBatch &reference) {
-		std::vector<uint32_t> rid_order;
-		rid_order.resize(num_reference_sequences);
-		uint32_t i;
-		for (i = 0; i < num_reference_sequences; ++i) {
-			rid_order[ this->custom_rid_rank_[i] ] = i;
-		}
+    std::vector<uint32_t> rid_order;
+    rid_order.resize(num_reference_sequences);
+    uint32_t i;
+    for (i = 0; i < num_reference_sequences; ++i) {
+      rid_order[ this->custom_rid_rank_[i] ] = i;
+    }
     this->AppendMappingOutput("## pairs format v1.0.0\n#shape: upper triangle\n");
     for (i = 0; i < num_reference_sequences; ++i) {
-			uint32_t rid = rid_order[i];
+      uint32_t rid = rid_order[i];
       const char *reference_sequence_name = reference.GetSequenceNameAt(rid);
       uint32_t reference_sequence_length = reference.GetSequenceLengthAt(rid);
       this->AppendMappingOutput("#chromsize: " + std::string(reference_sequence_name) + " " + std::to_string(reference_sequence_length) + "\n");
     }
-		this->AppendMappingOutput("#columns: readID chrom1 pos1 chrom2 pos2 strand1 strand2 pair_type\n");
+    this->AppendMappingOutput("#columns: readID chrom1 pos1 chrom2 pos2 strand1 strand2 pair_type\n");
+  }
+  inline void OutputTempMapping(const std::string &temp_mapping_output_file_path, uint32_t num_reference_sequences, const std::vector<std::vector<MappingRecord> > &mappings) {
+  }
+  inline void LoadBinaryTempMapping(const std::string &temp_mapping_file_path, uint32_t num_reference_sequences, std::vector<std::vector<MappingRecord> > &mappings) {
   }
 };
 
@@ -865,5 +1176,44 @@ inline void PairsOutputTools<PairsMapping>::AppendMapping(uint32_t rid, const Se
   this->AppendMappingOutput(mapping.read_name + "\t" + std::string(reference_sequence_name1) + "\t" + std::to_string(mapping.GetPosition(1)) + "\t" + std::string(reference_sequence_name2) + "\t" + std::to_string(mapping.GetPosition(2)) + "\t" + std::string(1, mapping.GetDirection(1)) + "\t" + std::string(1, mapping.GetDirection(2)) + "\tUU\n");
 }
 
+template <>
+inline void PairsOutputTools<PairsMapping>::OutputTempMapping(const std::string &temp_mapping_output_file_path, uint32_t num_reference_sequences, const std::vector<std::vector<PairsMapping> > &mappings) {
+  FILE *temp_mapping_output_file = fopen(temp_mapping_output_file_path.c_str(), "wb");
+  assert(temp_mapping_output_file != NULL);
+  for (size_t ri = 0; ri < num_reference_sequences; ++ri) {
+    // make sure mappings[ri] exists even if its size is 0
+    size_t num_mappings = mappings[ri].size();
+    fwrite(&num_mappings, sizeof(size_t), 1, temp_mapping_output_file);
+    if (mappings[ri].size() > 0) {
+      for (size_t mi = 0; mi < num_mappings; ++mi) {
+        mappings[ri][mi].WriteToFile(temp_mapping_output_file);
+      }
+      //fwrite(mappings[ri].data(), sizeof(MappingRecord), mappings[ri].size(), temp_mapping_output_file);
+    }
+  }
+  fclose(temp_mapping_output_file);
+}
+
+template <>
+inline void PairsOutputTools<PairsMapping>::LoadBinaryTempMapping(const std::string &temp_mapping_file_path, uint32_t num_reference_sequences, std::vector<std::vector<PairsMapping> > &mappings) {
+  FILE *temp_mapping_file = fopen(temp_mapping_file_path.c_str(), "rb");
+  assert(temp_mapping_file != NULL);
+  for (size_t ri = 0; ri < num_reference_sequences; ++ri) {
+    size_t num_mappings = 0;
+    fread(&num_mappings, sizeof(size_t), 1, temp_mapping_file);
+    if (num_mappings > 0) {
+      mappings.emplace_back(std::vector<PairsMapping>(num_mappings));
+      for (size_t mi = 0; mi < num_mappings; ++mi) {
+        mappings[ri][mi].LoadFromFile(temp_mapping_file);
+      }
+      //mappings.emplace_back(std::vector<MappingRecord>(num_mappings));
+      //fread(&(mappings[ri].data()), sizeof(MappingRecord), num_mappings, temp_mapping_file);
+      //fread(mappings[ri].data(), sizeof(MappingRecord), num_mappings, temp_mapping_file);
+    } else {
+      mappings.emplace_back(std::vector<PairsMapping>());
+    }
+  }
+  fclose(temp_mapping_file);
+}
 } // namespace chromap
 #endif // OUTPUTTOOLS_H_
