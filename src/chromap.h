@@ -151,6 +151,7 @@ class Chromap {
   void BandedAlign8PatternsToText(const char **patterns, const char *text, int read_length, int16_t *mapping_edit_distances, int16_t *mapping_end_positions);
   void BandedTraceback(int min_num_errors, const char *pattern, const char *text, const int read_length, int *mapping_start_position);
   void BandedTracebackToEnd(int min_num_errors, const char *pattern, const char *text, const int read_length, int *mapping_end_position);
+	int GetLongestMatchLength(const char *pattern, const char *text, const int read_length);
   void MergeCandidates(std::vector<Candidate> &c1, std::vector<Candidate> &c2, std::vector<Candidate> &buffer);
   void SupplementCandidates(const Index &index, uint32_t repetitive_seed_length1, uint32_t repetitive_seed_length2, std::vector<std::pair<uint64_t, uint64_t> > &minimizers1, std::vector<std::pair<uint64_t, uint64_t> > &minimizers2, std::vector<uint64_t> &positive_hits1, std::vector<uint64_t> &positive_hits2, std::vector<Candidate> &positive_candidates1, std::vector<Candidate> &positive_candidates2, std::vector<Candidate> &positive_candidates1_buffer, std::vector<Candidate> &positive_candidates2_buffer, std::vector<uint64_t> &negative_hits1, std::vector<uint64_t> &negative_hits2, std::vector<Candidate> &negative_candidates1, std::vector<Candidate> &negative_candidates2, std::vector<Candidate> &negative_candidates1_buffer, std::vector<Candidate> &negative_candidates2_buffer);
   void PostProcessingInLowMemory(uint32_t num_mappings_in_mem, uint32_t num_reference_sequences, const SequenceBatch &reference);
