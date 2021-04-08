@@ -242,7 +242,7 @@ class Chromap {
   int drop_repetitive_reads_; // Read with more than this number of mappings will be dropped.
   int max_mapping_start_position_on_read5_ = 20; // inclusive
   int min_read_mapping_length_ = 30;
-  int error_weight_ = 4;
+  int error_weight_ = 3;
   bool trim_adapters_;
   bool remove_pcr_duplicates_;
   bool is_bulk_data_;
