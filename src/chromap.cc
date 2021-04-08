@@ -3850,23 +3850,26 @@ uint8_t Chromap<MappingRecord>::GetMAPQForPairedEndRead(int num_positive_candida
   return (uint8_t)mapq;
 }
 
-
-
 void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
   cxxopts::Options options("chromap", "A short read mapper for chromatin biology");
   options.add_options("Indexing")
     ("i,build-index", "Build index")
+    ("min-frag-length", "Min fragment length for choosing k and w automatically [30]", cxxopts::value<int>(), "INT")
     ("k,kmer", "Kmer length [17]", cxxopts::value<int>(), "INT")
-    ("w,window", "Window size [9]", cxxopts::value<int>(), "INT");
-  options.add_options("Mapping")
-    ("m,map", "Map reads")
-    ("e,error-threshold", "Max # errors allowed to map a read [4]", cxxopts::value<int>(), "INT")
+    ("w,window", "Window size [7]", cxxopts::value<int>(), "INT");
+  options
+    .set_width(120)
+    .add_options("Mapping")
+    //("m,map", "Map reads")
+    ("preset", "Preset parameters for mapping reads (always applied before other options) []\natac: mapping ATAC-seq/scATAC-seq reads\nchip: mapping ChIP-seq reads\nhic: mapping Hi-C reads", cxxopts::value<std::string>(), "STR")
+    ("split-alignment", "Allow split alignments")
+    ("e,error-threshold", "Max # errors allowed to map a read [8]", cxxopts::value<int>(), "INT")
     //("A,match-score", "Match score [1]", cxxopts::value<int>(), "INT")
     //("B,mismatch-penalty", "Mismatch penalty [4]", cxxopts::value<int>(), "INT")
     //("O,gap-open-penalties", "Gap open penalty [6,6]", cxxopts::value<std::vector<int>>(), "INT[,INT]")
     //("E,gap-extension-penalties", "Gap extension penalty [1,1]", cxxopts::value<std::vector<int>>(), "INT[,INT]")
     ("s,min-num-seeds", "Min # seeds to try to map a read [2]", cxxopts::value<int>(), "INT")
-    ("f,max-seed-frequencies", "Max seed frequencies for a seed to be selected [1000,5000]", cxxopts::value<std::vector<int>>(), "INT[,INT]")
+    ("f,max-seed-frequencies", "Max seed frequencies for a seed to be selected [500,1000]", cxxopts::value<std::vector<int>>(), "INT[,INT]")
     //("n,max-num-best-mappings", "Only report n best mappings [1]", cxxopts::value<int>(), "INT")
     ("l,max-insert-size", "Max insert size, only for paired-end read mapping [1000]", cxxopts::value<int>(), "INT")
     ("q,MAPQ-threshold", "Min MAPQ in range [0, 60] for mappings to be output [30]", cxxopts::value<uint8_t>(), "INT")
@@ -3880,12 +3883,12 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
     ("Tn5-shift", "Perform Tn5 shift")
     ("low-mem", "Use low memory mode")
     ("t,num-threads", "# threads for mapping [1]", cxxopts::value<int>(), "INT");
-  options.add_options("Peak")
-    ("cell-by-bin", "Generate cell-by-bin matrix")
-    ("bin-size", "Bin size to generate cell-by-bin matrix [5000]", cxxopts::value<int>(), "INT")
-    ("depth-cutoff", "Depth cutoff for peak calling [3]", cxxopts::value<int>(), "INT")
-    ("peak-min-length", "Min length of peaks to report [30]", cxxopts::value<int>(), "INT")
-    ("peak-merge-max-length", "Peaks within this length will be merged [30]", cxxopts::value<int>(), "INT");
+  //options.add_options("Peak")
+  //  ("cell-by-bin", "Generate cell-by-bin matrix")
+  //  ("bin-size", "Bin size to generate cell-by-bin matrix [5000]", cxxopts::value<int>(), "INT")
+  //  ("depth-cutoff", "Depth cutoff for peak calling [3]", cxxopts::value<int>(), "INT")
+  //  ("peak-min-length", "Min length of peaks to report [30]", cxxopts::value<int>(), "INT")
+  //  ("peak-merge-max-length", "Peaks within this length will be merged [30]", cxxopts::value<int>(), "INT");
   options.add_options("Input")
     ("r,ref", "Reference file", cxxopts::value<std::string>(), "FILE")
     ("x,index", "Index file", cxxopts::value<std::string>(), "FILE")
@@ -3895,13 +3898,13 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
     ("barcode-whitelist", "Cell barcode whitelist file", cxxopts::value<std::string>(), "FILE");
   options.add_options("Output")
     ("o,output", "Output file", cxxopts::value<std::string>(), "FILE")
-    ("p,matrix-output-prefix", "Prefix of matrix output files", cxxopts::value<std::string>(), "FILE")
-		("chr-order", "custom chromsome order", cxxopts::value<std::string>(), "FILE")
+    //("p,matrix-output-prefix", "Prefix of matrix output files", cxxopts::value<std::string>(), "FILE")
+    ("chr-order", "custom chromsome order", cxxopts::value<std::string>(), "FILE")
     ("BED", "Output mappings in BED/BEDPE format")
     ("TagAlign", "Output mappings in TagAlign/PairedTagAlign format")
-    ("split-alignment", "Allow split alignments")
+    ("SAM", "Output mappings in SAM format")
     ("pairs", "Output mappings in pairs format (defined by 4DN for HiC data)")
-		("pairs-natural-chr-order", "natural chromosome order for pairs flipping", cxxopts::value<std::string>(), "FILE");
+    ("pairs-natural-chr-order", "natural chromosome order for pairs flipping", cxxopts::value<std::string>(), "FILE");
     //("PAF", "Output mappings in PAF format (only for test)");
   options.add_options()
     ("h,help", "Print help");
@@ -3915,122 +3918,184 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
     ("multi-mapping-allocation-seed", "Seed for random number generator in multi-mapping allocation [11]", cxxopts::value<int>(), "INT")
     ("drop-repetitive-reads", "Drop reads with too many best mappings [500000]", cxxopts::value<int>(), "INT")
     ("allocate-multi-mappings", "Allocate multi-mappings")
-    ("SAM", "Output mappings in SAM format (only for test)")
     ("PAF", "Output mappings in PAF format (only for test)");
     
   auto result = options.parse(argc, argv);
-  // Optional parameters
+  // Parameters and their default
+  int min_fragment_length = 30;
   int kmer_size = 17;
+  int window_size = 7;
+  int error_threshold = 8;
+  int match_score = 1;
+  int mismatch_penalty = 4;
+  std::vector<int> gap_open_penalties = {6, 6};
+  std::vector<int> gap_extension_penalties = {1, 1};
+  int min_num_seeds_required_for_mapping = 2;
+  std::vector<int> max_seed_frequencies = {500, 1000};
+  int max_num_best_mappings = 1; 
+  int max_insert_size = 1000;
+  uint8_t mapq_threshold = 30;
+  int num_threads = 1;
+  int min_read_length = 30;
+  int multi_mapping_allocation_distance = 0;
+  int multi_mapping_allocation_seed = 11;
+  int drop_repetitive_reads = 500000;
+  bool trim_adapters = false;
+  bool remove_pcr_duplicates = false;
+  bool only_output_unique_mappings = true;
+  bool allocate_multi_mappings = false;
+  bool Tn5_shift = false;
+  bool split_alignment = false;
+  bool output_mapping_in_BED = false;
+  bool output_mapping_in_TagAlign = false;
+  bool output_mapping_in_PAF = false;
+  bool output_mapping_in_SAM = false;
+  bool output_mapping_in_pairs = false;
+  bool low_memory_mode = false;
+
+  std::string read_type;
+  if (result.count("preset")) {
+    read_type = result["preset"].as<std::string>();
+    if (read_type == "atac") {
+      std::cerr << "Preset parameters for ATAC-seq/scATAC-seq are used.\n";
+      max_insert_size = 2000;
+      trim_adapters = true;
+      remove_pcr_duplicates = true;
+      Tn5_shift = true;
+      output_mapping_in_BED = true;
+      low_memory_mode = true;
+    } else if (read_type == "chip") {
+      std::cerr << "Preset parameters for ChIP-seq are used.\n";
+      remove_pcr_duplicates = true;
+      low_memory_mode = true;
+      output_mapping_in_BED = true;
+    } else if (read_type == "hic") {
+      std::cerr << "Preset parameters for Hi-C are used.\n";
+      error_threshold = 4;
+      mapq_threshold = 1;
+      split_alignment = true;
+      low_memory_mode = true;
+      output_mapping_in_pairs = true;
+    } else {
+      chromap::Chromap<>::ExitWithMessage("Unrecognized preset parameters " + read_type +"\n");
+    }
+  }
+  // Optional parameters
+  if (result.count("min-frag-length")) {
+    min_fragment_length = result["min-frag-length"].as<int>();
+    if (min_fragment_length <= 75) {
+      kmer_size = 17;
+      window_size = 7;
+    } else if (min_fragment_length <= 125) {
+      kmer_size = 19;
+      window_size = 10;
+    } else {
+      kmer_size = 21;
+      window_size = 11;
+    }
+  }
   if (result.count("k")) {
     kmer_size = result["kmer"].as<int>();
   }
-  int window_size = 9;
   if (result.count("w")) {
     window_size = result["window"].as<int>();
   }
-  int error_threshold = 4;
   if (result.count("e")) {
     error_threshold = result["error-threshold"].as<int>();
   }
-  int match_score = 1;
   if (result.count("A")) {
     match_score = result["match-score"].as<int>();
   }
-  int mismatch_penalty = 4;
   if (result.count("B")) {
     mismatch_penalty = result["mismatch-penalty"].as<int>();
   }
-  std::vector<int> gap_open_penalties = {6, 6};
   if (result.count("O")) {
     gap_open_penalties = result["gap-open-penalties"].as<std::vector<int>>();
   }
-  std::vector<int> gap_extension_penalties = {1, 1};
   if (result.count("E")) {
     gap_extension_penalties = result["gap-extension-penalties"].as<std::vector<int>>();
   }
-  int min_num_seeds_required_for_mapping = 2;
   if (result.count("s")) {
     min_num_seeds_required_for_mapping = result["min-num-seeds"].as<int>();
   }
-  std::vector<int> max_seed_frequencies = {1000, 5000};
   if (result.count("f")) {
     max_seed_frequencies = result["max-seed-frequencies"].as<std::vector<int>>();
   } 
-  int max_num_best_mappings = 1; 
   if (result.count("n")) {
     max_num_best_mappings = result["max-num-best-mappings"].as<int>();
   } 
-  int max_insert_size = 1000;
   if (result.count("l")) {
     max_insert_size = result["max-insert-size"].as<int>();
   } 
-  uint8_t mapq_threshold = 30;
   if (result.count("q")) {
     mapq_threshold = result["MAPQ-threshold"].as<uint8_t>();
   } 
-  int num_threads = 1;
   if (result.count("t")) {
     num_threads = result["num-threads"].as<int>();
   } 
-  int min_read_length = 30;
   if (result.count("min-read-length")) {
     min_read_length = result["min-read-length"].as<int>();
   }
-  int multi_mapping_allocation_distance = 0;
   if (result.count("multi-mapping-allocation-distance")) {
     multi_mapping_allocation_distance = result["multi-mapping-allocation-distance"].as<int>();
   }
-  int multi_mapping_allocation_seed = 11;
   if (result.count("multi-mapping-allocation-seed")) {
     multi_mapping_allocation_seed = result["multi-mapping-allocation-seed"].as<int>();
   }
-  int drop_repetitive_reads = 500000;
   if (result.count("drop-repetitive-reads")) {
     drop_repetitive_reads = result["drop-repetitive-reads"].as<int>();
   }
-  bool trim_adapters = false;
   if (result.count("trim-adapters")) {
     trim_adapters = true;
   }
-  bool remove_pcr_duplicates = false;
   if (result.count("remove-pcr-duplicates")) {
     remove_pcr_duplicates = true;
   }
-  bool only_output_unique_mappings = true;
-  bool allocate_multi_mappings = false;
   if (result.count("allocate-multi-mappings")) {
     allocate_multi_mappings = true;
     only_output_unique_mappings = false;
   }
-  bool Tn5_shift = false;
   if (result.count("Tn5-shift")) {
     Tn5_shift = true;
   }
-  bool split_alignment = false;
   if (result.count("split-alignment")) {
     split_alignment = true;
   }
-  bool output_mapping_in_BED = false;
   if (result.count("BED")) {
     output_mapping_in_BED = true;
+    output_mapping_in_SAM = false;
+    output_mapping_in_TagAlign = false;
+    output_mapping_in_PAF = false;
+    output_mapping_in_pairs = false;
   }
-  bool output_mapping_in_TagAlign = false;
   if (result.count("TagAlign")) {
     output_mapping_in_TagAlign = true;
+    output_mapping_in_BED = false;
+    output_mapping_in_SAM = false;
+    output_mapping_in_PAF = false;
+    output_mapping_in_pairs = false;
   }
-  bool output_mapping_in_PAF = false;
   if (result.count("PAF")) {
     output_mapping_in_PAF = true;
+    output_mapping_in_TagAlign = false;
+    output_mapping_in_BED = false;
+    output_mapping_in_SAM = false;
+    output_mapping_in_pairs = false;
   }
-  bool output_mapping_in_SAM = false;
-  if (result.count("SAM")) {
-    output_mapping_in_SAM = true;
-  }
-  bool output_mapping_in_pairs = false;
   if (result.count("pairs")) {
     output_mapping_in_pairs = true;
+    output_mapping_in_BED = false;
+    output_mapping_in_SAM = false;
+    output_mapping_in_TagAlign = false;
+    output_mapping_in_PAF = false;
   }
-  bool low_memory_mode = false;
+  if (result.count("SAM")) {
+    output_mapping_in_SAM = true;
+    output_mapping_in_BED = false;
+    output_mapping_in_TagAlign = false;
+    output_mapping_in_PAF = false;
+    output_mapping_in_pairs = false;
+  }
   if (result.count("low-mem")) {
     low_memory_mode = true;
   }
@@ -4075,7 +4140,7 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
     std::cerr << "Output file: " << output_file_path << "\n";
     chromap::Chromap<> chromap_for_indexing(kmer_size, window_size, num_threads, reference_file_path, output_file_path);
     chromap_for_indexing.ConstructIndex();
-  } else if (result.count("m")) {
+  } else if (result.count("1")) {
     std::cerr << "Start to map reads.\n";
     std::string reference_file_path;
     if (result.count("r")) {
@@ -4126,17 +4191,18 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
       }
     }
 
-		std::string custom_rid_order_path("");
+    std::string custom_rid_order_path("");
     if (result.count("chr-order")) {
       custom_rid_order_path = result["chr-order"].as<std::string>();
     } 
-    
-		std::string pairs_custom_rid_order_path("");
+
+    std::string pairs_custom_rid_order_path("");
     if (result.count("pairs-natural-chr-order")) {
       pairs_custom_rid_order_path = result["pairs-natural-chr-order"].as<std::string>();
     } 
 
-		std::cerr << "Parameters: error threshold: " << error_threshold << ", match score: " << match_score << ", mismatch_penalty: " << mismatch_penalty << ", gap open penalties for deletions and insertions: " << gap_open_penalties[0] << "," << gap_open_penalties[1] << ", gap extension penalties for deletions and insertions: " << gap_extension_penalties[0] << "," << gap_extension_penalties[1] << ", min-num-seeds: " << min_num_seeds_required_for_mapping << ", max-seed-frequency: " << max_seed_frequencies[0] << "," << max_seed_frequencies[1] << ", max-num-best-mappings: " << max_num_best_mappings << ", max-insert-size: " << max_insert_size << ", MAPQ-threshold: " << (int)mapq_threshold << ", min-read-length: " << min_read_length << ", multi-mapping-allocation-distance: " << multi_mapping_allocation_distance << ", multi-mapping-allocation-seed: " << multi_mapping_allocation_seed << ", drop-repetitive-reads: " << drop_repetitive_reads << "\n";
+    //std::cerr << "Parameters: error threshold: " << error_threshold << ", match score: " << match_score << ", mismatch_penalty: " << mismatch_penalty << ", gap open penalties for deletions and insertions: " << gap_open_penalties[0] << "," << gap_open_penalties[1] << ", gap extension penalties for deletions and insertions: " << gap_extension_penalties[0] << "," << gap_extension_penalties[1] << ", min-num-seeds: " << min_num_seeds_required_for_mapping << ", max-seed-frequency: " << max_seed_frequencies[0] << "," << max_seed_frequencies[1] << ", max-num-best-mappings: " << max_num_best_mappings << ", max-insert-size: " << max_insert_size << ", MAPQ-threshold: " << (int)mapq_threshold << ", min-read-length: " << min_read_length << ", multi-mapping-allocation-distance: " << multi_mapping_allocation_distance << ", multi-mapping-allocation-seed: " << multi_mapping_allocation_seed << ", drop-repetitive-reads: " << drop_repetitive_reads << "\n";
+    std::cerr << "Parameters: error threshold: " << error_threshold << ", min-num-seeds: " << min_num_seeds_required_for_mapping << ", max-seed-frequency: " << max_seed_frequencies[0] << "," << max_seed_frequencies[1] << ", max-num-best-mappings: " << max_num_best_mappings << ", max-insert-size: " << max_insert_size << ", MAPQ-threshold: " << (int)mapq_threshold << ", min-read-length: " << min_read_length << "\n";
     std::cerr << "Number of threads: " << num_threads << "\n";
     if (is_bulk_data) {
       std::cerr << "Analyze bulk data.\n";
