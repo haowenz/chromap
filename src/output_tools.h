@@ -167,6 +167,7 @@ struct PAFMapping {
     uint16_t read_name_length = read_name.length();
     num_written_bytes += fwrite(&read_name_length, sizeof(uint16_t), 1, temp_mapping_output_file);
     num_written_bytes += fwrite(read_name.data(), sizeof(char), read_name_length, temp_mapping_output_file);
+    num_written_bytes += fwrite(&read_length, sizeof(uint16_t), 1, temp_mapping_output_file);
     num_written_bytes += fwrite(&fragment_start_position, sizeof(uint32_t), 1, temp_mapping_output_file);
     num_written_bytes += fwrite(&fragment_length, sizeof(uint16_t), 1, temp_mapping_output_file);
     uint8_t mapq_direction_is_unique = (mapq << 2) | (direction << 1) | is_unique;
@@ -181,6 +182,7 @@ struct PAFMapping {
     num_read_bytes += fread(&read_name_length, sizeof(uint16_t), 1, temp_mapping_output_file);
     read_name = std::string(read_name_length, '\0');
     num_read_bytes += fread(&(read_name[0]), sizeof(char), read_name_length, temp_mapping_output_file);
+    num_read_bytes += fread(&read_length, sizeof(uint16_t), 1, temp_mapping_output_file);
     num_read_bytes += fread(&fragment_start_position, sizeof(uint32_t), 1, temp_mapping_output_file);
     num_read_bytes += fread(&fragment_length, sizeof(uint16_t), 1, temp_mapping_output_file);
     uint8_t mapq_direction_is_unique = 0;
@@ -240,8 +242,12 @@ struct PairedPAFMapping {
     uint16_t read2_name_length = read2_name.length();
     num_written_bytes += fwrite(&read2_name_length, sizeof(uint16_t), 1, temp_mapping_output_file);
     num_written_bytes += fwrite(read2_name.data(), sizeof(char), read2_name_length, temp_mapping_output_file);
+    num_written_bytes += fwrite(&read1_length, sizeof(uint16_t), 1, temp_mapping_output_file);
+    num_written_bytes += fwrite(&read2_length, sizeof(uint16_t), 1, temp_mapping_output_file);
     num_written_bytes += fwrite(&fragment_start_position, sizeof(uint32_t), 1, temp_mapping_output_file);
     num_written_bytes += fwrite(&fragment_length, sizeof(uint16_t), 1, temp_mapping_output_file);
+    num_written_bytes += fwrite(&positive_alignment_length, sizeof(uint16_t), 1, temp_mapping_output_file);
+    num_written_bytes += fwrite(&negative_alignment_length, sizeof(uint16_t), 1, temp_mapping_output_file);
     num_written_bytes += fwrite(&mapq, sizeof(uint8_t), 1, temp_mapping_output_file);
     uint16_t mapq1_mapq2_direction_is_unique = (mapq1 << 10) | (mapq2 << 4) | (direction << 3) | (is_unique << 2);
     num_written_bytes += fwrite(&mapq1_mapq2_direction_is_unique, sizeof(uint16_t), 1, temp_mapping_output_file);
@@ -259,13 +265,17 @@ struct PairedPAFMapping {
     num_read_bytes += fread(&read2_name_length, sizeof(uint16_t), 1, temp_mapping_output_file);
     read2_name = std::string(read2_name_length, '\0');
     num_read_bytes += fread(&(read2_name[0]), sizeof(char), read2_name_length, temp_mapping_output_file);
+    num_read_bytes += fread(&read1_length, sizeof(uint16_t), 1, temp_mapping_output_file);
+    num_read_bytes += fread(&read2_length, sizeof(uint16_t), 1, temp_mapping_output_file);
     num_read_bytes += fread(&fragment_start_position, sizeof(uint32_t), 1, temp_mapping_output_file);
     num_read_bytes += fread(&fragment_length, sizeof(uint16_t), 1, temp_mapping_output_file);
+    num_read_bytes += fread(&positive_alignment_length, sizeof(uint16_t), 1, temp_mapping_output_file);
+    num_read_bytes += fread(&negative_alignment_length, sizeof(uint16_t), 1, temp_mapping_output_file);
     num_read_bytes += fread(&mapq, sizeof(uint8_t), 1, temp_mapping_output_file);
     uint16_t mapq1_mapq2_direction_is_unique = 0;
     num_read_bytes += fread(&mapq1_mapq2_direction_is_unique, sizeof(uint16_t), 1, temp_mapping_output_file);
     mapq1 = (mapq1_mapq2_direction_is_unique >> 10);
-    mapq1 = ((mapq1_mapq2_direction_is_unique << 6) >> 10);
+    mapq2 = ((mapq1_mapq2_direction_is_unique << 6) >> 10);
     direction = (mapq1_mapq2_direction_is_unique >> 3) & 1;
     is_unique = (mapq1_mapq2_direction_is_unique >> 2) & 1;
     num_read_bytes += fread(&num_dups, sizeof(uint8_t), 1, temp_mapping_output_file);
@@ -1165,7 +1175,27 @@ class PairedPAFOutputTools : public OutputTools<MappingRecord> {
   }
   inline void AppendMapping(uint32_t rid, const SequenceBatch &reference, const MappingRecord &mapping) {
   }
+  inline void OutputTempMapping(const std::string &temp_mapping_output_file_path, uint32_t num_reference_sequences, const std::vector<std::vector<MappingRecord> > &mappings) {
+  }
 };
+
+template <>
+inline void PairedPAFOutputTools<PairedPAFMapping>::OutputTempMapping(const std::string &temp_mapping_output_file_path, uint32_t num_reference_sequences, const std::vector<std::vector<PairedPAFMapping> > &mappings) {
+  FILE *temp_mapping_output_file = fopen(temp_mapping_output_file_path.c_str(), "wb");
+  assert(temp_mapping_output_file != NULL);
+  for (size_t ri = 0; ri < num_reference_sequences; ++ri) {
+    // make sure mappings[ri] exists even if its size is 0
+    size_t num_mappings = mappings[ri].size();
+    fwrite(&num_mappings, sizeof(size_t), 1, temp_mapping_output_file);
+    if (mappings[ri].size() > 0) {
+      for (size_t mi = 0; mi < num_mappings; ++mi) {
+        mappings[ri][mi].WriteToFile(temp_mapping_output_file);
+      }
+      //fwrite(mappings[ri].data(), sizeof(MappingRecord), mappings[ri].size(), temp_mapping_output_file);
+    }
+  }
+  fclose(temp_mapping_output_file);
+}
 
 template <>
 inline void PairedPAFOutputTools<PairedPAFMapping>::AppendMapping(uint32_t rid, const SequenceBatch &reference, const PairedPAFMapping &mapping) {
