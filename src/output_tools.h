@@ -177,25 +177,18 @@ struct PAFMapping {
   size_t LoadFromFile(FILE *temp_mapping_output_file) {
     size_t num_read_bytes = 0;
     num_read_bytes += fread(&read_id, sizeof(uint32_t), 1, temp_mapping_output_file);
-    std::cerr << num_read_bytes << "\n";
     uint16_t read_name_length = 0;
     num_read_bytes += fread(&read_name_length, sizeof(uint16_t), 1, temp_mapping_output_file);
-    std::cerr << num_read_bytes << "\n";
     read_name = std::string(read_name_length, '\0');
     num_read_bytes += fread(&(read_name[0]), sizeof(char), read_name_length, temp_mapping_output_file);
-    std::cerr << num_read_bytes << "\n";
     num_read_bytes += fread(&fragment_start_position, sizeof(uint32_t), 1, temp_mapping_output_file);
-    std::cerr << num_read_bytes << "\n";
     num_read_bytes += fread(&fragment_length, sizeof(uint16_t), 1, temp_mapping_output_file);
-    std::cerr << num_read_bytes << "\n";
     uint8_t mapq_direction_is_unique = 0;
     num_read_bytes += fread(&mapq_direction_is_unique, sizeof(uint8_t), 1, temp_mapping_output_file);
-    std::cerr << num_read_bytes << "\n";
     mapq = (mapq_direction_is_unique >> 2);
     direction = (mapq_direction_is_unique >> 1) & 1;
     is_unique = mapq_direction_is_unique & 1;
     num_read_bytes += fread(&num_dups, sizeof(uint8_t), 1, temp_mapping_output_file);
-    std::cerr << num_read_bytes << "\n";
     return num_read_bytes;
   }
 };
@@ -237,6 +230,46 @@ struct PairedPAFMapping {
   }
   uint16_t GetStructSize() const {
     return 2 * sizeof(uint32_t) + 6 * sizeof(uint16_t) + 2 * sizeof(uint8_t) + (read1_name.length() + read2_name.length()) * sizeof(char);
+  }
+  size_t WriteToFile(FILE *temp_mapping_output_file) const {
+    size_t num_written_bytes = 0;
+    num_written_bytes += fwrite(&read_id, sizeof(uint32_t), 1, temp_mapping_output_file);
+    uint16_t read1_name_length = read1_name.length();
+    num_written_bytes += fwrite(&read1_name_length, sizeof(uint16_t), 1, temp_mapping_output_file);
+    num_written_bytes += fwrite(read1_name.data(), sizeof(char), read1_name_length, temp_mapping_output_file);
+    uint16_t read2_name_length = read2_name.length();
+    num_written_bytes += fwrite(&read2_name_length, sizeof(uint16_t), 1, temp_mapping_output_file);
+    num_written_bytes += fwrite(read2_name.data(), sizeof(char), read2_name_length, temp_mapping_output_file);
+    num_written_bytes += fwrite(&fragment_start_position, sizeof(uint32_t), 1, temp_mapping_output_file);
+    num_written_bytes += fwrite(&fragment_length, sizeof(uint16_t), 1, temp_mapping_output_file);
+    num_written_bytes += fwrite(&mapq, sizeof(uint8_t), 1, temp_mapping_output_file);
+    uint16_t mapq1_mapq2_direction_is_unique = (mapq1 << 10) | (mapq2 << 4) | (direction << 3) | (is_unique << 2);
+    num_written_bytes += fwrite(&mapq1_mapq2_direction_is_unique, sizeof(uint16_t), 1, temp_mapping_output_file);
+    num_written_bytes += fwrite(&num_dups, sizeof(uint8_t), 1, temp_mapping_output_file);
+    return num_written_bytes;
+  }
+  size_t LoadFromFile(FILE *temp_mapping_output_file) {
+    size_t num_read_bytes = 0;
+    num_read_bytes += fread(&read_id, sizeof(uint32_t), 1, temp_mapping_output_file);
+    uint16_t read1_name_length = 0;
+    num_read_bytes += fread(&read1_name_length, sizeof(uint16_t), 1, temp_mapping_output_file);
+    read1_name = std::string(read1_name_length, '\0');
+    num_read_bytes += fread(&(read1_name[0]), sizeof(char), read1_name_length, temp_mapping_output_file);
+    uint16_t read2_name_length = 0;
+    num_read_bytes += fread(&read2_name_length, sizeof(uint16_t), 1, temp_mapping_output_file);
+    read2_name = std::string(read2_name_length, '\0');
+    num_read_bytes += fread(&(read2_name[0]), sizeof(char), read2_name_length, temp_mapping_output_file);
+    num_read_bytes += fread(&fragment_start_position, sizeof(uint32_t), 1, temp_mapping_output_file);
+    num_read_bytes += fread(&fragment_length, sizeof(uint16_t), 1, temp_mapping_output_file);
+    num_read_bytes += fread(&mapq, sizeof(uint8_t), 1, temp_mapping_output_file);
+    uint16_t mapq1_mapq2_direction_is_unique = 0;
+    num_read_bytes += fread(&mapq1_mapq2_direction_is_unique, sizeof(uint16_t), 1, temp_mapping_output_file);
+    mapq1 = (mapq1_mapq2_direction_is_unique >> 10);
+    mapq1 = ((mapq1_mapq2_direction_is_unique << 6) >> 10);
+    direction = (mapq1_mapq2_direction_is_unique >> 3) & 1;
+    is_unique = (mapq1_mapq2_direction_is_unique >> 2) & 1;
+    num_read_bytes += fread(&num_dups, sizeof(uint8_t), 1, temp_mapping_output_file);
+    return num_read_bytes;
   }
 };
 
@@ -695,6 +728,82 @@ struct TempMappingFileHandle {
     }
   }
 };
+
+template <>
+inline void TempMappingFileHandle<PAFMapping>::LoadTempMappingBlock(uint32_t num_reference_sequences) {
+  num_mappings = 0;
+  while (num_mappings == 0) {
+    // Only keep mappings on one ref seq, which means # mappings in buffer can be less than block size
+    // Two cases: current ref seq has remainings or not
+    if (num_loaded_mappings_on_current_rid < num_mappings_on_current_rid) {
+      // Check if # remains larger than block size
+      uint32_t num_mappings_to_load_on_current_rid = num_mappings_on_current_rid - num_loaded_mappings_on_current_rid;
+      if (num_mappings_to_load_on_current_rid > block_size) {
+        num_mappings_to_load_on_current_rid = block_size;
+      }
+      //std::cerr << num_mappings_to_load_on_current_rid << " " << num_loaded_mappings_on_current_rid << " " << num_mappings_on_current_rid << "\n";
+      //std::cerr << mappings.size() << "\n";
+      for (size_t mi = 0; mi < num_mappings_to_load_on_current_rid; ++mi) {
+        mappings[mi].LoadFromFile(file);
+      }
+      //fread(mappings.data(), sizeof(MappingRecord), num_mappings_to_load_on_current_rid, file);
+      //std::cerr << "Load mappings\n";
+      num_loaded_mappings_on_current_rid += num_mappings_to_load_on_current_rid;
+      num_mappings = num_mappings_to_load_on_current_rid;
+    } else {
+      // Move to next rid
+      ++current_rid;
+      if (current_rid < num_reference_sequences) {
+        //std::cerr << "Load size\n";
+        fread(&num_mappings_on_current_rid, sizeof(size_t), 1, file);
+        //std::cerr << "Load size " << num_mappings_on_current_rid << "\n";
+        num_loaded_mappings_on_current_rid = 0;
+      } else {
+        all_loaded = true;
+        break;
+      }
+    }
+  }
+  current_mapping_index = 0;
+}
+
+template <>
+inline void TempMappingFileHandle<PairedPAFMapping>::LoadTempMappingBlock(uint32_t num_reference_sequences) {
+  num_mappings = 0;
+  while (num_mappings == 0) {
+    // Only keep mappings on one ref seq, which means # mappings in buffer can be less than block size
+    // Two cases: current ref seq has remainings or not
+    if (num_loaded_mappings_on_current_rid < num_mappings_on_current_rid) {
+      // Check if # remains larger than block size
+      uint32_t num_mappings_to_load_on_current_rid = num_mappings_on_current_rid - num_loaded_mappings_on_current_rid;
+      if (num_mappings_to_load_on_current_rid > block_size) {
+        num_mappings_to_load_on_current_rid = block_size;
+      }
+      //std::cerr << num_mappings_to_load_on_current_rid << " " << num_loaded_mappings_on_current_rid << " " << num_mappings_on_current_rid << "\n";
+      //std::cerr << mappings.size() << "\n";
+      for (size_t mi = 0; mi < num_mappings_to_load_on_current_rid; ++mi) {
+        mappings[mi].LoadFromFile(file);
+      }
+      //fread(mappings.data(), sizeof(MappingRecord), num_mappings_to_load_on_current_rid, file);
+      //std::cerr << "Load mappings\n";
+      num_loaded_mappings_on_current_rid += num_mappings_to_load_on_current_rid;
+      num_mappings = num_mappings_to_load_on_current_rid;
+    } else {
+      // Move to next rid
+      ++current_rid;
+      if (current_rid < num_reference_sequences) {
+        //std::cerr << "Load size\n";
+        fread(&num_mappings_on_current_rid, sizeof(size_t), 1, file);
+        //std::cerr << "Load size " << num_mappings_on_current_rid << "\n";
+        num_loaded_mappings_on_current_rid = 0;
+      } else {
+        all_loaded = true;
+        break;
+      }
+    }
+  }
+  current_mapping_index = 0;
+}
 
 template <>
 inline void TempMappingFileHandle<SAMMapping>::LoadTempMappingBlock(uint32_t num_reference_sequences) {
