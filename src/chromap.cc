@@ -587,17 +587,28 @@ void Chromap<MappingRecord>::SupplementCandidates(const Index &index, uint32_t r
         }
       //}
     }
+
     if (augment_flag) {
       positive_hits->clear();
       negative_hits->clear();
-      if (mate_positive_candidates->size() > 0 && mate_positive_candidates->size() <= (uint32_t)max_seed_frequencies_[0]) {
+			int positive_rescue_result = 0;
+			int negative_rescue_result = 0;
+      if (mate_positive_candidates->size() > 0) { //&& mate_positive_candidates->size() <= (uint32_t)max_seed_frequencies_[0]) {
         //std::cerr << "Supplement positive" << "\n";
-        index.GenerateCandidatesFromRepetitiveReadWithMateInfo(error_threshold_, *minimizers, repetitive_seed_length, negative_hits, augment_negative_candidates, mate_positive_candidates, kNegative, 2 * max_insert_size_);
+        positive_rescue_result = index.GenerateCandidatesFromRepetitiveReadWithMateInfo(error_threshold_, *minimizers, repetitive_seed_length, negative_hits, augment_negative_candidates, mate_positive_candidates, kNegative, 2 * max_insert_size_);
       }
-      if (mate_negative_candidates->size() > 0 && mate_negative_candidates->size() <= (uint32_t)max_seed_frequencies_[0]) {
+      if (mate_negative_candidates->size() > 0) { //&& mate_negative_candidates->size() <= (uint32_t)max_seed_frequencies_[0]) {
         //std::cerr << "Supplement negative" << "\n";
-        index.GenerateCandidatesFromRepetitiveReadWithMateInfo(error_threshold_, *minimizers, repetitive_seed_length, positive_hits, augment_positive_candidates, mate_negative_candidates, kPositive, 2 * max_insert_size_);
+        negative_rescue_result = index.GenerateCandidatesFromRepetitiveReadWithMateInfo(error_threshold_, *minimizers, repetitive_seed_length, positive_hits, augment_positive_candidates, mate_negative_candidates, kPositive, 2 * max_insert_size_);
       }
+			// If one of the strand did not supplement due to too many best candidate, 
+			// and the filtered strand have better best candidates,
+			// then we remove the supplement
+			if ((positive_rescue_result < 0 && negative_rescue_result > 0 && -positive_rescue_result >= negative_rescue_result)
+				|| (positive_rescue_result > 0 && negative_rescue_result < 0 && positive_rescue_result <= -negative_rescue_result)) {
+				augment_positive_candidates->clear();
+				augment_negative_candidates->clear();
+			}
     }
   }
   if (augment_positive_candidates1.size() > 0) {
@@ -3821,7 +3832,7 @@ uint8_t Chromap<MappingRecord>::GetMAPQForPairedEndRead(int num_positive_candida
   mapq1 = GetMAPQForSingleEndRead(error_threshold_, num_positive_candidates, repetitive_seed_length1, positive_alignment_length, num_errors1, num_best_mappings1, second_min_num_errors1, num_second_best_mappings1, read1_length);
   //mapq2 = GetMAPQForSingleEndRead(error_threshold_, num_negative_candidates, repetitive_seed_length2, negative_alignment_length, min_num_errors2, num_best_mappings2, second_min_num_errors2, num_second_best_mappings2, read2_length);
   mapq2 = GetMAPQForSingleEndRead(error_threshold_, num_negative_candidates, repetitive_seed_length2, negative_alignment_length, num_errors2, num_best_mappings2, second_min_num_errors2, num_second_best_mappings2, read2_length);
-  //std::cerr << " 1:" << (int)mapq1 << " 2:" << (int)mapq2 << "\n";
+  //std::cerr << " 1:" << (int)mapq1 << " 2:" << (int)mapq2 << " mapq_pe:" << (int)mapq_pe << "\n";
   if (!split_alignment_) {
     mapq1 = mapq1 > mapq_pe ? mapq1 : mapq_pe < mapq1 + 40? mapq_pe : mapq1 + 40;
     mapq2 = mapq2 > mapq_pe ? mapq2 : mapq_pe < mapq2 + 40? mapq_pe : mapq2 + 40;

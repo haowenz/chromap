@@ -473,7 +473,10 @@ int Index::CollectCandidates(int max_seed_frequency, int repetitive_seed_frequen
   return repetitive_seed_count;
 }
 
-void Index::GenerateCandidatesFromRepetitiveReadWithMateInfo(int error_threshold, const std::vector<std::pair<uint64_t, uint64_t> > &minimizers, uint32_t *repetitive_seed_length, std::vector<uint64_t> *hits, std::vector<Candidate> *candidates, std::vector<Candidate> *mate_candidates, Direction direction, uint32_t range) const {
+// |Return|:the best_candidate's minimizer count. 
+// positive: finish normally
+// negative: stop early due to too many best candidates
+int Index::GenerateCandidatesFromRepetitiveReadWithMateInfo(int error_threshold, const std::vector<std::pair<uint64_t, uint64_t> > &minimizers, uint32_t *repetitive_seed_length, std::vector<uint64_t> *hits, std::vector<Candidate> *candidates, std::vector<Candidate> *mate_candidates, Direction direction, uint32_t range) const {
   uint32_t num_minimizers = minimizers.size();
   hits->reserve(max_seed_frequencies_[0]);
   uint32_t previous_repetitive_seed_position = std::numeric_limits<uint32_t>::max();
@@ -493,7 +496,7 @@ void Index::GenerateCandidatesFromRepetitiveReadWithMateInfo(int error_threshold
     }
   }
   if (best_candidate_num >= 300 || (max_count <= min_num_seeds_required_for_mapping_ && best_candidate_num >= 200)) {
-    return;
+    return -max_count;
   }
   std::vector<std::pair<uint64_t, uint64_t> > boundaries;
   boundaries.reserve(300);
@@ -510,7 +513,7 @@ void Index::GenerateCandidatesFromRepetitiveReadWithMateInfo(int error_threshold
   uint32_t boundary_size = 1;
   uint32_t raw_boundary_size = boundaries.size();
   if (raw_boundary_size == 0)
-    return;
+    return max_count;
   for (uint32_t bi = 1; bi < raw_boundary_size; ++bi) {
     if (boundaries[boundary_size - 1].second < boundaries[bi].first) {
       boundaries[boundary_size] = boundaries[bi];
@@ -610,6 +613,7 @@ void Index::GenerateCandidatesFromRepetitiveReadWithMateInfo(int error_threshold
   //	  printf("%s: %d %d\n", __func__, (int)(hits->at(i)>>32),(int)hits->at(i));
   GenerateCandidatesOnOneDirection(error_threshold, 1, hits, candidates);
   //printf("%s: %d %d\n", __func__, hits->size(), candidates->size()) ;
+  return max_count;
 }
 
 void Index::GenerateCandidates(int error_threshold, const std::vector<std::pair<uint64_t, uint64_t> > &minimizers, uint32_t *repetitive_seed_length, std::vector<uint64_t> *positive_hits, std::vector<uint64_t> *negative_hits, std::vector<Candidate> *positive_candidates, std::vector<Candidate> *negative_candidates) const {
