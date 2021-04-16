@@ -593,19 +593,21 @@ void Chromap<MappingRecord>::SupplementCandidates(const Index &index, uint32_t r
       negative_hits->clear();
 			int positive_rescue_result = 0;
 			int negative_rescue_result = 0;
-      if (mate_positive_candidates->size() > 0) { //&& mate_positive_candidates->size() <= (uint32_t)max_seed_frequencies_[0]) {
+      if (mate_positive_candidates->size() > 0) { //&& mate_positive_candidates->size() <= (uint32_t)max_seed_frequencies_[0]) {}
         //std::cerr << "Supplement positive" << "\n";
         positive_rescue_result = index.GenerateCandidatesFromRepetitiveReadWithMateInfo(error_threshold_, *minimizers, repetitive_seed_length, negative_hits, augment_negative_candidates, mate_positive_candidates, kNegative, 2 * max_insert_size_);
       }
-      if (mate_negative_candidates->size() > 0) { //&& mate_negative_candidates->size() <= (uint32_t)max_seed_frequencies_[0]) {
+      if (mate_negative_candidates->size() > 0) { //&& mate_negative_candidates->size() <= (uint32_t)max_seed_frequencies_[0]) {}
         //std::cerr << "Supplement negative" << "\n";
         negative_rescue_result = index.GenerateCandidatesFromRepetitiveReadWithMateInfo(error_threshold_, *minimizers, repetitive_seed_length, positive_hits, augment_positive_candidates, mate_negative_candidates, kPositive, 2 * max_insert_size_);
       }
 			// If one of the strand did not supplement due to too many best candidate, 
 			// and the filtered strand have better best candidates,
+			// and there is no candidate directly from minimizers,
 			// then we remove the supplement
-			if ((positive_rescue_result < 0 && negative_rescue_result > 0 && -positive_rescue_result >= negative_rescue_result)
-				|| (positive_rescue_result > 0 && negative_rescue_result < 0 && positive_rescue_result <= -negative_rescue_result)) {
+			if (((positive_rescue_result < 0 && negative_rescue_result > 0 && -positive_rescue_result >= negative_rescue_result)
+				|| (positive_rescue_result > 0 && negative_rescue_result < 0 && positive_rescue_result <= -negative_rescue_result))
+				 && positive_candidates->size() + negative_candidates->size() == 0) {
 				augment_positive_candidates->clear();
 				augment_negative_candidates->clear();
 			}
