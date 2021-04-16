@@ -1564,7 +1564,7 @@ void Chromap<MappingRecord>::ProcessBestMappingsForPairedEndReadOnOneDirection(D
 				  printf("%d %d\n", ref_start_position1, ref_end_position1);
 				  printf("%d %d\n", ref_start_position2, ref_end_position2);
 				}*/
-				mapq = GetMAPQForPairedEndRead(num_candidates1, num_candidates2, repetitive_seed_length1, repetitive_seed_length2, ref_end_position1 - ref_start_position1 + 1, ref_end_position2 - ref_start_position2 + 1, min_sum_errors, num_best_mappings, second_min_sum_errors, num_second_best_mappings, min_num_errors1, min_num_errors2, num_best_mappings1, num_best_mappings2, second_min_num_errors1, second_min_num_errors2, num_second_best_mappings1, num_second_best_mappings2, read1_length, read2_length, mapq1, mapq2);
+				mapq = GetMAPQForPairedEndRead(num_candidates1, num_candidates2, repetitive_seed_length1, repetitive_seed_length2, ref_end_position1 - ref_start_position1 + 1, ref_end_position2 - ref_start_position2 + 1, min_sum_errors, num_best_mappings, second_min_sum_errors, num_second_best_mappings, mappings1[i1].first, mappings2[i2].first, min_num_errors1, min_num_errors2, num_best_mappings1, num_best_mappings2, second_min_num_errors1, second_min_num_errors2, num_second_best_mappings1, num_second_best_mappings2, read1_length, read2_length, mapq1, mapq2);
 				uint8_t direction = 1;
 				if (first_read_direction == kNegative) {
 					direction = 0;
@@ -3809,11 +3809,18 @@ uint8_t Chromap<MappingRecord>::GetMAPQForSingleEndRead(int error_threshold, int
 #define raw_mapq(diff, a) ((int)(6 * 6.02 * (diff) / (a) + .499))
 
 template <typename MappingRecord>
-uint8_t Chromap<MappingRecord>::GetMAPQForPairedEndRead(int num_positive_candidates, int num_negative_candidates, uint32_t repetitive_seed_length1, uint32_t repetitive_seed_length2, uint16_t positive_alignment_length, uint16_t negative_alignment_length, int min_sum_errors, int num_best_mappings, int second_min_sum_errors, int num_second_best_mappings, int min_num_errors1, int min_num_errors2, int num_best_mappings1, int num_best_mappings2, int second_min_num_errors1, int second_min_num_errors2, int num_second_best_mappings1, int num_second_best_mappings2, int read1_length, int read2_length, uint8_t &mapq1, uint8_t &mapq2) {
+uint8_t Chromap<MappingRecord>::GetMAPQForPairedEndRead(int num_positive_candidates, int num_negative_candidates, uint32_t repetitive_seed_length1, uint32_t repetitive_seed_length2, uint16_t positive_alignment_length, uint16_t negative_alignment_length, int min_sum_errors, int num_best_mappings, int second_min_sum_errors, int num_second_best_mappings, int num_errors1, int num_errors2, int min_num_errors1, int min_num_errors2, int num_best_mappings1, int num_best_mappings2, int second_min_num_errors1, int second_min_num_errors2, int num_second_best_mappings1, int num_second_best_mappings2, int read1_length, int read2_length, uint8_t &mapq1, uint8_t &mapq2) {
   //std::cerr << " rl1:" << (int)repetitive_seed_length1 << " rl2:" << (int)repetitive_seed_length2 << " pal:" << (int)positive_alignment_length << " nal:" << (int)negative_alignment_length << " me:" << min_sum_errors << " #bm:" << num_best_mappings << " sme:" << second_min_sum_errors << " #sbm:" << num_second_best_mappings << " me1:" << min_num_errors1 << " me2:" << min_num_errors2 << " #bm1:" << num_best_mappings1 << " #bm2:" << num_best_mappings2 << " sme1:" << second_min_num_errors1 << " sme2:" << second_min_num_errors2 << " #sbm1:" << num_second_best_mappings1 << " #sbm2:" << num_second_best_mappings2 << "\n";
-  uint8_t mapq_pe = GetMAPQForSingleEndRead(2 * error_threshold_, num_positive_candidates + num_negative_candidates, repetitive_seed_length1 + repetitive_seed_length2, positive_alignment_length + negative_alignment_length, min_sum_errors, num_best_mappings, second_min_sum_errors, num_second_best_mappings, read1_length + read2_length);
-  mapq1 = GetMAPQForSingleEndRead(error_threshold_, num_positive_candidates, repetitive_seed_length1, positive_alignment_length, min_num_errors1, num_best_mappings1, second_min_num_errors1, num_second_best_mappings1, read1_length);
-  mapq2 = GetMAPQForSingleEndRead(error_threshold_, num_negative_candidates, repetitive_seed_length2, negative_alignment_length, min_num_errors2, num_best_mappings2, second_min_num_errors2, num_second_best_mappings2, read2_length);
+  uint8_t mapq_pe = 0; 
+  int min_num_unpaired_sum_erros = min_num_errors1 + min_num_errors2 + 2;
+  if (min_sum_errors < min_num_unpaired_sum_erros) {
+    second_min_sum_errors = second_min_sum_errors < min_num_unpaired_sum_erros ? second_min_sum_errors : min_num_unpaired_sum_erros;
+    mapq_pe = GetMAPQForSingleEndRead(2 * error_threshold_, num_positive_candidates + num_negative_candidates, repetitive_seed_length1 + repetitive_seed_length2, positive_alignment_length + negative_alignment_length, min_sum_errors, num_best_mappings, second_min_sum_errors, num_second_best_mappings, read1_length + read2_length);
+  }
+  //mapq1 = GetMAPQForSingleEndRead(error_threshold_, num_positive_candidates, repetitive_seed_length1, positive_alignment_length, min_num_errors1, num_best_mappings1, second_min_num_errors1, num_second_best_mappings1, read1_length);
+  mapq1 = GetMAPQForSingleEndRead(error_threshold_, num_positive_candidates, repetitive_seed_length1, positive_alignment_length, num_errors1, num_best_mappings1, second_min_num_errors1, num_second_best_mappings1, read1_length);
+  //mapq2 = GetMAPQForSingleEndRead(error_threshold_, num_negative_candidates, repetitive_seed_length2, negative_alignment_length, min_num_errors2, num_best_mappings2, second_min_num_errors2, num_second_best_mappings2, read2_length);
+  mapq2 = GetMAPQForSingleEndRead(error_threshold_, num_negative_candidates, repetitive_seed_length2, negative_alignment_length, num_errors2, num_best_mappings2, second_min_num_errors2, num_second_best_mappings2, read2_length);
   //std::cerr << " 1:" << (int)mapq1 << " 2:" << (int)mapq2 << "\n";
   if (!split_alignment_) {
     mapq1 = mapq1 > mapq_pe ? mapq1 : mapq_pe < mapq1 + 40? mapq_pe : mapq1 + 40;
@@ -3833,8 +3840,16 @@ uint8_t Chromap<MappingRecord>::GetMAPQForPairedEndRead(int num_positive_candida
   //uint8_t max_mapq2 = 30 - 34.0 / error_threshold_ + 34.0 / error_threshold_ * (second_min_num_errors2 - min_num_errors2);
   //mapq1 = mapq1 < max_mapq1 ? mapq1 : max_mapq1;
   //mapq2 = mapq2 < max_mapq2 ? mapq2 : max_mapq2;
-  mapq1 = mapq1 < raw_mapq(second_min_num_errors1 - min_num_errors1, 1) ? mapq1 : raw_mapq(second_min_num_errors1 - min_num_errors1, 1);
-  mapq2 = mapq2 < raw_mapq(second_min_num_errors2 - min_num_errors2, 1) ? mapq2 : raw_mapq(second_min_num_errors2 - min_num_errors2, 1);
+  //mapq1 = mapq1 < raw_mapq(second_min_num_errors1 - min_num_errors1, 1) ? mapq1 : raw_mapq(second_min_num_errors1 - min_num_errors1, 1);
+  //if (second_min_num_errors1 < num_errors1) {
+  //  second_min_num_errors1 = num_errors1;
+  //}
+  //mapq1 = mapq1 < raw_mapq(second_min_num_errors1 - num_errors1, 1) ? mapq1 : raw_mapq(second_min_num_errors1 - num_errors1, 1);
+  ////mapq2 = mapq2 < raw_mapq(second_min_num_errors2 - min_num_errors2, 1) ? mapq2 : raw_mapq(second_min_num_errors2 - min_num_errors2, 1);
+  //if (second_min_num_errors2 < num_errors2) {
+  //  second_min_num_errors2 = num_errors2;
+  //}
+  //mapq2 = mapq2 < raw_mapq(second_min_num_errors2 - num_errors2, 1) ? mapq2 : raw_mapq(second_min_num_errors2 - num_errors2, 1);
   uint8_t mapq = mapq1 < mapq2 ? mapq1 : mapq2;
   //uint8_t mapq = (mapq1 + mapq2) / 2;
   //uint8_t mapq = (mapq1 + mapq2) / 2 + 0.499;
