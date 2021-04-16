@@ -495,7 +495,8 @@ int Index::GenerateCandidatesFromRepetitiveReadWithMateInfo(int error_threshold,
       ++best_candidate_num;
     }
   }
-  if (best_candidate_num >= 300 || (max_count <= min_num_seeds_required_for_mapping_ && best_candidate_num >= 200)) {
+  if (best_candidate_num >= 300 || (max_count <= min_num_seeds_required_for_mapping_ && best_candidate_num >= 200)
+			|| mate_candidates_size > (uint32_t)max_seed_frequencies_[0]) {
     return -max_count;
   }
   std::vector<std::pair<uint64_t, uint64_t> > boundaries;
