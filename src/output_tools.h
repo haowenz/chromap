@@ -304,7 +304,9 @@ struct SAMMapping {
   //char *XA;        // alternative mappings
   //int score, sub, alt_sc;
   bool operator<(const SAMMapping& m) const {
-    return std::tie(rid, pos, mapq) < std::tie(m.rid, m.pos, m.mapq);
+    int read1_flag = flag & BAM_FREAD1;
+    int m_read1_flag = m.flag & BAM_FREAD1;
+    return std::tie(rid, pos, mapq, read_id, read1_flag) < std::tie(m.rid, m.pos, m.mapq, m.read_id, m_read1_flag);
   }
   bool operator==(const SAMMapping& m) const {
     return std::tie(pos, rid, is_rev) == std::tie(m.pos, m.rid, m.is_rev);
@@ -418,41 +420,6 @@ struct SAMMapping {
     return num_read_bytes;
   }
 };
-
-//struct PairedSAMMapping {
-//  int64_t pos1;     // forward strand 5'-end mapping position
-//  int64_t pos2;     // forward strand 5'-end mapping position
-//  int rid1;         // reference sequence index in bntseq_t; <0 for unmapped
-//  int rid2;         // reference sequence index in bntseq_t; <0 for unmapped
-//  int flag1;        // extra flag
-//  int flag2;        // extra flag
-//  uint32_t is_rev1:1, is_alt1:1, mapq1:8, NM1:22; // is_rev: whether on the reverse strand; mapq: mapping quality; NM: edit distance
-//  uint32_t is_rev2:1, is_alt2:1, mapq2:8, NM2:22; // is_rev: whether on the reverse strand; mapq: mapping quality; NM: edit distance
-//  int n_cigar1;     // number of CIGAR operations
-//  int n_cigar2;     // number of CIGAR operations
-//  uint32_t *cigar1; // CIGAR in the BAM encoding: opLen<<4|op; op to integer mapping: MIDSH=>01234
-//  uint32_t *cigar2; // CIGAR in the BAM encoding: opLen<<4|op; op to integer mapping: MIDSH=>01234
-//  char *XA1;        // alternative mappings
-//  char *XA2;        // alternative mappings
-//
-//  int score1, sub1, alt_sc1;
-//  int score2, sub2, alt_sc2;
-//  bool operator<(const PairedSAMMapping& m) const {
-//    return std::tie(rid1, rid2, pos1, pos2, mapq1, mapq2) < std::tie(m.rid1, m.rid2, pos1, pos2, mapq1, mapq2);
-//  }
-//  bool operator==(const PairedSAMMapping& m) const {
-//    return std::tie(pos1, pos2, rid1, rid2, is_rev1, is_rev2) == std::tie(m.pos1, m.pos2, m.rid1, m.rid2, m.is_rev1, m.is_rev2);
-//  }
-//  void Tn5Shift() {
-//    // We don't support Tn5 shift in SAM format because it has other fields that depend mapping position.
-//  }
-//  //uint32_t GetStartPosition() const { // inclusive
-//  //  return fragment_start_position;
-//  //}
-//  //uint32_t GetEndPosition() const { // exclusive
-//  //  return fragment_start_position + fragment_length;
-//  //}
-//};
 
 // Format for pairtools for HiC data.
 struct PairsMapping {  

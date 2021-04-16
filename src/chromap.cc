@@ -1589,8 +1589,8 @@ void Chromap<MappingRecord>::ProcessBestMappingsForPairedEndReadOnOneDirection(D
 				  }
 				//printf("%d %d\n", ref_start_position1, ref_end_position1);
 				//printf("%d %d\n", ref_start_position2, ref_end_position2);
-				  EmplaceBackMappingRecord(read_id, read1_name, 1, ref_start_position1, rid1, flag1, 0, is_unique, mapq, NM1, n_cigar1, cigar1, MD_tag1, &((*mappings_on_diff_ref_seqs)[rid1])); 
-				  EmplaceBackMappingRecord(read_id, read2_name, 1, ref_start_position2, rid2, flag2, 0, is_unique, mapq, NM2, n_cigar2, cigar2, MD_tag2, &((*mappings_on_diff_ref_seqs)[rid2])); 
+				  EmplaceBackMappingRecord(read_id, read1_name, 1, ref_start_position1, rid1, flag1, first_read_direction == kPositive ? 1 : 0, is_unique, mapq, NM1, n_cigar1, cigar1, MD_tag1, &((*mappings_on_diff_ref_seqs)[rid1])); 
+				  EmplaceBackMappingRecord(read_id, read2_name, 1, ref_start_position2, rid2, flag2, second_read_direction == kPositive ? 1 : 0, is_unique, mapq, NM2, n_cigar2, cigar2, MD_tag2, &((*mappings_on_diff_ref_seqs)[rid2])); 
 				} else if (output_mapping_in_pairs_) {
 					int position1 = ref_start_position1;
 					int position2 = ref_start_position2;
