@@ -315,7 +315,7 @@ struct SAMMapping {
     // We don't support Tn5 shift in SAM format because it has other fields that depend mapping position.
   }
   bool IsPositive() const {
-    return is_rev > 0 ? false : true;
+    return is_rev > 0 ? true : false;
   }
   std::string GenerateCigarString() const {
     if (n_cigar == 0) {
