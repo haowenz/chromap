@@ -263,7 +263,7 @@ void Index::Load() {
   std::cerr << "Loaded index successfully in "<< Chromap<>::GetRealTime() - real_start_time << "s.\n";
 }
 
-void Index::GenerateCandidatesOnOneDirection(int error_threshold, int num_seeds_required, std::vector<uint64_t> *hits, std::vector<Candidate> *candidates) const {
+void Index::GenerateCandidatesOnOneDirection(int error_threshold, int num_seeds_required, uint32_t num_minimizers, std::vector<uint64_t> *hits, std::vector<Candidate> *candidates) const {
   hits->emplace_back(UINT64_MAX);
   if (hits->size() > 0) {
     int count = 1;
@@ -273,24 +273,30 @@ void Index::GenerateCandidatesOnOneDirection(int error_threshold, int num_seeds_
     uint32_t previous_reference_id = previous_hit >> 32;
     uint32_t previous_reference_position = previous_hit;
     uint64_t best_local_hit = (*hits)[0];
+    uint32_t previous_start_reference_position = previous_reference_position;
     for (uint32_t pi = 1; pi < hits->size(); ++pi) {
       uint32_t current_reference_id = (*hits)[pi] >> 32;
       uint32_t current_reference_position = (*hits)[pi];
 #ifdef LI_DEBUG
       printf("%s: %d %d\n", __func__, current_reference_id, current_reference_position);
 #endif
-      if (current_reference_id != previous_reference_id || current_reference_position > previous_reference_position + error_threshold) {
+      //printf("cur: %s: %d %d\n", __func__, current_reference_id, current_reference_position);
+      //printf("pre: %s: %d %d\n", __func__, previous_reference_id, previous_reference_position);
+      //if (current_reference_id != previous_reference_id || current_reference_position > previous_reference_position + error_threshold || ((uint32_t)count >= num_minimizers && current_reference_position > previous_start_reference_position + error_threshold)) {
+      if (current_reference_id != previous_reference_id || current_reference_position > previous_reference_position + error_threshold || ((uint32_t)count >= num_minimizers && current_reference_position > best_local_hit + error_threshold)) {
         if (count >= num_seeds_required) {
           Candidate candidate;
           candidate.position = best_local_hit;
           //candidate.count = count;
           candidate.count = best_equal_count;
           candidates->push_back(candidate);
+          //std::cerr << "candi: " << (int)candidate.position << " " << (int)candidate.count << "\n";
         }
         count = 1;
         equal_count = 1;
         best_equal_count = 1;
         best_local_hit = (*hits)[pi];
+        previous_start_reference_position = current_reference_position;
       } else {
         //printf("%d %d %d: %d %d\n", (int)best_local_hit, (int)previous_hit, (int)(*hits)[pi], equal_count, best_equal_count);
         if ((*hits)[pi] == best_local_hit) { 
@@ -612,7 +618,8 @@ int Index::GenerateCandidatesFromRepetitiveReadWithMateInfo(int error_threshold,
   std::sort(hits->begin(), hits->end());
   //for (uint32_t i = 0 ; i < hits->size(); ++i)
   //	  printf("%s: %d %d\n", __func__, (int)(hits->at(i)>>32),(int)hits->at(i));
-  GenerateCandidatesOnOneDirection(error_threshold, 1, hits, candidates);
+  //std::cerr << "Rescue gen on one dir\n";
+  GenerateCandidatesOnOneDirection(error_threshold, 1, minimizers.size(), hits, candidates);
   //printf("%s: %d %d\n", __func__, hits->size(), candidates->size()) ;
   return max_count;
 }
@@ -668,8 +675,10 @@ void Index::GenerateCandidates(int error_threshold, const std::vector<std::pair<
   if (use_high_frequency_minimizers) {
   	num_required_seeds = min_num_seeds_required_for_mapping_;
   }
-  GenerateCandidatesOnOneDirection(error_threshold, num_required_seeds, positive_hits, positive_candidates);
-  GenerateCandidatesOnOneDirection(error_threshold, num_required_seeds, negative_hits, negative_candidates);
+  //std::cerr << "Normal positive gen on one dir\n";
+  GenerateCandidatesOnOneDirection(error_threshold, num_required_seeds, minimizers.size(), positive_hits, positive_candidates);
+  //std::cerr << "Normal negative gen on one dir\n";
+  GenerateCandidatesOnOneDirection(error_threshold, num_required_seeds, minimizers.size(), negative_hits, negative_candidates);
   //fprintf(stderr, "p+n: %d\n", positive_candidates->size() + negative_candidates->size()) ;
 }
 } // namespace chromap

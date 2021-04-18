@@ -78,7 +78,7 @@ class Index {
   void Construct(uint32_t num_sequences, const SequenceBatch &reference);
   void Save();
   void Load();
-  void GenerateCandidatesOnOneDirection(int error_threshold, int num_seeds_required, std::vector<uint64_t> *hits, std::vector<Candidate> *candidates) const;
+  void GenerateCandidatesOnOneDirection(int error_threshold, int num_seeds_required, uint32_t num_minimizers, std::vector<uint64_t> *hits, std::vector<Candidate> *candidates) const;
   void GenerateCandidates(int error_threshold, const std::vector<std::pair<uint64_t, uint64_t> > &minimizers, uint32_t *repetitive_seed_length, std::vector<uint64_t> *positive_hits, std::vector<uint64_t> *negative_hits, std::vector<Candidate> *positive_candidates, std::vector<Candidate> *negative_candidates) const;
 	int GenerateCandidatesFromRepetitiveReadWithMateInfo(int error_threshold, const std::vector<std::pair<uint64_t, uint64_t> > &minimizers, uint32_t *repetitive_seed_length, std::vector<uint64_t> *hits, std::vector<Candidate> *candidates, std::vector<Candidate> *mate_candidates, Direction direction, uint32_t range) const;
   int CollectCandidates(int max_seed_frequency, int repetitive_seed_frequency, const std::vector<std::pair<uint64_t, uint64_t> > &minimizers, uint32_t *repetitive_seed_length, std::vector<uint64_t> *positive_hits, std::vector<uint64_t> *negative_hits, bool use_heap) const;
