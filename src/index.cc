@@ -283,7 +283,7 @@ void Index::GenerateCandidatesOnOneDirection(int error_threshold, int num_seeds_
       //printf("cur: %s: %d %d\n", __func__, current_reference_id, current_reference_position);
       //printf("pre: %s: %d %d\n", __func__, previous_reference_id, previous_reference_position);
       //if (current_reference_id != previous_reference_id || current_reference_position > previous_reference_position + error_threshold || ((uint32_t)count >= num_minimizers && current_reference_position > previous_start_reference_position + error_threshold)) {
-      if (current_reference_id != previous_reference_id || current_reference_position > previous_reference_position + error_threshold || ((uint32_t)count >= num_minimizers && current_reference_position > best_local_hit + error_threshold)) {
+      if (current_reference_id != previous_reference_id || current_reference_position > previous_reference_position + error_threshold || ((uint32_t)count >= num_minimizers && current_reference_position > (uint32_t)best_local_hit + error_threshold)) {
         if (count >= num_seeds_required) {
           Candidate candidate;
           candidate.position = best_local_hit;
