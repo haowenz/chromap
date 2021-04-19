@@ -273,7 +273,7 @@ void Index::GenerateCandidatesOnOneDirection(int error_threshold, int num_seeds_
     uint32_t previous_reference_id = previous_hit >> 32;
     uint32_t previous_reference_position = previous_hit;
     uint64_t best_local_hit = (*hits)[0];
-    uint32_t previous_start_reference_position = previous_reference_position;
+    //uint32_t previous_start_reference_position = previous_reference_position;
     for (uint32_t pi = 1; pi < hits->size(); ++pi) {
       uint32_t current_reference_id = (*hits)[pi] >> 32;
       uint32_t current_reference_position = (*hits)[pi];
@@ -296,7 +296,7 @@ void Index::GenerateCandidatesOnOneDirection(int error_threshold, int num_seeds_
         equal_count = 1;
         best_equal_count = 1;
         best_local_hit = (*hits)[pi];
-        previous_start_reference_position = current_reference_position;
+        //previous_start_reference_position = current_reference_position;
       } else {
         //printf("%d %d %d: %d %d\n", (int)best_local_hit, (int)previous_hit, (int)(*hits)[pi], equal_count, best_equal_count);
         if ((*hits)[pi] == best_local_hit) { 
