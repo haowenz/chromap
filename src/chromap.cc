@@ -872,8 +872,8 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
 	output_tools_->OutputHeader(num_reference_sequences, reference);
   
 	uint32_t num_mappings_in_mem = 0;
-  //uint64_t max_num_mappings_in_mem = 1 * ((uint64_t)1 << 30) / sizeof(MappingRecord);
-  uint64_t max_num_mappings_in_mem = 1 * ((uint64_t)1 << 28) / sizeof(MappingRecord);
+  uint64_t max_num_mappings_in_mem = 1 * ((uint64_t)1 << 30) / sizeof(MappingRecord);
+  //uint64_t max_num_mappings_in_mem = 1 * ((uint64_t)1 << 28) / sizeof(MappingRecord);
   // Preprocess barcodes for single cell data
   if (!is_bulk_data_) {
     if (!barcode_whitelist_file_path_.empty()) {
@@ -1035,6 +1035,23 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
 							if (mm_to_candidates_cache.Query(minimizers2, positive_candidates2, negative_candidates2, repetitive_seed_length2, read_batch2.GetSequenceLengthAt(pair_index)) == -1) {
 								index.GenerateCandidates(error_threshold_, minimizers2, &repetitive_seed_length2, &positive_hits2, &negative_hits2, &positive_candidates2, &negative_candidates2);
 							}
+								//std::cerr << "p1" << "\n";
+								//for (auto &ci : positive_candidates1) {
+								//  std::cerr << (ci.position >> 32) << " " << (uint32_t) ci.position << " " << (int)ci.count << "\n";
+								//}
+								//std::cerr << "n1" << "\n";
+								//for (auto &ci : negative_candidates1) {
+								//  std::cerr << (ci.position >> 32) << " " << (uint32_t) ci.position << " " << (int)ci.count << "\n";
+								//}
+								//std::cerr << "p2" << "\n";
+								//for (auto &ci : positive_candidates2) {
+								//  std::cerr << (ci.position >> 32) << " " << (uint32_t) ci.position << " " << (int)ci.count << "\n";
+								//}
+								//std::cerr << "n2" << "\n";
+								//for (auto &ci : negative_candidates2) {
+								//  std::cerr << (ci.position >> 32) << " " << (uint32_t) ci.position << " " << (int)ci.count << "\n";
+								//}
+								//std::cerr << "After generation, #pc1: " << positive_candidates1.size() << ", #nc1: " << negative_candidates1.size() << ", #pc2: " << positive_candidates2.size() << ", #nc2: " << negative_candidates2.size() << "\n";
 							uint32_t current_num_candidates2 = positive_candidates2.size() + negative_candidates2.size();
 							if (pair_index < num_loaded_pairs / 2 && (pair_index < num_loaded_pairs / num_threads_ || num_reads_ < 2 * 5000000)) {
 								mm_history1[pair_index].minimizers = minimizers1;
@@ -1142,6 +1159,7 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
 								VerifyCandidates(read_batch1, pair_index, reference, minimizers1, positive_candidates1, negative_candidates1, &positive_mappings1, &positive_split_sites1, &negative_mappings1, &negative_split_sites1, &min_num_errors1, &num_best_mappings1, &second_min_num_errors1, &num_second_best_mappings1);
 								uint32_t current_num_mappings1 = positive_mappings1.size() + negative_mappings1.size();
 								VerifyCandidates(read_batch2, pair_index, reference, minimizers2, positive_candidates2, negative_candidates2, &positive_mappings2, &positive_split_sites2, &negative_mappings2, &negative_split_sites2, &min_num_errors2, &num_best_mappings2, &second_min_num_errors2, &num_second_best_mappings2);
+                //std::cerr << "me1: " << min_num_errors1 << " me2: " << min_num_errors2 << "\n";
 								uint32_t current_num_mappings2 = positive_mappings2.size() + negative_mappings2.size();
 								if (current_num_mappings1 > 0 && current_num_mappings2 > 0) {
 									int min_sum_errors, second_min_sum_errors;
@@ -1321,6 +1339,11 @@ void Chromap<MappingRecord>::ReduceCandidatesForPairedEndReadOnOneDirection(cons
   uint32_t i1 = 0;
   uint32_t i2 = 0;
   uint32_t mapping_positions_distance = max_insert_size_;
+  int num_unpaired_candidate1 = 0;
+  int num_unpaired_candidate2 = 0;
+  int num_unpaired_candidate_threshold = 5;
+  int max_candidate_count1 = 6;
+  int max_candidate_count2 = 6;
   uint32_t previous_end_i2 = i2;
 #ifdef LI_DEBUG
   for (uint32_t i = 0 ; i < candidates1.size(); ++i)
@@ -1330,17 +1353,31 @@ void Chromap<MappingRecord>::ReduceCandidatesForPairedEndReadOnOneDirection(cons
 #endif
   while (i1 < candidates1.size() && i2 < candidates2.size()) {
     if (candidates1[i1].position > candidates2[i2].position + mapping_positions_distance) {
+      if (i2 >= previous_end_i2 && num_unpaired_candidate2 < num_unpaired_candidate_threshold && (candidates1[i1].position >> 32) == (candidates2[i2].position >> 32) && max_candidate_count2 != 0 && candidates2[i2].count >= max_candidate_count2) {
+        filtered_candidates2->emplace_back(candidates2[i2]);
+        ++num_unpaired_candidate2;
+      }
       ++i2;
-    } else if (candidates2[i2].position > candidates1[i1].position + mapping_positions_distance) {
+    } else if (candidates2[i2].position > candidates1[i1].position + mapping_positions_distance ) {
+      if (num_unpaired_candidate1 < num_unpaired_candidate_threshold && (candidates1[i1].position >> 32) == (candidates2[i2].position >> 32) && max_candidate_count1 != 0 && candidates1[i1].count >= max_candidate_count1) {
+        filtered_candidates1->emplace_back(candidates1[i1]);
+        ++num_unpaired_candidate1;
+      }
       ++i1;
     } else {
       // ok, find a pair, we store current ni2 somewhere and keep looking until we go out of the range, 
       // then we go back and then move to next pi1 and keep doing the similar thing.
       filtered_candidates1->emplace_back(candidates1[i1]);
+      if (candidates1[i1].count > max_candidate_count1) {
+        max_candidate_count1 = candidates1[i1].count;
+      }
       uint32_t current_i2 = i2;
       while (current_i2 < candidates2.size() && candidates2[current_i2].position <= candidates1[i1].position + mapping_positions_distance) {
         if (current_i2 >= previous_end_i2) {
           filtered_candidates2->emplace_back(candidates2[current_i2]);
+          if (candidates2[current_i2].count > max_candidate_count2) {
+            max_candidate_count2 = candidates2[current_i2].count;
+          }
         }
         ++current_i2;
       }
@@ -2643,26 +2680,36 @@ void Chromap<MappingRecord>::MergeCandidates(std::vector<Candidate> &c1, std::ve
   i = 0; j = 0;
   while (i < size1 && j < size2) {
     if (c1[i].position == c2[j].position) {
+      if (buffer.empty() || c1[i].position > buffer.back().position + error_threshold_) {
       if (c1[i].count > c2[j].count) {
         buffer.push_back(c1[i]);
       } else {
         buffer.push_back(c2[j]);
       }
+      }
       ++i, ++j;
     } else if (c1[i].position < c2[j].position) {
+      if (buffer.empty() || c1[i].position > buffer.back().position + error_threshold_) {
       buffer.push_back(c1[i]);
+      }
       ++i;
     } else {
+      if (buffer.empty() || c2[j].position > buffer.back().position + error_threshold_) {
       buffer.push_back(c2[j]);
+      }
       ++j;
     }
   }
   while (i < size1) {
+      if (buffer.empty() || c1[i].position > buffer.back().position + error_threshold_) {
     buffer.push_back(c1[i]);
+      }
     ++i;
   }
   while (j < size2) {
+      if (buffer.empty() || c2[j].position > buffer.back().position + error_threshold_) {
     buffer.push_back(c2[j]);
+      }
     ++j;
   }
   //c1 = buffer;
@@ -3753,11 +3800,11 @@ uint8_t Chromap<MappingRecord>::GetMAPQForSingleEndRead(int error_threshold, int
   int mapq_coef_fraction = log(mapq_coef_length);
   alignment_length = alignment_length > read_length ? alignment_length : read_length;
   double alignment_identity = 1 - (double)min_num_errors / alignment_length;
-	if (split_alignment_) {
-		alignment_identity = (double)(-min_num_errors) / alignment_length;
-		if (alignment_identity > 1) 
-			alignment_identity = 1;
-	}
+  if (split_alignment_) {
+    alignment_identity = (double)(-min_num_errors) / alignment_length;
+    if (alignment_identity > 1) 
+      alignment_identity = 1;
+  }
   int mapq = 0;
   if (num_best_mappings > 1) {
     //mapq = -4.343 * log(1 - 1.0 / num_best_mappings);
@@ -3781,17 +3828,17 @@ uint8_t Chromap<MappingRecord>::GetMAPQForSingleEndRead(int error_threshold, int
     //mapq = alignment_identity < 0.98 ? (int)(mapq * tmp + .499) : mapq;
     double tmp = alignment_length < mapq_coef_length ? 1.0 : mapq_coef_fraction / log(alignment_length);
     tmp *= alignment_identity * alignment_identity;
-		if (!split_alignment_) {
-			//mapq = 6 * 6.02 * (second_min_num_errors - min_num_errors) * tmp * tmp + 0.499 + 10;
-			mapq = 5 * 6.02 * (second_min_num_errors - min_num_errors) * tmp * tmp + 0.499;
+    if (!split_alignment_) {
+      //mapq = 6 * 6.02 * (second_min_num_errors - min_num_errors) * tmp * tmp + 0.499 + 10;
+      mapq = 5 * 6.02 * (second_min_num_errors - min_num_errors) * tmp * tmp + 0.499;
       //std::cerr << "sne: " << second_min_num_errors << " min_e: " << min_num_errors << " aln_len: " << alignment_length << "id: " << alignment_identity << " tmp: " << tmp << " 1: mapq:" << (int)mapq << "\n";
-		} else {
-			if (second_min_num_errors - min_num_errors < error_threshold_ + 1) {
-				mapq = 6 * 6.02 * (second_min_num_errors - min_num_errors) * tmp * tmp + 0.499 ;
-			} else {
-				mapq = 6 * 6.02 * (error_threshold_ + 1) * tmp * tmp + 0.499 ;
-			}
-		}
+    } else {
+      if (second_min_num_errors - min_num_errors < error_threshold_ + 1) {
+        mapq = 6 * 6.02 * (second_min_num_errors - min_num_errors) * tmp * tmp + 0.499 ;
+      } else {
+        mapq = 6 * 6.02 * (error_threshold_ + 1) * tmp * tmp + 0.499 ;
+      }
+    }
     //mapq = 30 - 34.0 / error_threshold + 34.0 / error_threshold * (second_min_num_errors - min_num_errors) * tmp * tmp + 0.499;
   }
   //printf("%d %d %d %d. %d\n", alignment_length, min_num_errors, second_min_num_errors, mapq, read_length);
@@ -3808,45 +3855,40 @@ uint8_t Chromap<MappingRecord>::GetMAPQForSingleEndRead(int error_threshold, int
   if (mapq < 0) {
     mapq = 0;
   }
-	//printf("%d\n", repetitive_seed_length);
-	if (repetitive_seed_length > 0) {
-		//double frac_rep = (repetitive_seed_length) / (double)alignment_length;
-		double frac_rep = (repetitive_seed_length) / (double)read_length;
-		if (repetitive_seed_length >= (uint32_t)read_length) {
-			frac_rep = 0.999;
-		}
-		//mapq = mapq * (1 - frac_rep / 2) + 0.499;
-    if (alignment_identity <= 0.95 && second_min_num_errors > error_threshold_) {
-      //frac_rep *= frac_rep;
+  //printf("%d\n", repetitive_seed_length);
+  if (repetitive_seed_length > 0) {
+    //double frac_rep = (repetitive_seed_length) / (double)alignment_length;
+    double frac_rep = (repetitive_seed_length) / (double)read_length;
+    if (repetitive_seed_length >= (uint32_t)read_length) {
+      frac_rep = 0.999;
+    }
+    //mapq = mapq * (1 - frac_rep / 2) + 0.499;
+    //if (alignment_identity <= 0.95 && second_min_num_errors > error_threshold_) {
+    if (alignment_identity <= 0.95) {
+      mapq = mapq * (1 - sqrt(frac_rep)) + 0.499;
+    } else if (alignment_identity <= 0.97) { 
       mapq = mapq * (1 - frac_rep) + 0.499;
-    } else if (alignment_identity > 0.999) { 
+    } else if (alignment_identity >= 0.999) { 
       mapq = mapq * (1 - frac_rep * frac_rep * frac_rep * frac_rep) + 0.499;
-    } 
-    else {
+    } else {
       mapq = mapq * (1 - frac_rep * frac_rep) + 0.499;
     }
-    //if (frac_rep > 0.8) {
-		//mapq = mapq * (1 - frac_rep) + 0.499;
-    //} else {
-		//mapq = mapq * (1 - frac_rep * frac_rep) + 0.499;
-    //}
-	} 
-	if (split_alignment_ && alignment_length < read_length - error_threshold_) {
-		if (repetitive_seed_length >= alignment_length && repetitive_seed_length < (uint32_t)read_length) {
-			mapq = 0;
-		}
+  } 
+  if (split_alignment_ && alignment_length < read_length - error_threshold_) {
+    if (repetitive_seed_length >= alignment_length && repetitive_seed_length < (uint32_t)read_length) {
+      mapq = 0;
+    }
 
-		if ( second_min_num_errors - min_num_errors <= error_threshold_ * 3 / 4 && num_candidates >= 5) {
-			mapq -= (num_candidates/5);
-		}
-		if (mapq < 0) {
-			mapq = 0 ;
-		}
-		if (num_second_best_mappings > 0 && second_min_num_errors - min_num_errors < error_threshold_ * 3 / 4) {
-			mapq /= (num_second_best_mappings + 1);
-		}
-	}
-  //mapq <<= 1;
+    if ( second_min_num_errors - min_num_errors <= error_threshold_ * 3 / 4 && num_candidates >= 5) {
+      mapq -= (num_candidates/5);
+    }
+    if (mapq < 0) {
+      mapq = 0 ;
+    }
+    if (num_second_best_mappings > 0 && second_min_num_errors - min_num_errors < error_threshold_ * 3 / 4) {
+      mapq /= (num_second_best_mappings + 1);
+    }
+  }
   return (uint8_t)mapq;
 }
 
@@ -3866,6 +3908,16 @@ uint8_t Chromap<MappingRecord>::GetMAPQForPairedEndRead(int num_positive_candida
     if (num_second_best_mappings > 0) {
       mapq_pe -= (int)(4.343 * log(num_second_best_mappings + 1) + 0.499);
     }
+    //if (num_positive_candidates > 10 && num_negative_candidates > 10 && second_min_sum_errors > 2 * error_threshold_) {
+    //  mapq_pe -= (int)(4.343 * log(num_positive_candidates + num_negative_candidates) + 0.499);
+    //  //mapq_pe *= 0.8;
+    //}
+    //if (num_positive_candidates > 10 && num_errors1 + 2 >= second_min_num_errors1 && second_min_num_errors1 > error_threshold_) {
+    //  mapq_pe -= (int)(4.343 * log(num_positive_candidates) + 0.499);
+    //}
+    //if (num_negative_candidates > 10 && num_errors2 + 2 >= second_min_num_errors2 && second_min_num_errors2 > error_threshold_) {
+    //  mapq_pe -= (int)(4.343 * log(num_negative_candidates) + 0.499);
+    //}
     if (mapq_pe > 60) {
       mapq_pe = 60;
     }
@@ -3874,18 +3926,27 @@ uint8_t Chromap<MappingRecord>::GetMAPQForPairedEndRead(int num_positive_candida
     }
     //std::cerr << "mapqpe: " << (int)mapq_pe << "\n";
     int repetitive_seed_length = repetitive_seed_length1 + repetitive_seed_length2;
-    int total_alignment_length = positive_alignment_length + negative_alignment_length;
+    //int total_alignment_length = positive_alignment_length + negative_alignment_length;
     if (repetitive_seed_length > 0) {
       double total_read_length = read1_length + read2_length;
-      double frac_rep = repetitive_seed_length / total_read_length;
+      double frac_rep = (double)repetitive_seed_length / total_read_length;
+      //double frac_rep1 = (double)repetitive_seed_length1 / read1_length;
+      //double frac_rep2 = (double)repetitive_seed_length2 / read2_length;
+      //frac_rep = frac_rep1 > frac_rep2 ? frac_rep1 : frac_rep2;
       if (repetitive_seed_length >= total_read_length) {
         frac_rep = 0.999;
       }
       //mapq_pe = mapq_pe * (1 - frac_rep / 2) + 0.499;
-      double alignment_identity = 1 - (double)min_sum_errors / (total_read_length > total_alignment_length ? total_read_length : total_alignment_length); 
-      if (alignment_identity <= 0.95 && second_min_sum_errors > 2 * error_threshold_) {
+      //double alignment_identity = 1 - (double)min_sum_errors / (total_read_length > total_alignment_length ? total_read_length : total_alignment_length); 
+      double alignment_identity1 = 1 - (double)num_errors1 / (read1_length > positive_alignment_length ? read1_length : positive_alignment_length);
+      double alignment_identity2 = 1 - (double)num_errors2 / (read2_length > negative_alignment_length ? read2_length : negative_alignment_length);
+      double alignment_identity = alignment_identity1 < alignment_identity2 ? alignment_identity1 : alignment_identity2;
+      //if (alignment_identity <= 0.95 && second_min_sum_errors > 2 * error_threshold_) {
+      if (alignment_identity <= 0.95) {
+        mapq_pe = mapq_pe * (1 - sqrt(frac_rep)) + 0.499;
+      } else if (alignment_identity <= 0.97) {
         mapq_pe = mapq_pe * (1 - frac_rep) + 0.499;
-      } else if (alignment_identity > 0.999) {
+      } else if (alignment_identity >= 0.999) {
         mapq_pe = mapq_pe * (1 - frac_rep * frac_rep * frac_rep * frac_rep) + 0.499;
         //std::cerr << "mapqpe: " << (int)mapq_pe << "\n";
       } else {
@@ -3895,7 +3956,7 @@ uint8_t Chromap<MappingRecord>::GetMAPQForPairedEndRead(int num_positive_candida
       //} else {
       //mapq_pe = mapq_pe * (1 - frac_rep * frac_rep) + 0.499;
       //}
-      //std::cerr <<"frep: " << frac_rep << " id: " << (1 - (double)min_sum_errors / (total_read_length > total_alignment_length ? total_read_length : total_alignment_length)) << " mapqpe: " << (int)mapq_pe << "\n";
+      //std::cerr <<"id1,2: " << alignment_identity1 << ", " << alignment_identity2 << " frep: " << frac_rep << " frep1: " << frac_rep1 << " frep2: " << frac_rep2 << " id: " << (1 - (double)min_sum_errors / (total_read_length > total_alignment_length ? total_read_length : total_alignment_length)) << " " << alignment_identity << " mapqpe: " << (int)mapq_pe << "\n";
     }
   }
   //mapq1 = GetMAPQForSingleEndRead(error_threshold_, num_positive_candidates, repetitive_seed_length1, positive_alignment_length, min_num_errors1, num_best_mappings1, second_min_num_errors1, num_second_best_mappings1, read1_length);
@@ -3904,8 +3965,10 @@ uint8_t Chromap<MappingRecord>::GetMAPQForPairedEndRead(int num_positive_candida
   mapq2 = GetMAPQForSingleEndRead(error_threshold_, num_negative_candidates, repetitive_seed_length2, negative_alignment_length, num_errors2, num_best_mappings2, second_min_num_errors2, num_second_best_mappings2, read2_length);
   //std::cerr << " 1:" << (int)mapq1 << " 2:" << (int)mapq2 << " mapq_pe:" << (int)mapq_pe << "\n";
   if (!split_alignment_) {
-    mapq1 = mapq1 > mapq_pe ? mapq1 : mapq_pe < mapq1 + 40? mapq_pe : mapq1 + 40;
-    mapq2 = mapq2 > mapq_pe ? mapq2 : mapq_pe < mapq2 + 40? mapq_pe : mapq2 + 40;
+    //mapq1 = mapq1 > mapq_pe ? mapq1 : mapq_pe < mapq1 + 40? mapq_pe : mapq1 + 40;
+    //mapq2 = mapq2 > mapq_pe ? mapq2 : mapq_pe < mapq2 + 40? mapq_pe : mapq2 + 40;
+    mapq1 = mapq1 > mapq_pe ? mapq1 : mapq_pe < mapq1 + mapq_pe * 0.65 ? mapq_pe : mapq1 + mapq_pe * 0.65;
+    mapq2 = mapq2 > mapq_pe ? mapq2 : mapq_pe < mapq2 + mapq_pe * 0.65 ? mapq_pe : mapq2 + mapq_pe * 0.65;
   }
   //std::cerr << " 1:" << (int)mapq1 << " 2:" << (int)mapq2 << "\n\n";
   //if (second_min_num_errors1 > error_threshold_) {
