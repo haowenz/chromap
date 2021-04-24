@@ -985,9 +985,9 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
           {
             num_loaded_pairs_for_loading = LoadPairedEndReadsWithBarcodes(&read_batch1_for_loading, &read_batch2_for_loading, &barcode_batch_for_loading);
           } // end of openmp loading task
-          //int grain_size = 5000;
-          //#pragma omp taskloop grainsize(grain_size) //num_tasks(num_threads_* 50)
-#pragma omp taskloop num_tasks(num_threads_* num_threads_)
+          int grain_size = 5000;
+          #pragma omp taskloop grainsize(grain_size) //num_tasks(num_threads_* 50)
+//#pragma omp taskloop num_tasks(num_threads_* num_threads_)
 					for (uint32_t pair_index = 0; pair_index < num_loaded_pairs; ++pair_index) {
 						read_batch1.PrepareNegativeSequenceAt(pair_index);
 						read_batch2.PrepareNegativeSequenceAt(pair_index);
@@ -1353,13 +1353,13 @@ void Chromap<MappingRecord>::ReduceCandidatesForPairedEndReadOnOneDirection(cons
 #endif
   while (i1 < candidates1.size() && i2 < candidates2.size()) {
     if (candidates1[i1].position > candidates2[i2].position + mapping_positions_distance) {
-      if (i2 >= previous_end_i2 && num_unpaired_candidate2 < num_unpaired_candidate_threshold && (candidates1[i1].position >> 32) == (candidates2[i2].position >> 32) && max_candidate_count2 != 0 && candidates2[i2].count >= max_candidate_count2) {
+      if (i2 >= previous_end_i2 && num_unpaired_candidate2 < num_unpaired_candidate_threshold && (candidates1[i1].position >> 32) == (candidates2[i2].position >> 32) && candidates2[i2].count >= max_candidate_count2) {
         filtered_candidates2->emplace_back(candidates2[i2]);
         ++num_unpaired_candidate2;
       }
       ++i2;
     } else if (candidates2[i2].position > candidates1[i1].position + mapping_positions_distance ) {
-      if (num_unpaired_candidate1 < num_unpaired_candidate_threshold && (candidates1[i1].position >> 32) == (candidates2[i2].position >> 32) && max_candidate_count1 != 0 && candidates1[i1].count >= max_candidate_count1) {
+      if (num_unpaired_candidate1 < num_unpaired_candidate_threshold && (candidates1[i1].position >> 32) == (candidates2[i2].position >> 32) && candidates1[i1].count >= max_candidate_count1) {
         filtered_candidates1->emplace_back(candidates1[i1]);
         ++num_unpaired_candidate1;
       }
@@ -3969,6 +3969,14 @@ uint8_t Chromap<MappingRecord>::GetMAPQForPairedEndRead(int num_positive_candida
     //mapq2 = mapq2 > mapq_pe ? mapq2 : mapq_pe < mapq2 + 40? mapq_pe : mapq2 + 40;
     mapq1 = mapq1 > mapq_pe ? mapq1 : mapq_pe < mapq1 + mapq_pe * 0.65 ? mapq_pe : mapq1 + mapq_pe * 0.65;
     mapq2 = mapq2 > mapq_pe ? mapq2 : mapq_pe < mapq2 + mapq_pe * 0.65 ? mapq_pe : mapq2 + mapq_pe * 0.65;
+  }
+  mapq1 *= 1.2;
+  if (mapq1 > 60) {
+    mapq1 = 60;
+  }
+  mapq2 *= 1.2;
+  if (mapq2 > 60) {
+    mapq2 = 60;
   }
   //std::cerr << " 1:" << (int)mapq1 << " 2:" << (int)mapq2 << "\n\n";
   //if (second_min_num_errors1 > error_threshold_) {
