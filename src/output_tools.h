@@ -142,6 +142,12 @@ struct PAFMapping {
   bool operator==(const PAFMapping& m) const {
     return std::tie(fragment_start_position) == std::tie(m.fragment_start_position);
   }
+  bool HasSamePosition(const PAFMapping& m) const {
+    return std::tie(fragment_start_position) == std::tie(m.fragment_start_position);
+  }
+  uint32_t GetBarcode() const {
+    return 0;
+  }
   void Tn5Shift() {
     if (direction == 1) {
       fragment_start_position += 4;
@@ -214,6 +220,12 @@ struct PairedPAFMapping {
   }
   bool operator==(const PairedPAFMapping& m) const {
     return std::tie(fragment_start_position, fragment_length) == std::tie(m.fragment_start_position, m.fragment_length);
+  }
+  bool HasSamePosition(const PairedPAFMapping& m) const {
+    return std::tie(fragment_start_position, fragment_length) == std::tie(m.fragment_start_position, m.fragment_length);
+  }
+  uint32_t GetBarcode() const {
+    return 0;
   }
   void Tn5Shift() {
     fragment_start_position += 4;
@@ -310,6 +322,12 @@ struct SAMMapping {
   }
   bool operator==(const SAMMapping& m) const {
     return std::tie(pos, rid, is_rev) == std::tie(m.pos, m.rid, m.is_rev);
+  }
+  bool HasSamePosition(const SAMMapping& m) const {
+    return std::tie(pos, rid, is_rev) == std::tie(m.pos, m.rid, m.is_rev);
+  }
+  uint32_t GetBarcode() const {
+    return 0;
   }
   void Tn5Shift() {
     // We don't support Tn5 shift in SAM format because it has other fields that depend mapping position.
@@ -441,6 +459,12 @@ struct PairsMapping {
     return std::tie(rid1, pos1, rid2, pos2) == std::tie(m.rid1, m.pos1, m.rid2, m.pos2);
     //return std::tie(pos1, pos2, rid1, rid2, is_rev1, is_rev2) == std::tie(m.pos1, m.pos2, m.rid1, m.rid2, m.is_rev1, m.is_rev2);
   }
+  bool HasSamePosition(const PairsMapping& m) const {
+    return std::tie(rid1, pos1, rid2, pos2) == std::tie(m.rid1, m.pos1, m.rid2, m.pos2);
+  }
+  uint32_t GetBarcode() const {
+    return 0;
+  }
   void Tn5Shift() {
     // We don't support Tn5 shift in SAM format because it has other fields that depend mapping position.
   }
@@ -526,6 +550,12 @@ struct MappingWithBarcode {
   bool operator==(const MappingWithBarcode& m) const {
     return std::tie(cell_barcode, fragment_start_position) == std::tie(m.cell_barcode, m.fragment_start_position);
   }
+  bool HasSamePosition(const MappingWithBarcode& m) const {
+    return std::tie(fragment_start_position) == std::tie(m.fragment_start_position);
+  }
+  uint32_t GetBarcode() const {
+    return cell_barcode;
+  }
   void Tn5Shift() {
     if (direction == 1) {
       fragment_start_position += 4;
@@ -556,6 +586,12 @@ struct MappingWithoutBarcode {
   }
   bool operator==(const MappingWithoutBarcode& m) const {
     return std::tie(fragment_start_position) == std::tie(m.fragment_start_position);
+  }
+  bool HasSamePosition(const MappingWithBarcode& m) const {
+    return std::tie(fragment_start_position) == std::tie(m.fragment_start_position);
+  }
+  uint32_t GetBarcode() const {
+    return 0;
   }
   void Tn5Shift() {
     if (direction == 1) {
@@ -591,6 +627,12 @@ struct PairedEndMappingWithBarcode {
   bool operator==(const PairedEndMappingWithBarcode& m) const {
     return std::tie(cell_barcode, fragment_start_position, fragment_length) == std::tie(m.cell_barcode, m.fragment_start_position, m.fragment_length);
   }
+  bool HasSamePosition(const PairedEndMappingWithBarcode& m) const {
+    return std::tie(fragment_start_position, fragment_length) == std::tie(m.fragment_start_position, m.fragment_length);
+  }
+  uint32_t GetBarcode() const {
+    return cell_barcode;
+  }
   void Tn5Shift() {
     fragment_start_position += 4;
     positive_alignment_length -= 4;
@@ -622,6 +664,12 @@ struct PairedEndMappingWithoutBarcode {
   }
   bool operator==(const PairedEndMappingWithoutBarcode& m) const {
     return std::tie(fragment_start_position, fragment_length) == std::tie(m.fragment_start_position, m.fragment_length);
+  }
+  bool HasSamePosition(const PairedEndMappingWithoutBarcode& m) const {
+    return std::tie(fragment_start_position, fragment_length) == std::tie(m.fragment_start_position, m.fragment_length);
+  }
+  uint32_t GetBarcode() const {
+    return 0;
   }
   void Tn5Shift() {
     fragment_start_position += 4;
