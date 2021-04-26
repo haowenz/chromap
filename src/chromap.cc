@@ -659,7 +659,7 @@ void Chromap<MappingRecord>::PostProcessingInLowMemory(uint32_t num_mappings_in_
   bool all_merged = false;
   uint32_t last_rid = std::numeric_limits<uint32_t>::max();
   MappingRecord last_mapping;
-  uint8_t dup_count = 0;
+  uint32_t dup_count = 0;
   uint64_t num_uni_mappings = 0;
   uint64_t num_multi_mappings = 0;
   uint64_t num_mappings_passing_filters = 0;
@@ -686,7 +686,7 @@ void Chromap<MappingRecord>::PostProcessingInLowMemory(uint32_t num_mappings_in_
         if (dup_count > 0) {
           if (last_mapping.mapq >= mapq_threshold_) {
             //if (allocate_multi_mappings_ || (only_output_unique_mappings_ && last_mapping.is_unique == 1)) {
-            last_mapping.num_dups = dup_count;
+            last_mapping.num_dups = std::min((uint32_t)std::numeric_limits<uint8_t>::max(), dup_count);
             if (Tn5_shift_) {
               //last_mapping.fragment_start_position += 4;
               //last_mapping.positive_alignment_length -= 4;
@@ -720,7 +720,7 @@ void Chromap<MappingRecord>::PostProcessingInLowMemory(uint32_t num_mappings_in_
   }
   if (last_mapping.mapq >= mapq_threshold_) {
     //if (allocate_multi_mappings_ || (only_output_unique_mappings_ && last_mapping.is_unique == 1)) {
-    last_mapping.num_dups = dup_count;
+    last_mapping.num_dups = std::min((uint32_t)std::numeric_limits<uint8_t>::max(), dup_count);
     if (Tn5_shift_) {
       //last_mapping.fragment_start_position += 4;
       //last_mapping.positive_alignment_length -= 4;
@@ -2472,12 +2472,12 @@ void Chromap<MappingRecord>::RemovePCRDuplicate(uint32_t num_reference_sequences
       deduped_mappings_on_diff_ref_seqs_[ri].emplace_back(mappings_on_diff_ref_seqs_[ri].front()); // ideally I should output the last of the dups of first mappings.
       //std::vector<MappingRecord>::iterator last_it = mappings_on_diff_ref_seqs_[ri].begin();
       auto last_it = mappings_on_diff_ref_seqs_[ri].begin();
-      uint8_t last_dup_count = 1;
+      uint32_t last_dup_count = 1;
       //for (std::vector<MappingRecord>::iterator it = ++(mappings_on_diff_ref_seqs_[ri].begin()); it != mappings_on_diff_ref_seqs_[ri].end(); ++it) {
       for (auto it = ++(mappings_on_diff_ref_seqs_[ri].begin()); it != mappings_on_diff_ref_seqs_[ri].end(); ++it) {
         if (!((*it) == (*last_it))) {
           //last_it->num_dups = last_dup_count;
-          deduped_mappings_on_diff_ref_seqs_[ri].back().num_dups = last_dup_count;
+          deduped_mappings_on_diff_ref_seqs_[ri].back().num_dups = std::min((uint32_t)std::numeric_limits<uint8_t>::max(), last_dup_count);
           last_dup_count = 1;
           deduped_mappings_on_diff_ref_seqs_[ri].emplace_back((*it));
           last_it = it;
@@ -2485,7 +2485,7 @@ void Chromap<MappingRecord>::RemovePCRDuplicate(uint32_t num_reference_sequences
           ++last_dup_count;
         }
       }
-      deduped_mappings_on_diff_ref_seqs_[ri].back().num_dups = last_dup_count;
+      deduped_mappings_on_diff_ref_seqs_[ri].back().num_dups = std::min((uint32_t)std::numeric_limits<uint8_t>::max(), last_dup_count);
       std::vector<MappingRecord>().swap(mappings_on_diff_ref_seqs_[ri]);
       num_mappings += deduped_mappings_on_diff_ref_seqs_[ri].size();
     }
