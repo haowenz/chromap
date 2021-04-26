@@ -150,7 +150,11 @@ void Chromap<MappingRecord>::CorrectBarcodeAt(uint32_t barcode_index, SequenceBa
         uint32_t corrected_barcode_key = barcode_key_to_change | (base_to_change << (2 * i));
         barcode_whitelist_lookup_table_iterator = kh_get(k32, barcode_whitelist_lookup_table_, corrected_barcode_key);
         double barcode_abundance = kh_value(barcode_whitelist_lookup_table_, barcode_whitelist_lookup_table_iterator) / (double)num_sample_barcodes_;
-        double score = (1 - pow(10.0, ((-(int)barcode_qual[barcode_length - 1 - i]) / 10.0))) * barcode_abundance;
+        int qual_offset = 33;
+        int adjusted_qual = barcode_qual[barcode_length - 1 - i] - qual_offset;
+        adjusted_qual = adjusted_qual > 40 ? 40 : adjusted_qual;
+        adjusted_qual = adjusted_qual < 3 ? 3 : adjusted_qual;
+        double score = pow(10.0, ((-adjusted_qual) / 10.0)) * barcode_abundance;
         if (barcode_whitelist_lookup_table_iterator != kh_end(barcode_whitelist_lookup_table_)) {
           // find one possible corrected barcode
           corrected_barcodes_with_quals.emplace_back(BarcodeWithQual{barcode_length - 1 - i, SequenceBatch::Uint8ToChar(base_to_change), barcode_qual[barcode_length - 1 - i], barcode_abundance, score});
@@ -168,7 +172,7 @@ void Chromap<MappingRecord>::CorrectBarcodeAt(uint32_t barcode_index, SequenceBa
       ++(*num_corrected_barcode);
       //std::cerr << barcode << "\n";
     } else {
-      // Randomly select one of the best corrections
+      // Select the best correction
       std::sort(corrected_barcodes_with_quals.begin(), corrected_barcodes_with_quals.end(), std::greater<BarcodeWithQual>());
       //int num_ties = 0;
       double sum_score = 0;
@@ -185,7 +189,8 @@ void Chromap<MappingRecord>::CorrectBarcodeAt(uint32_t barcode_index, SequenceBa
       //  best_corrected_barcode_index = distribution(tmp_generator);
       //}
       //std::cerr << "Corrected the barcode from " << barcode << " to ";
-      if (corrected_barcodes_with_quals[best_corrected_barcode_index].score / sum_score >= 0.9) {
+      double confidence_threshold = 0.975;
+      if (corrected_barcodes_with_quals[best_corrected_barcode_index].score / sum_score > confidence_threshold) {
         barcode_batch->CorrectBaseAt(barcode_index, corrected_barcodes_with_quals[best_corrected_barcode_index].corrected_base_index, corrected_barcodes_with_quals[best_corrected_barcode_index].correct_base);
         //std::cerr << "score: " << corrected_barcodes_with_quals[best_corrected_barcode_index].score << "\n";
         ++(*num_corrected_barcode);
