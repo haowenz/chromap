@@ -150,14 +150,14 @@ bool Chromap<MappingRecord>::CorrectBarcodeAt(uint32_t barcode_index, SequenceBa
         // generate the corrected key
         uint32_t corrected_barcode_key = barcode_key_to_change | (base_to_change << (2 * i));
         barcode_whitelist_lookup_table_iterator = kh_get(k32, barcode_whitelist_lookup_table_, corrected_barcode_key);
-        double barcode_abundance = kh_value(barcode_whitelist_lookup_table_, barcode_whitelist_lookup_table_iterator) / (double)num_sample_barcodes_;
-        int qual_offset = 33;
-        int adjusted_qual = barcode_qual[barcode_length - 1 - i] - qual_offset;
-        adjusted_qual = adjusted_qual > 40 ? 40 : adjusted_qual;
-        adjusted_qual = adjusted_qual < 3 ? 3 : adjusted_qual;
-        double score = pow(10.0, ((-adjusted_qual) / 10.0)) * barcode_abundance;
         if (barcode_whitelist_lookup_table_iterator != kh_end(barcode_whitelist_lookup_table_)) {
           // find one possible corrected barcode
+          double barcode_abundance = kh_value(barcode_whitelist_lookup_table_, barcode_whitelist_lookup_table_iterator) / (double)num_sample_barcodes_;
+          int qual_offset = 33;
+          int adjusted_qual = barcode_qual[barcode_length - 1 - i] - qual_offset;
+          adjusted_qual = adjusted_qual > 40 ? 40 : adjusted_qual;
+          adjusted_qual = adjusted_qual < 3 ? 3 : adjusted_qual;
+          double score = pow(10.0, ((-adjusted_qual) / 10.0)) * barcode_abundance;
           corrected_barcodes_with_quals.emplace_back(BarcodeWithQual{barcode_length - 1 - i, SequenceBatch::Uint8ToChar(base_to_change), barcode_qual[barcode_length - 1 - i], barcode_abundance, score});
         }
       }
@@ -197,9 +197,11 @@ bool Chromap<MappingRecord>::CorrectBarcodeAt(uint32_t barcode_index, SequenceBa
         barcode_batch->CorrectBaseAt(barcode_index, corrected_barcodes_with_quals[best_corrected_barcode_index].corrected_base_index, corrected_barcodes_with_quals[best_corrected_barcode_index].correct_base);
         //std::cerr << "score: " << corrected_barcodes_with_quals[best_corrected_barcode_index].score << "\n";
         ++(*num_corrected_barcode);
+        return true;
+      } else {
+        return false;
       }
       //std::cerr << barcode << "\n";
-      return true;
     }
   }
 }
