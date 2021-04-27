@@ -738,6 +738,10 @@ void Chromap<MappingRecord>::PostProcessingInLowMemory(uint32_t num_mappings_in_
         last_mapping = current_min_mapping;
         last_rid = min_rid;
         dup_count = 1;
+        if (remove_pcr_duplicates_at_bulk_level_) {
+          temp_dups_for_bulk_level_dedup.push_back(current_min_mapping);
+          temp_dups_for_bulk_level_dedup.back().num_dups = 1;
+        }
       }
       temp_mapping_file_handles_[min_handle_index].Next(num_reference_sequences);
     }
