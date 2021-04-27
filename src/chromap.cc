@@ -691,7 +691,8 @@ void Chromap<MappingRecord>::PostProcessingInLowMemory(uint32_t num_mappings_in_
         ++dup_count;
         if (remove_pcr_duplicates_at_bulk_level_) {
           if (!temp_dups_for_bulk_level_dedup.empty() && current_min_mapping == temp_dups_for_bulk_level_dedup.back()) {
-            temp_dups_for_bulk_level_dedup.back().num_dups += 1;
+            current_min_mapping.num_dups = temp_dups_for_bulk_level_dedup.back().num_dups + 1;
+            temp_dups_for_bulk_level_dedup.back() = current_min_mapping;
           } else {
             temp_dups_for_bulk_level_dedup.push_back(current_min_mapping);
             temp_dups_for_bulk_level_dedup.back().num_dups = 1;
@@ -703,12 +704,13 @@ void Chromap<MappingRecord>::PostProcessingInLowMemory(uint32_t num_mappings_in_
             // Find the best barcode, break ties first by the number of the barcodes in the dups, then by the barcode abundance
             last_mapping = temp_dups_for_bulk_level_dedup[0];
             khiter_t barcode_whitelist_lookup_table_iterator = kh_get(k32, barcode_whitelist_lookup_table_, last_mapping.GetBarcode());
-            double min_mapping_barcode_abundance = kh_value(barcode_whitelist_lookup_table_, barcode_whitelist_lookup_table_iterator) / (double)num_sample_barcodes_;
+            double last_mapping_barcode_abundance = kh_value(barcode_whitelist_lookup_table_, barcode_whitelist_lookup_table_iterator) / (double)num_sample_barcodes_;
             for (uint32_t bulk_dup_i = 1; bulk_dup_i < temp_dups_for_bulk_level_dedup.size(); ++bulk_dup_i) {
               barcode_whitelist_lookup_table_iterator = kh_get(k32, barcode_whitelist_lookup_table_, temp_dups_for_bulk_level_dedup[bulk_dup_i].GetBarcode());
               double current_mapping_barcode_abundance = kh_value(barcode_whitelist_lookup_table_, barcode_whitelist_lookup_table_iterator) / (double)num_sample_barcodes_;
-              if (temp_dups_for_bulk_level_dedup[bulk_dup_i].num_dups > last_mapping.num_dups || (temp_dups_for_bulk_level_dedup[bulk_dup_i].num_dups == last_mapping.num_dups && current_mapping_barcode_abundance > min_mapping_barcode_abundance)) {
+              if (temp_dups_for_bulk_level_dedup[bulk_dup_i].num_dups > last_mapping.num_dups || (temp_dups_for_bulk_level_dedup[bulk_dup_i].num_dups == last_mapping.num_dups && current_mapping_barcode_abundance > last_mapping_barcode_abundance)) {
                 last_mapping = temp_dups_for_bulk_level_dedup[bulk_dup_i];
+                last_mapping_barcode_abundance = current_mapping_barcode_abundance;
               }
             }
             temp_dups_for_bulk_level_dedup.clear();
@@ -752,12 +754,13 @@ void Chromap<MappingRecord>::PostProcessingInLowMemory(uint32_t num_mappings_in_
       // Find the best barcode, break ties first by the number of the barcodes in the dups, then by the barcode abundance
       last_mapping = temp_dups_for_bulk_level_dedup[0];
       khiter_t barcode_whitelist_lookup_table_iterator = kh_get(k32, barcode_whitelist_lookup_table_, last_mapping.GetBarcode());
-      double min_mapping_barcode_abundance = kh_value(barcode_whitelist_lookup_table_, barcode_whitelist_lookup_table_iterator) / (double)num_sample_barcodes_;
+      double last_mapping_barcode_abundance = kh_value(barcode_whitelist_lookup_table_, barcode_whitelist_lookup_table_iterator) / (double)num_sample_barcodes_;
       for (uint32_t bulk_dup_i = 1; bulk_dup_i < temp_dups_for_bulk_level_dedup.size(); ++bulk_dup_i) {
         barcode_whitelist_lookup_table_iterator = kh_get(k32, barcode_whitelist_lookup_table_, temp_dups_for_bulk_level_dedup[bulk_dup_i].GetBarcode());
         double current_mapping_barcode_abundance = kh_value(barcode_whitelist_lookup_table_, barcode_whitelist_lookup_table_iterator) / (double)num_sample_barcodes_;
-        if (temp_dups_for_bulk_level_dedup[bulk_dup_i].num_dups > last_mapping.num_dups || (temp_dups_for_bulk_level_dedup[bulk_dup_i].num_dups == last_mapping.num_dups && current_mapping_barcode_abundance > min_mapping_barcode_abundance)) {
+        if (temp_dups_for_bulk_level_dedup[bulk_dup_i].num_dups > last_mapping.num_dups || (temp_dups_for_bulk_level_dedup[bulk_dup_i].num_dups == last_mapping.num_dups && current_mapping_barcode_abundance > last_mapping_barcode_abundance)) {
           last_mapping = temp_dups_for_bulk_level_dedup[bulk_dup_i];
+          last_mapping_barcode_abundance = current_mapping_barcode_abundance;
         }
       }
       temp_dups_for_bulk_level_dedup.clear();
