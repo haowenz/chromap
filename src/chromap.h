@@ -279,7 +279,7 @@ class Chromap {
   uint64_t num_reads_ = 0;
   uint64_t num_duplicated_reads_ = 0; // # identical reads
   // For barcode stats
-  uint64_t initial_num_sample_barcodes_ = 50000000;
+  uint64_t initial_num_sample_barcodes_ = 500000000000;
   uint64_t num_sample_barcodes_ = 0;
   uint64_t num_barcode_in_whitelist_ = 0;
   uint64_t num_corrected_barcode_ = 0;
