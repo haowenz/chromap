@@ -48,13 +48,13 @@ KHASH_SET_INIT_INT(k32_set);
 KHASH_MAP_INIT_INT64(kmatrix, uint32_t);
 
 struct BarcodeWithQual {
-  uint32_t corrected_base_index;
-  char correct_base;
-  char qual;
-  double abundance;
+  uint32_t corrected_base_index1;
+  char correct_base1;
+  uint32_t corrected_base_index2;
+  char correct_base2;
   double score;
   bool operator>(const BarcodeWithQual& b) const {
-    return std::tie(score, corrected_base_index, correct_base) > std::tie(b.score, b.corrected_base_index, b.correct_base);
+    return std::tie(score, corrected_base_index1, correct_base1, corrected_base_index2, correct_base2) > std::tie(b.score, b.corrected_base_index1, b.correct_base1, b.corrected_base_index2, b.correct_base2);
   }
 };
 

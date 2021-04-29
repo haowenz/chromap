@@ -142,13 +142,13 @@ bool Chromap<MappingRecord>::CorrectBarcodeAt(uint32_t barcode_index, SequenceBa
       uint32_t barcode_key_to_change = mask << (2 * i);
       barcode_key_to_change = ~barcode_key_to_change;
       barcode_key_to_change &= barcode_key;
-      uint32_t base_to_change = (barcode_key >> (2 * i)) & mask;
+      uint32_t base_to_change1 = (barcode_key >> (2 * i)) & mask;
       for (uint32_t ti = 0; ti < 3; ++ti) {
         // change the base
-        base_to_change += 1;
-        base_to_change &= mask;
+        base_to_change1 += 1;
+        base_to_change1 &= mask;
         // generate the corrected key
-        uint32_t corrected_barcode_key = barcode_key_to_change | (base_to_change << (2 * i));
+        uint32_t corrected_barcode_key = barcode_key_to_change | (base_to_change1 << (2 * i));
         barcode_whitelist_lookup_table_iterator = kh_get(k32, barcode_whitelist_lookup_table_, corrected_barcode_key);
         if (barcode_whitelist_lookup_table_iterator != kh_end(barcode_whitelist_lookup_table_)) {
           // find one possible corrected barcode
@@ -158,7 +158,38 @@ bool Chromap<MappingRecord>::CorrectBarcodeAt(uint32_t barcode_index, SequenceBa
           adjusted_qual = adjusted_qual > 40 ? 40 : adjusted_qual;
           adjusted_qual = adjusted_qual < 3 ? 3 : adjusted_qual;
           double score = pow(10.0, ((-adjusted_qual) / 10.0)) * barcode_abundance;
-          corrected_barcodes_with_quals.emplace_back(BarcodeWithQual{barcode_length - 1 - i, SequenceBatch::Uint8ToChar(base_to_change), barcode_qual[barcode_length - 1 - i], barcode_abundance, score});
+          corrected_barcodes_with_quals.emplace_back(BarcodeWithQual{barcode_length - 1 - i, SequenceBatch::Uint8ToChar(base_to_change1), 0, 0, score});
+          //std::cerr << "1score: " << score << " pos1: " << barcode_length - 1 - i << " b1: " << base_to_change1 << " pos2: " << 0 << " b2: " << (char)0 << "\n";
+        }
+        for (uint32_t j = i + 1; j < barcode_length; ++j) {
+          uint32_t barcode_key_to_change2 = mask << (2 * i);
+          barcode_key_to_change2 = mask << (2 * j);
+          barcode_key_to_change2 = ~barcode_key_to_change2;
+          barcode_key_to_change2 &= corrected_barcode_key;
+          uint32_t base_to_change2 = (corrected_barcode_key >> (2 * j)) & mask;
+          for (uint32_t ti2 = 0; ti2 < 3; ++ti2) {
+            // change the base
+            base_to_change2 += 1;
+            base_to_change2 &= mask;
+            // generate the corrected key
+            uint32_t corrected_barcode_key2 = barcode_key_to_change2 | (base_to_change2 << (2 * j));
+            barcode_whitelist_lookup_table_iterator = kh_get(k32, barcode_whitelist_lookup_table_, corrected_barcode_key2);
+            if (barcode_whitelist_lookup_table_iterator != kh_end(barcode_whitelist_lookup_table_)) {
+              // find one possible corrected barcode
+              double barcode_abundance = kh_value(barcode_whitelist_lookup_table_, barcode_whitelist_lookup_table_iterator) / (double)num_sample_barcodes_;
+              int qual_offset = 33;
+              int adjusted_qual = barcode_qual[barcode_length - 1 - j] - qual_offset;
+              adjusted_qual = adjusted_qual > 40 ? 40 : adjusted_qual;
+              adjusted_qual = adjusted_qual < 3 ? 3 : adjusted_qual;
+              int adjusted_qual1 = barcode_qual[barcode_length - 1 - i] - qual_offset;
+              adjusted_qual1 = adjusted_qual1 > 40 ? 40 : adjusted_qual1;
+              adjusted_qual1 = adjusted_qual1 < 3 ? 3 : adjusted_qual1;
+              adjusted_qual += adjusted_qual1;
+              double score = pow(10.0, ((-adjusted_qual) / 10.0)) * barcode_abundance;
+              corrected_barcodes_with_quals.emplace_back(BarcodeWithQual{barcode_length - 1 - i, SequenceBatch::Uint8ToChar(base_to_change1), barcode_length - 1 - j, SequenceBatch::Uint8ToChar(base_to_change2), score});
+              //std::cerr << "2score: " << score << " pos1: " << barcode_length - 1 - i << " b1: " << base_to_change1 << " pos2: " << barcode_length - 1 -j << " b2: " << base_to_change2 << "\n";
+            }
+          }
         }
       }
     }
@@ -169,10 +200,14 @@ bool Chromap<MappingRecord>::CorrectBarcodeAt(uint32_t barcode_index, SequenceBa
     } else if (num_possible_corrected_barcodes == 1) {
       // Just correct it
       //std::cerr << "Corrected the barcode from " << barcode << " to ";
-      barcode_batch->CorrectBaseAt(barcode_index, corrected_barcodes_with_quals[0].corrected_base_index, corrected_barcodes_with_quals[0].correct_base);
-      //std::cerr << "score: " << corrected_barcodes_with_quals[0].score << "\n";
-      ++(*num_corrected_barcode);
+      barcode_batch->CorrectBaseAt(barcode_index, corrected_barcodes_with_quals[0].corrected_base_index1, corrected_barcodes_with_quals[0].correct_base1);
+      if (corrected_barcodes_with_quals[0].correct_base2 != 0) {
+        barcode_batch->CorrectBaseAt(barcode_index, corrected_barcodes_with_quals[0].corrected_base_index2, corrected_barcodes_with_quals[0].correct_base2);
+      }
       //std::cerr << barcode << "\n";
+      //std::cerr << "score: " << corrected_barcodes_with_quals[0].score << "\n";
+      //std::cerr << "score: " << corrected_barcodes_with_quals[0].score << " pos1: " << corrected_barcodes_with_quals[0].corrected_base_index1 << " b1: " << corrected_barcodes_with_quals[0].correct_base1 << " pos2: " << corrected_barcodes_with_quals[0].corrected_base_index2 << " b2: " << corrected_barcodes_with_quals[0].correct_base2 << "\n";
+      ++(*num_corrected_barcode);
       return true;
     } else {
       // Select the best correction
@@ -181,6 +216,7 @@ bool Chromap<MappingRecord>::CorrectBarcodeAt(uint32_t barcode_index, SequenceBa
       double sum_score = 0;
       for (size_t ci = 0; ci < num_possible_corrected_barcodes; ++ci) {
         sum_score += corrected_barcodes_with_quals[ci].score;
+        //std::cerr << ci << " score: " << corrected_barcodes_with_quals[ci].score << " pos1: " << corrected_barcodes_with_quals[ci].corrected_base_index1 << " b1: " << corrected_barcodes_with_quals[ci].correct_base1 << " pos2: " << corrected_barcodes_with_quals[ci].corrected_base_index2 << " b2: " << corrected_barcodes_with_quals[ci].correct_base2 << "\n";
         //if (corrected_barcodes_with_quals[ci].qual == corrected_barcodes_with_quals[0].qual) {
         //  ++num_ties;
         //}
@@ -194,14 +230,20 @@ bool Chromap<MappingRecord>::CorrectBarcodeAt(uint32_t barcode_index, SequenceBa
       //std::cerr << "Corrected the barcode from " << barcode << " to ";
       double confidence_threshold = 0.975;
       if (corrected_barcodes_with_quals[best_corrected_barcode_index].score / sum_score > confidence_threshold) {
-        barcode_batch->CorrectBaseAt(barcode_index, corrected_barcodes_with_quals[best_corrected_barcode_index].corrected_base_index, corrected_barcodes_with_quals[best_corrected_barcode_index].correct_base);
+        barcode_batch->CorrectBaseAt(barcode_index, corrected_barcodes_with_quals[best_corrected_barcode_index].corrected_base_index1, corrected_barcodes_with_quals[best_corrected_barcode_index].correct_base1);
+        if (corrected_barcodes_with_quals[best_corrected_barcode_index].correct_base2 != 0) {
+          barcode_batch->CorrectBaseAt(barcode_index, corrected_barcodes_with_quals[best_corrected_barcode_index].corrected_base_index2, corrected_barcodes_with_quals[best_corrected_barcode_index].correct_base2);
+        }
+        //std::cerr << barcode << "\n";
         //std::cerr << "score: " << corrected_barcodes_with_quals[best_corrected_barcode_index].score << "\n";
+        //std::cerr << "best score: " << corrected_barcodes_with_quals[best_corrected_barcode_index].score << " sum score: " << sum_score << "\n";
         ++(*num_corrected_barcode);
         return true;
       } else {
+        //std::cerr << "Didnt pass filter: " << corrected_barcodes_with_quals[best_corrected_barcode_index].score / sum_score << "\n";
+        //std::cerr << "best score: " << corrected_barcodes_with_quals[best_corrected_barcode_index].score << " sum score: " << sum_score << "\n";
         return false;
       }
-      //std::cerr << barcode << "\n";
     }
   }
 }
