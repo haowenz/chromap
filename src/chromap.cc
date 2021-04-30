@@ -737,7 +737,7 @@ void Chromap<MappingRecord>::PostProcessingInLowMemory(uint32_t num_mappings_in_
       MappingRecord &current_min_mapping = temp_mapping_file_handles_[min_handle_index].mappings[temp_mapping_file_handles_[min_handle_index].current_mapping_index];
       if (remove_pcr_duplicates_ && last_rid == min_rid && (current_min_mapping == last_mapping || (remove_pcr_duplicates_at_bulk_level_ && current_min_mapping.HasSamePosition(last_mapping)))) {
         ++dup_count;
-        if (remove_pcr_duplicates_at_bulk_level_) {
+        if (!is_bulk_data_ && remove_pcr_duplicates_at_bulk_level_) {
           if (!temp_dups_for_bulk_level_dedup.empty() && current_min_mapping == temp_dups_for_bulk_level_dedup.back()) {
             current_min_mapping.num_dups = temp_dups_for_bulk_level_dedup.back().num_dups + 1;
             temp_dups_for_bulk_level_dedup.back() = current_min_mapping;
@@ -748,7 +748,7 @@ void Chromap<MappingRecord>::PostProcessingInLowMemory(uint32_t num_mappings_in_
         }
       } else {
         if (dup_count > 0) {
-          if (remove_pcr_duplicates_at_bulk_level_ && temp_dups_for_bulk_level_dedup.size() > 0) {
+          if (!is_bulk_data_ && remove_pcr_duplicates_at_bulk_level_ && temp_dups_for_bulk_level_dedup.size() > 0) {
             // Find the best barcode, break ties first by the number of the barcodes in the dups, then by the barcode abundance
             last_mapping = temp_dups_for_bulk_level_dedup[0];
             khiter_t barcode_whitelist_lookup_table_iterator = kh_get(k32, barcode_whitelist_lookup_table_, last_mapping.GetBarcode());
@@ -802,7 +802,7 @@ void Chromap<MappingRecord>::PostProcessingInLowMemory(uint32_t num_mappings_in_
     }
   }
   if (last_mapping.mapq >= mapq_threshold_) {
-    if (remove_pcr_duplicates_at_bulk_level_ && temp_dups_for_bulk_level_dedup.size() > 0) {
+    if (!is_bulk_data_ && remove_pcr_duplicates_at_bulk_level_ && temp_dups_for_bulk_level_dedup.size() > 0) {
       // Find the best barcode, break ties first by the number of the barcodes in the dups, then by the barcode abundance
       last_mapping = temp_dups_for_bulk_level_dedup[0];
       khiter_t barcode_whitelist_lookup_table_iterator = kh_get(k32, barcode_whitelist_lookup_table_, last_mapping.GetBarcode());
