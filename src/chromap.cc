@@ -3899,7 +3899,9 @@ uint8_t Chromap<MappingRecord>::GetMAPQForSingleEndRead(int error_threshold, int
   int mapq_coef_length = 50;
   //double mapq_coef_fraction = log(mapq_coef_length);
   int mapq_coef_fraction = log(mapq_coef_length);
-  alignment_length = alignment_length > read_length ? alignment_length : read_length;
+  if (!split_alignment_) {
+    alignment_length = alignment_length > read_length ? alignment_length : read_length;
+  }
   double alignment_identity = 1 - (double)min_num_errors / alignment_length;
   if (split_alignment_) {
     alignment_identity = (double)(-min_num_errors) / alignment_length;
@@ -3934,11 +3936,12 @@ uint8_t Chromap<MappingRecord>::GetMAPQForSingleEndRead(int error_threshold, int
       mapq = 5 * 6.02 * (second_min_num_errors - min_num_errors) * tmp * tmp + 0.499;
       //std::cerr << "sne: " << second_min_num_errors << " min_e: " << min_num_errors << " aln_len: " << alignment_length << "id: " << alignment_identity << " tmp: " << tmp << " 1: mapq:" << (int)mapq << "\n";
     } else {
-      if (second_min_num_errors - min_num_errors < error_threshold_ + 1) {
-        mapq = 6 * 6.02 * (second_min_num_errors - min_num_errors) * tmp * tmp + 0.499 ;
-      } else {
-        mapq = 6 * 6.02 * (error_threshold_ + 1) * tmp * tmp + 0.499 ;
-      }
+      mapq = 5 * 6.02 * (second_min_num_errors - min_num_errors) * tmp * tmp + 0.499;
+      //if (second_min_num_errors - min_num_errors < error_threshold_ + 1) {
+      //  mapq = 6 * 6.02 * (second_min_num_errors - min_num_errors) * tmp * tmp + 0.499 ;
+      //} else {
+      //  mapq = 6 * 6.02 * (error_threshold_ + 1) * tmp * tmp + 0.499 ;
+      //}
     }
     //mapq = 30 - 34.0 / error_threshold + 34.0 / error_threshold * (second_min_num_errors - min_num_errors) * tmp * tmp + 0.499;
   }
@@ -3975,21 +3978,21 @@ uint8_t Chromap<MappingRecord>::GetMAPQForSingleEndRead(int error_threshold, int
       mapq = mapq * (1 - frac_rep * frac_rep) + 0.499;
     }
   } 
-  if (split_alignment_ && alignment_length < read_length - error_threshold_) {
-    if (repetitive_seed_length >= alignment_length && repetitive_seed_length < (uint32_t)read_length) {
-      mapq = 0;
-    }
+  //if (split_alignment_ && alignment_length < read_length - error_threshold_) {
+  //  if (repetitive_seed_length >= alignment_length && repetitive_seed_length < (uint32_t)read_length) {
+  //    mapq = 0;
+  //  }
 
-    if ( second_min_num_errors - min_num_errors <= error_threshold_ * 3 / 4 && num_candidates >= 5) {
-      mapq -= (num_candidates/5);
-    }
-    if (mapq < 0) {
-      mapq = 0 ;
-    }
-    if (num_second_best_mappings > 0 && second_min_num_errors - min_num_errors < error_threshold_ * 3 / 4) {
-      mapq /= (num_second_best_mappings + 1);
-    }
-  }
+  //  if ( second_min_num_errors - min_num_errors <= error_threshold_ * 3 / 4 && num_candidates >= 5) {
+  //    mapq -= (num_candidates/5);
+  //  }
+  //  if (mapq < 0) {
+  //    mapq = 0 ;
+  //  }
+  //  if (num_second_best_mappings > 0 && second_min_num_errors - min_num_errors < error_threshold_ * 3 / 4) {
+  //    mapq /= (num_second_best_mappings + 1);
+  //  }
+  //}
   return (uint8_t)mapq;
 }
 
