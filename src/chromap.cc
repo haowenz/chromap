@@ -3112,11 +3112,11 @@ void Chromap<MappingRecord>::VerifyCandidatesOnOneDirection(Direction candidate_
 				/*if (mapping_end_position - error_threshold_ < 0 || mapping_end_position - error_threshold_ > 200 || mapping_end_position - error_threshold_ < 20) {
 					printf("ERROR! %d %d %d %d %d\n", mapping_end_position, error_threshold_, read_length,(int)candidates[ci].position, gap_beginning);
 					}*/
-				if (num_errors < *min_num_errors + error_threshold_ / 2 && num_errors > *min_num_errors 
+				/*if (num_errors < *min_num_errors + error_threshold_ / 2 && num_errors > *min_num_errors 
 						&& longest_match > best_mapping_longest_match && candidates.size() > 200) {
 					(*num_second_best_mappings)++;
 					*second_min_num_errors = *min_num_errors;
-				}
+				}*/
 				split_sites->emplace_back( ((actual_num_errors&0xff)<<24) 
 						| ((gap_beginning&0xff)<<16) 
 						| (read_mapping_length&0xffff) );
@@ -3978,21 +3978,22 @@ uint8_t Chromap<MappingRecord>::GetMAPQForSingleEndRead(int error_threshold, int
       mapq = mapq * (1 - frac_rep * frac_rep) + 0.499;
     }
   } 
-  //if (split_alignment_ && alignment_length < read_length - error_threshold_) {
-  //  if (repetitive_seed_length >= alignment_length && repetitive_seed_length < (uint32_t)read_length) {
-  //    mapq = 0;
-  //  }
-
-  //  if ( second_min_num_errors - min_num_errors <= error_threshold_ * 3 / 4 && num_candidates >= 5) {
-  //    mapq -= (num_candidates/5);
-  //  }
-  //  if (mapq < 0) {
-  //    mapq = 0 ;
-  //  }
-  //  if (num_second_best_mappings > 0 && second_min_num_errors - min_num_errors < error_threshold_ * 3 / 4) {
-  //    mapq /= (num_second_best_mappings + 1);
-  //  }
-  //}
+  if (split_alignment_ && alignment_length < read_length - error_threshold_ && second_min_num_errors != min_num_errors) {
+    if (repetitive_seed_length >= alignment_length && repetitive_seed_length < (uint32_t)read_length 
+				&& alignment_length < read_length / 3 ) {
+      mapq = 0 ;
+    }
+		int diff = second_min_num_errors - min_num_errors ;
+    if ( second_min_num_errors - min_num_errors <= error_threshold_ * 3 / 4 && num_candidates >= 5) {
+      mapq -= (num_candidates/5 / diff);
+    }
+    if (mapq < 0) {
+      mapq = 0 ;
+    }
+    if (num_second_best_mappings > 0 && second_min_num_errors - min_num_errors <= error_threshold_ * 3 / 4) {
+      mapq /= (num_second_best_mappings / diff + 1);
+    }
+  }
   return (uint8_t)mapq;
 }
 
