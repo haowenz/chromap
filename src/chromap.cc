@@ -4160,12 +4160,13 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
     //("drop-repetitive-reads", "Drop reads with too many best mappings [500000]", cxxopts::value<int>(), "INT")
     ("trim-adapters", "Try to trim adapters on 3'")
     ("remove-pcr-duplicates", "Remove PCR duplicates")
+    ("remove-pcr-duplicates-at-bulk-level", "Remove PCR duplicates at bulk level for single cell data")
     ("remove-pcr-duplicates-at-cell-level", "Remove PCR duplicates at cell level for single cell data")
     //("allocate-multi-mappings", "Allocate multi-mappings")
     ("Tn5-shift", "Perform Tn5 shift")
     ("low-mem", "Use low memory mode")
-    ("bc-error-threshold", "Max Hamming distance allowed to correct a barcode [2]", cxxopts::value<int>(), "INT")
-    ("bc-probability-threshold", "Min probability to correct a barcode [0.975]", cxxopts::value<double>(), "FLT")
+    ("bc-error-threshold", "Max Hamming distance allowed to correct a barcode [1]", cxxopts::value<int>(), "INT")
+    ("bc-probability-threshold", "Min probability to correct a barcode [0.9]", cxxopts::value<double>(), "FLT")
     ("t,num-threads", "# threads for mapping [1]", cxxopts::value<int>(), "INT");
   //options.add_options("Peak")
   //  ("cell-by-bin", "Generate cell-by-bin matrix")
@@ -4222,8 +4223,8 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
   uint8_t mapq_threshold = 30;
   int num_threads = 1;
   int min_read_length = 30;
-  int barcode_correction_error_threshold = 2;
-  double barcode_correction_probability_threshold = 0.975;
+  int barcode_correction_error_threshold = 1;
+  double barcode_correction_probability_threshold = 0.9;
   int multi_mapping_allocation_distance = 0;
   int multi_mapping_allocation_seed = 11;
   int drop_repetitive_reads = 500000;
@@ -4250,11 +4251,13 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
       max_insert_size = 2000;
       trim_adapters = true;
       remove_pcr_duplicates = true;
+      remove_pcr_duplicates_at_bulk_level = false;
       Tn5_shift = true;
       output_mapping_in_BED = true;
       low_memory_mode = true;
     } else if (read_type == "chip") {
       std::cerr << "Preset parameters for ChIP-seq are used.\n";
+      max_insert_size = 2000;
       remove_pcr_duplicates = true;
       low_memory_mode = true;
       output_mapping_in_BED = true;
@@ -4272,14 +4275,14 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
   // Optional parameters
   if (result.count("min-frag-length")) {
     min_fragment_length = result["min-frag-length"].as<int>();
-    if (min_fragment_length <= 75) {
+    if (min_fragment_length <= 60) {
       kmer_size = 17;
       window_size = 7;
-    } else if (min_fragment_length <= 125) {
+    } else if (min_fragment_length <= 80) {
       kmer_size = 19;
       window_size = 10;
     } else {
-      kmer_size = 21;
+      kmer_size = 23;
       window_size = 11;
     }
   }
@@ -4345,6 +4348,9 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
   }
   if (result.count("remove-pcr-duplicates")) {
     remove_pcr_duplicates = true;
+  }
+  if (result.count("remove-pcr-duplicates-at-bulk-level")) {
+    remove_pcr_duplicates_at_bulk_level = true;
   }
   if (result.count("remove-pcr-duplicates-at-cell-level")) {
     remove_pcr_duplicates_at_bulk_level = false;
@@ -4533,6 +4539,11 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
     if (only_output_unique_mappings) {
       std::cerr << "Only output unique mappings after mapping.\n";
     } 
+    if (!output_mappings_not_in_whitelist) {
+      std::cerr << "Only output mappings of which barcodes are in whitelist.\n";
+    } else {
+      std::cerr << "No filtering of mappings based on whether their barcodes are in whitelist.\n";
+    }
     //if (allocate_multi_mappings && only_output_unique_mappings) {
     //  std::cerr << "WARNING: you want to output unique mappings only but you ask to allocate multi-mappings! In this case, it won't allocate multi-mappings and will only output unique mappings.\n";
     //  allocate_multi_mappings = false;
