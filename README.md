@@ -119,9 +119,9 @@ chromap --preset hic -x index -r ref.fa -1 read1.fa -2 read2.fa -o aln.pairs    
 ```
 Chromap will perform split alignment on Hi-C reads and output mappings
 in [pairs][pairs] format, which is used in [4DN Hi-C data processing pipeline][4DN]. 
-Certain Hi-C data analysis pipeline requires the reads are sorted in specific order
+Some Hi-C data analysis pipelines may require the reads are sorted in specific chromosome order
 other than the one in the index. Therefore, Chromap provides the option **--chr-order** 
-to specify the sort order, and **--pairs-natural-chr-order** for flipping the pair 
+to specify the alignment order, and **--pairs-natural-chr-order** for flipping the pair 
 in the pairs format. 
 
 
