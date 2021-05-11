@@ -52,9 +52,9 @@ directory to compile.
 Before mapping, an index of the reference needs to be created and saved on the disk:
 
 ```sh
-chromap -r ref.fa -o index
+chromap -i -r ref.fa -o index
 ```
-The users can input the min fragment length expected in their sequencing experiments by **--min-frag-length**. Then Chromap will choose proper k-mer length and window size to build the index. For human genome, it only takes a few minutes to build the index. 
+The users can input the min fragment length expected in their sequencing experiments, e.g. read length, by **--min-frag-length**. Then Chromap will choose proper k-mer length and window size to build the index. For human genome, it only takes a few minutes to build the index. 
 Without any preset parameters, Chromap takes a reference database and a query sequence
 file as input and produce approximate mapping, without base-level alignment in the [BED format][bed]:
 
@@ -78,7 +78,7 @@ parameters such as **-k**, **-w** and **--min-frag-length** can't be changed dur
 mapping. If you are running Chromap for different data types, you will
 probably need to keep multiple indexes generated with different parameters.
 This makes Chromap different from BWA which always uses the same index
-regardless of query data types.
+regardless of query data types. Chromap can build the human genome index file in about 10 minutes.
 
 ### <a name="cases"></a>Use cases
 
@@ -118,7 +118,13 @@ corrections.
 chromap --preset hic -x index -r ref.fa -1 read1.fa -2 read2.fa -o aln.pairs           # Hi-C reads and pairs output
 ```
 Chromap will perform split alignment on Hi-C reads and output mappings
-in [pairs][pairs] format, which is used in [4DN Hi-C data processing pipeline][4DN].
+in [pairs][pairs] format, which is used in [4DN Hi-C data processing pipeline][4DN]. 
+Certain Hi-C data analysis pipeline requires the reads are sorted in specific order
+other than the one in the index. Therefore, Chromap provides the option **--chr-order** 
+to specify the sort order, and **--pairs-natural-chr-order** for flipping the pair 
+in the pairs format. 
+
+
 
 ### <a name="help"></a>Getting help
 
