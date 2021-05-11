@@ -4403,6 +4403,9 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
     output_mapping_in_PAF = false;
     output_mapping_in_pairs = false;
   }
+  if (!output_mapping_in_SAM && !output_mapping_in_BED && !output_mapping_in_TagAlign && !output_mapping_in_PAF && !output_mapping_in_pairs) {
+    output_mapping_in_BED = true;
+  }
   if (result.count("low-mem")) {
     low_memory_mode = true;
   }
