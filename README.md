@@ -112,7 +112,7 @@ threshold to make a correction by setting **--bc-probability-threshold**
 (set to 0.9 by default) to a large value (e.g., 0.975) to only make reliable
 corrections. 
 
-#### <a name="long-hic"></a>Map Hi-C short reads
+#### <a name="map-hic"></a>Map Hi-C short reads
 
 ```sh
 chromap --preset hic -x index -r ref.fa -1 read1.fa -2 read2.fa -o aln.pairs           # Hi-C reads and pairs output
