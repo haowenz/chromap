@@ -111,7 +111,7 @@ Hamming distance from a whitelist barcode. User can also increase the probabilit
 threshold to make a correction by setting **--bc-probability-threshold**
 (set to 0.9 by default) to a large value (e.g., 0.975) to only make reliable
 corrections. single-cell ATAC-seq data, such as 10x Genomics, may come in multiple lanes and have 
-multiple read files, and you can use "," to add multiple files as mentioned [above](#general)
+multiple read and barcode files, and you can use "," to add multiple files as [above](#general)
 
 #### <a name="map-hic"></a>Map Hi-C short reads
 
