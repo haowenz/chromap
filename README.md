@@ -124,7 +124,8 @@ other than the one in the index. Therefore, Chromap provides the option **--chr-
 to specify the alignment order, and **--pairs-natural-chr-order** for flipping the pair 
 in the pairs format. 
 
-
+Detailed description of Chromap command line options and optional tags 
+can be displayed by running "./chromap" or "./chromap -h".
 
 ### <a name="help"></a>Getting help
 
