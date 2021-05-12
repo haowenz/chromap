@@ -3,15 +3,15 @@
 git clone https://github.com/haowenz/chromap.git
 cd chromap && make
 # create an index first and then map
-./chromap -i -r test/ref.fa.gz -o ref.index
-./chromap -x ref.index -r test/ref.fa.gz -1 test/read1.fq.gz -o test.bed
+./chromap -i -r test/ref.fa -o ref.index
+./chromap -x ref.index -r test/ref.fa -1 test/read1.fq -2 test/read2.fq -o test.bed
 # use presets (no test data)
-./chromap --preset atac -x index -r ref.fa -1 read1.fq.gz -2 read2.fq.gz -o aln.bed       # ATAC-seq reads
-./chromap --preset atac -x index -r ref.fa -1 read1.fq.gz -2 read2.fq.gz -o aln.bed \
+./chromap --preset atac -x index -r ref.fa -1 read1.fq -2 read2.fq -o aln.bed       # ATAC-seq reads
+./chromap --preset atac -x index -r ref.fa -1 read1.fq -2 read2.fq -o aln.bed \
  -b barcode.fq.gz --barcode-whitelist whitelist.txt                                       # scATAC-seq reads
-./chromap --preset chip -x index -r ref.fa -1 read1.fq.gz -2 read2.fq.gz -o aln.bed       # ChIP-seq reads
-./chromap --preset hic -x index -r ref.fa -1 read1.fq.gz -2 read2.fq.gz -o aln.pairs      # Hi-C reads and pairs output
-./chromap --preset hic -x index -r ref.fa -1 read1.fq.gz -2 read2.fq.gz -o --SAM aln.sam  # Hi-C reads and SAM output
+./chromap --preset chip -x index -r ref.fa -1 read1.fq -2 read2.fq -o aln.bed       # ChIP-seq reads
+./chromap --preset hic -x index -r ref.fa -1 read1.fq -2 read2.fq -o aln.pairs      # Hi-C reads and pairs output
+./chromap --preset hic -x index -r ref.fa -1 read1.fq -2 read2.fq -o --SAM aln.sam  # Hi-C reads and SAM output
 ```
 ## Table of Contents
 
