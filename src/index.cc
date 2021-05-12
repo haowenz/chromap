@@ -230,9 +230,11 @@ void Index::Save() {
   err = fwrite(&occurrence_table_size, sizeof(uint32_t), 1, index_file);
   num_bytes += sizeof(uint32_t);
   assert(err != 0);
-  err = fwrite(occurrence_table_.data(), sizeof(uint64_t), occurrence_table_size, index_file);
-  num_bytes += sizeof(uint64_t) * occurrence_table_size;
-  assert(err != 0);
+  if (occurrence_table_size > 0) {
+    err = fwrite(occurrence_table_.data(), sizeof(uint64_t), occurrence_table_size, index_file);
+    num_bytes += sizeof(uint64_t) * occurrence_table_size;
+    assert(err != 0);
+  }
   fclose(index_file);
   //std::cerr << "Index size: " << num_bytes / (1024.0 * 1024 * 1024) << "GB, saved in " << Chromap<>::GetRealTime() - real_start_time << "s.\n";
   std::cerr << "Saved in " << Chromap<>::GetRealTime() - real_start_time << "s.\n";
@@ -254,9 +256,11 @@ void Index::Load() {
   uint32_t occurrence_table_size = 0;
   err = fread(&occurrence_table_size, sizeof(uint32_t), 1, index_file);
   assert(err != 0);
-  occurrence_table_.resize(occurrence_table_size); 
-  err = fread(occurrence_table_.data(), sizeof(uint64_t), occurrence_table_size, index_file);
-  assert(err != 0);
+  if (occurrence_table_size > 0) {
+    occurrence_table_.resize(occurrence_table_size); 
+    err = fread(occurrence_table_.data(), sizeof(uint64_t), occurrence_table_size, index_file);
+    assert(err != 0);
+  }
   fclose(index_file);
   std::cerr << "Kmer size: " << kmer_size_ << ", window size: " << window_size_ << ".\n";
   std::cerr << "Lookup table size: " << kh_size(lookup_table_) << ", occurrence table size: " << occurrence_table_.size() << ".\n";
