@@ -110,8 +110,8 @@ correction with up to 1 Hamming distance from a whitelist barcode. By setting
 Hamming distance from a whitelist barcode. User can also increase the probability
 threshold to make a correction by setting **--bc-probability-threshold**
 (set to 0.9 by default) to a large value (e.g., 0.975) to only make reliable
-corrections. Single-cell ATAC-seq data, such as 10x Genomics, may come in multiple lanes and have 
-multiple read and barcode files, and you can use "," to add multiple files as [above](#general)
+corrections. For scATAC-seq data with multiple read and barcode files, you can
+use "," to concatenate multiple input files as the example [above](#general).
 
 #### <a name="map-hic"></a>Map Hi-C short reads
 
@@ -125,12 +125,10 @@ other than the one in the index. Therefore, Chromap provides the option **--chr-
 to specify the alignment order, and **--pairs-natural-chr-order** for flipping the pair 
 in the pairs format. 
 
-Detailed description of Chromap command line options and optional tags 
-can be displayed by running "./chromap" or "./chromap -h".
-
 ### <a name="help"></a>Getting help
 
-If you encounter bugs or have further questions or requests,
+Detailed description of Chromap command line options and optional tags 
+can be displayed by running Chromap with **-h**. If you encounter bugs or have further questions or requests,
 you can raise an issue at the [issue page][issue].
 
 
