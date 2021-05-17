@@ -4132,7 +4132,7 @@ uint8_t Chromap<MappingRecord>::GetMAPQForPairedEndRead(int num_positive_candida
 }
 
 void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
-  cxxopts::Options options("chromap", "A short read mapper for chromatin biology");
+  cxxopts::Options options("chromap", "Fast alignment and preprocessing of chromatin profiles");
   options.add_options("Indexing")
     ("i,build-index", "Build index")
     ("min-frag-length", "Min fragment length for choosing k and w automatically [30]", cxxopts::value<int>(), "INT")
