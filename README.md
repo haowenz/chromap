@@ -111,7 +111,14 @@ Hamming distance from a whitelist barcode. User can also increase the probabilit
 threshold to make a correction by setting **--bc-probability-threshold**
 (set to 0.9 by default) to a large value (e.g., 0.975) to only make reliable
 corrections. For scATAC-seq data with multiple read and barcode files, you can
-use "," to concatenate multiple input files as the example [above](#general).
+use "," to concatenate multiple input files as the example [above](#general). 
+
+The BED format (fragment file) for bulk and single-cell are different except for the first
+three columns. For bulk data, the columns are "chrom chrom_start chrom_end N mapq strand".
+For single-cell data, the columns are "chrom chrom_start chrom_end barcode duplicate_count" 
+as the definition of the fragment file in 
+[CellRanger](https://support.10xgenomics.com/single-cell-atac/software/pipelines/latest/output/fragments). 
+Note that chrom_end is open-end.
 
 #### <a name="map-hic"></a>Map Hi-C short reads
 

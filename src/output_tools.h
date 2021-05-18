@@ -1033,7 +1033,7 @@ class BEDOutputTools : public OutputTools<MappingRecord> {
     std::string strand = mapping.IsPositive() ? "+" : "-";
     const char *reference_sequence_name = reference.GetSequenceNameAt(rid);
     uint32_t mapping_end_position = mapping.GetEndPosition();
-    this->AppendMappingOutput(std::string(reference_sequence_name) + "\t" + std::to_string(mapping.GetStartPosition()) + "\t" + std::to_string(mapping_end_position) + "\tN\t1000\t" + strand + "\n");
+    this->AppendMappingOutput(std::string(reference_sequence_name) + "\t" + std::to_string(mapping.GetStartPosition()) + "\t" + std::to_string(mapping_end_position) + "\tN\t" + std::to_string(mapping.mapq) + "\t" + strand + "\n");
   }
 };
 
@@ -1053,7 +1053,7 @@ class BEDPEOutputTools : public OutputTools<MappingRecord> {
     std::string strand = mapping.IsPositive() ? "+" : "-";
     const char *reference_sequence_name = reference.GetSequenceNameAt(rid);
     uint32_t mapping_end_position = mapping.GetEndPosition();
-    this->AppendMappingOutput(std::string(reference_sequence_name) + "\t" + std::to_string(mapping.GetStartPosition()) + "\t" + std::to_string(mapping_end_position) + "\tN\t1000\t" + strand + "\n");
+    this->AppendMappingOutput(std::string(reference_sequence_name) + "\t" + std::to_string(mapping.GetStartPosition()) + "\t" + std::to_string(mapping_end_position) + "\tN\t" + std::to_string(mapping.mapq) + "\t" + strand + "\n");
   }
 };
 
@@ -1075,7 +1075,7 @@ class TagAlignOutputTools : public OutputTools<MappingRecord> {
     std::string strand = mapping.IsPositive() ? "+" : "-";
     const char *reference_sequence_name = reference.GetSequenceNameAt(rid);
     uint32_t mapping_end_position = mapping.GetEndPosition();
-    this->AppendMappingOutput(std::string(reference_sequence_name) + "\t" + std::to_string(mapping.GetStartPosition()) + "\t" + std::to_string(mapping_end_position) + "\tN\t1000\t" + strand + "\n");
+    this->AppendMappingOutput(std::string(reference_sequence_name) + "\t" + std::to_string(mapping.GetStartPosition()) + "\t" + std::to_string(mapping_end_position) + "\tN\t" + std::to_string(mapping.mapq) + "\t" + strand + "\n");
   }
 };
 
@@ -1090,9 +1090,9 @@ class PairedTagAlignOutputTools : public OutputTools<MappingRecord> {
     uint32_t negative_read_start = negative_read_end - mapping.negative_alignment_length;
     const char *reference_sequence_name = reference.GetSequenceNameAt(rid);
     if (positive_strand) {
-      this->AppendMappingOutput(std::string(reference_sequence_name) + "\t" + std::to_string(mapping.fragment_start_position) + "\t" + std::to_string(positive_read_end) + "\tN\t1000\t+\n" + std::string(reference_sequence_name) + "\t" + std::to_string(negative_read_start) + "\t" + std::to_string(negative_read_end) + "\tN\t1000\t-\n");
+      this->AppendMappingOutput(std::string(reference_sequence_name) + "\t" + std::to_string(mapping.fragment_start_position) + "\t" + std::to_string(positive_read_end) + "\tN\t" + std::to_string(mapping.mapq) + "\t+\n" + std::string(reference_sequence_name) + "\t" + std::to_string(negative_read_start) + "\t" + std::to_string(negative_read_end) + "\tN\t" + std::to_string(mapping.mapq) + "\t-\n");
     } else {
-      this->AppendMappingOutput(std::string(reference_sequence_name) + "\t" + std::to_string(negative_read_start) + "\t" + std::to_string(negative_read_end) + "\tN\t1000\t-\n" + std::string(reference_sequence_name) + "\t" + std::to_string(mapping.fragment_start_position) + "\t" + std::to_string(positive_read_end) + "\tN\t1000\t+\n");
+      this->AppendMappingOutput(std::string(reference_sequence_name) + "\t" + std::to_string(negative_read_start) + "\t" + std::to_string(negative_read_end) + "\tN\t" + std::to_string(mapping.mapq) + "\t-\n" + std::string(reference_sequence_name) + "\t" + std::to_string(mapping.fragment_start_position) + "\t" + std::to_string(positive_read_end) + "\tN\t" + std::to_string(mapping.mapq) + "\t+\n");
     }
   }
 };
