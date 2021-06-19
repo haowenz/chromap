@@ -298,6 +298,7 @@ struct PairedPAFMapping {
 struct SAMMapping {
   uint32_t read_id;
   std::string read_name;
+  uint32_t cell_barcode;
   //uint16_t read_length;
   //uint32_t fragment_start_position;
   //uint16_t fragment_length;
@@ -318,16 +319,16 @@ struct SAMMapping {
   bool operator<(const SAMMapping& m) const {
     int read1_flag = flag & BAM_FREAD1;
     int m_read1_flag = m.flag & BAM_FREAD1;
-    return std::tie(rid, pos, mapq, read_id, read1_flag) < std::tie(m.rid, m.pos, m.mapq, m.read_id, m_read1_flag);
+    return std::tie(rid, pos, cell_barcode, mapq, read_id, read1_flag) < std::tie(m.rid, m.pos, m.cell_barcode, m.mapq, m.read_id, m_read1_flag);
   }
   bool operator==(const SAMMapping& m) const {
-    return std::tie(pos, rid, is_rev) == std::tie(m.pos, m.rid, m.is_rev);
+    return std::tie(pos, rid, cell_barcode, is_rev) == std::tie(m.pos, m.rid, m.cell_barcode, m.is_rev);
   }
   bool HasSamePosition(const SAMMapping& m) const {
     return std::tie(pos, rid, is_rev) == std::tie(m.pos, m.rid, m.is_rev);
   }
   uint32_t GetBarcode() const {
-    return 0;
+    return cell_barcode;
   }
   void Tn5Shift() {
     // We don't support Tn5 shift in SAM format because it has other fields that depend mapping position.
@@ -389,6 +390,7 @@ struct SAMMapping {
     uint16_t read_name_length = read_name.length();
     num_written_bytes += fwrite(&read_name_length, sizeof(uint16_t), 1, temp_mapping_output_file);
     num_written_bytes += fwrite(read_name.data(), sizeof(char), read_name_length, temp_mapping_output_file);
+    num_written_bytes += fwrite(&cell_barcode, sizeof(uint32_t), 1, temp_mapping_output_file);
     num_written_bytes += fwrite(&num_dups, sizeof(uint8_t), 1, temp_mapping_output_file);
     num_written_bytes += fwrite(&pos, sizeof(int64_t), 1, temp_mapping_output_file);
     num_written_bytes += fwrite(&rid, sizeof(int), 1, temp_mapping_output_file);
@@ -413,6 +415,7 @@ struct SAMMapping {
     num_read_bytes += fread(&read_name_length, sizeof(uint16_t), 1, temp_mapping_output_file);
     read_name = std::string(read_name_length, '\0');
     num_read_bytes += fread(&(read_name[0]), sizeof(char), read_name_length, temp_mapping_output_file);
+    num_read_bytes += fread(&cell_barcode, sizeof(uint32_t), 1, temp_mapping_output_file);
     num_read_bytes += fread(&num_dups, sizeof(uint8_t), 1, temp_mapping_output_file);
     num_read_bytes += fread(&pos, sizeof(int64_t), 1, temp_mapping_output_file);
     num_read_bytes += fread(&rid, sizeof(int), 1, temp_mapping_output_file);
@@ -1253,7 +1256,7 @@ inline void SAMOutputTools<SAMMapping>::AppendMapping(uint32_t rid, const Sequen
   //std::string strand = (mapping.direction & 1) == 1 ? "+" : "-";
   //uint32_t mapping_end_position = mapping.fragment_start_position + mapping.fragment_length;
   const char *reference_sequence_name = (mapping.flag & BAM_FUNMAP) > 0 ? "*" : reference.GetSequenceNameAt(rid);
-  this->AppendMappingOutput(mapping.read_name + "\t" + std::to_string(mapping.flag) + "\t" + std::string(reference_sequence_name) + "\t" + std::to_string(mapping.GetStartPosition()) + "\t" + std::to_string(mapping.mapq) + "\t" + mapping.GenerateCigarString() + "\t*\t" + std::to_string(0) + "\t" + std::to_string(0) + "\t*\t*\t" + mapping.GenerateIntTagString("NM", mapping.NM) + "\tMD:Z:" + mapping.MD + "\n");
+  this->AppendMappingOutput(mapping.read_name + "\t" + std::to_string(mapping.flag) + "\t" + std::string(reference_sequence_name) + "\t" + std::to_string(mapping.GetStartPosition()) + "\t" + std::to_string(mapping.mapq) + "\t" + mapping.GenerateCigarString() + "\t*\t" + std::to_string(0) + "\t" + std::to_string(0) + "\t*\t*\t" + mapping.GenerateIntTagString("NM", mapping.NM) + "\tMD:Z:" + mapping.MD + "\tCB:Z:" + Seed2Sequence(mapping.cell_barcode, cell_barcode_length_) + "\n");
 }
 
 template <>
