@@ -1274,8 +1274,9 @@ inline void SAMOutputTools<SAMMapping>::AppendMapping(uint32_t rid, const Sequen
   //std::string strand = (mapping.direction & 1) == 1 ? "+" : "-";
   //uint32_t mapping_end_position = mapping.fragment_start_position + mapping.fragment_length;
   const char *reference_sequence_name = (mapping.flag & BAM_FUNMAP) > 0 ? "*" : reference.GetSequenceNameAt(rid);
+  const uint32_t mapping_start_position = mapping.GetStartPosition();
 
-  this->AppendMappingOutput(mapping.read_name + "\t" + std::to_string(mapping.flag) + "\t" + std::string(reference_sequence_name) + "\t" + std::to_string(mapping.GetStartPosition()) + "\t" + std::to_string(mapping.mapq) + "\t" + mapping.GenerateCigarString() + "\t*\t" + std::to_string(0) + "\t" + std::to_string(0) + "\t" + mapping.sequence + "\t" + mapping.sequence_qual + "\t" + mapping.GenerateIntTagString("NM", mapping.NM) + "\tMD:Z:" + mapping.MD);
+  this->AppendMappingOutput(mapping.read_name + "\t" + std::to_string(mapping.flag) + "\t" + std::string(reference_sequence_name) + "\t" + std::to_string(mapping_start_position) + "\t" + std::to_string(mapping.mapq) + "\t" + mapping.GenerateCigarString() + "\t*\t" + std::to_string(0) + "\t" + std::to_string(0) + "\t" + mapping.sequence + "\t" + mapping.sequence_qual + "\t" + mapping.GenerateIntTagString("NM", mapping.NM) + "\tMD:Z:" + mapping.MD);
   if (cell_barcode_length_ > 0) {
     this->AppendMappingOutput("\tCB:Z:" + Seed2Sequence(mapping.cell_barcode, cell_barcode_length_));
   }
