@@ -66,7 +66,7 @@ You may ask Chromap to output alignments in the [SAM format][sam]:
 ```sh
 chromap -x index -r ref.fa -1 query.fq --SAM -o alignment.sam
 ```
-But note that one of the motivations to develop Chromap is to bypass the processing of SAM files which can be slow. Thus generating the output in SAM format is not preferred and should be avoided when possible. Chromap can take multiple input read files:
+But note that the the processing of SAM files is not fully optimized and can be slow. Thus generating the output in SAM format is not preferred and should be avoided when possible. Chromap can take multiple input read files:
 
 ```sh
 chromap -x index -r ref.fa -1 query1.fq,query2.fq,query3.fq --SAM -o alignment.sam
