@@ -11,7 +11,7 @@ cd chromap && make
  -b barcode.fq.gz --barcode-whitelist whitelist.txt                                       # scATAC-seq reads
 ./chromap --preset chip -x index -r ref.fa -1 read1.fq -2 read2.fq -o aln.bed       # ChIP-seq reads
 ./chromap --preset hic -x index -r ref.fa -1 read1.fq -2 read2.fq -o aln.pairs      # Hi-C reads and pairs output
-./chromap --preset hic -x index -r ref.fa -1 read1.fq -2 read2.fq -o --SAM aln.sam  # Hi-C reads and SAM output
+./chromap --preset hic -x index -r ref.fa -1 read1.fq -2 read2.fq --SAM -o aln.sam  # Hi-C reads and SAM output
 ```
 ## Table of Contents
 
