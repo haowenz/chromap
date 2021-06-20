@@ -986,7 +986,7 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
 	uint32_t num_mappings_in_mem = 0;
   uint64_t max_num_mappings_in_mem = 1 * ((uint64_t)1 << 30) / sizeof(MappingRecord);
   if (output_mapping_in_SAM_ || output_mapping_in_pairs_ || output_mapping_in_PAF_) {
-    max_num_mappings_in_mem = 1 * ((uint64_t)1 << 28) / sizeof(MappingRecord);
+    max_num_mappings_in_mem = 1 * ((uint64_t)1 << 29) / sizeof(MappingRecord);
   }
   static uint64_t thread_num_candidates = 0;
   static uint64_t thread_num_mappings = 0;

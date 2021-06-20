@@ -336,6 +336,7 @@ struct SAMMapping {
   bool IsPositive() const {
     return is_rev > 0 ? true : false;
   }
+  // For now for convenience, we assume cigar should not be accessed after generating the cigar string for output
   std::string GenerateCigarString() const {
     if (n_cigar == 0) {
       return "*";
@@ -349,6 +350,7 @@ struct SAMMapping {
       //cigar_string.append(std::to_string((BAM_CIGAR_STR[op])));
       cigar_string.push_back((BAM_CIGAR_STR[op]));
     }
+    delete[] cigar;
     return cigar_string;
   }
   std::string GenerateIntTagString(const std::string &tag, int value) const {
@@ -400,6 +402,7 @@ struct SAMMapping {
     num_written_bytes += fwrite(&n_cigar, sizeof(int), 1, temp_mapping_output_file);
     if (n_cigar > 0) {
       num_written_bytes += fwrite(cigar, sizeof(uint32_t), n_cigar, temp_mapping_output_file);
+      delete[] cigar;
     }
     uint16_t MD_length = MD.length();
     num_written_bytes += fwrite(&MD_length, sizeof(uint16_t), 1, temp_mapping_output_file);
