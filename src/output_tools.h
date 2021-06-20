@@ -314,6 +314,8 @@ struct SAMMapping {
   int n_cigar;     // number of CIGAR operations
   uint32_t *cigar; // CIGAR in the BAM encoding: opLen<<4|op; op to integer mapping: MIDSH=>01234
   std::string MD;
+  std::string sequence;
+  std::string sequence_qual;
   //char *XA;        // alternative mappings
   //int score, sub, alt_sc;
   bool operator<(const SAMMapping& m) const {
@@ -409,6 +411,10 @@ struct SAMMapping {
     if (MD_length > 0) {
       num_written_bytes += fwrite(MD.data(), sizeof(char), MD_length, temp_mapping_output_file);
     }
+    uint16_t sequence_length = sequence.length();
+    num_written_bytes += fwrite(&sequence_length, sizeof(uint16_t), 1, temp_mapping_output_file);
+    num_written_bytes += fwrite(sequence.data(), sizeof(char), sequence_length, temp_mapping_output_file);
+    num_written_bytes += fwrite(sequence_qual.data(), sizeof(char), sequence_length, temp_mapping_output_file);
     return num_written_bytes;
   }
   size_t LoadFromFile(FILE *temp_mapping_output_file) {
@@ -440,6 +446,14 @@ struct SAMMapping {
     if (MD_length > 0) {
       MD = std::string(MD_length, '\0');
       num_read_bytes += fread(&(MD[0]), sizeof(char), MD_length, temp_mapping_output_file);
+    }
+    uint16_t sequence_length = 0;
+    num_read_bytes += fread(&sequence_length, sizeof(uint16_t), 1, temp_mapping_output_file);
+    if (sequence_length > 0) {
+      sequence = std::string(sequence_length, '\0');
+      sequence_qual = std::string(sequence_length, '\0');
+      num_read_bytes += fread(&(sequence[0]), sizeof(char), sequence_length, temp_mapping_output_file);
+      num_read_bytes += fread(&(sequence_qual[0]), sizeof(char), sequence_length, temp_mapping_output_file);
     }
     return num_read_bytes;
   }
@@ -1260,11 +1274,12 @@ inline void SAMOutputTools<SAMMapping>::AppendMapping(uint32_t rid, const Sequen
   //std::string strand = (mapping.direction & 1) == 1 ? "+" : "-";
   //uint32_t mapping_end_position = mapping.fragment_start_position + mapping.fragment_length;
   const char *reference_sequence_name = (mapping.flag & BAM_FUNMAP) > 0 ? "*" : reference.GetSequenceNameAt(rid);
+
+  this->AppendMappingOutput(mapping.read_name + "\t" + std::to_string(mapping.flag) + "\t" + std::string(reference_sequence_name) + "\t" + std::to_string(mapping.GetStartPosition()) + "\t" + std::to_string(mapping.mapq) + "\t" + mapping.GenerateCigarString() + "\t*\t" + std::to_string(0) + "\t" + std::to_string(0) + "\t" + mapping.sequence + "\t" + mapping.sequence_qual + "\t" + mapping.GenerateIntTagString("NM", mapping.NM) + "\tMD:Z:" + mapping.MD);
   if (cell_barcode_length_ > 0) {
-    this->AppendMappingOutput(mapping.read_name + "\t" + std::to_string(mapping.flag) + "\t" + std::string(reference_sequence_name) + "\t" + std::to_string(mapping.GetStartPosition()) + "\t" + std::to_string(mapping.mapq) + "\t" + mapping.GenerateCigarString() + "\t*\t" + std::to_string(0) + "\t" + std::to_string(0) + "\t*\t*\t" + mapping.GenerateIntTagString("NM", mapping.NM) + "\tMD:Z:" + mapping.MD + "\tCB:Z:" + Seed2Sequence(mapping.cell_barcode, cell_barcode_length_) + "\n");
-  } else {
-    this->AppendMappingOutput(mapping.read_name + "\t" + std::to_string(mapping.flag) + "\t" + std::string(reference_sequence_name) + "\t" + std::to_string(mapping.GetStartPosition()) + "\t" + std::to_string(mapping.mapq) + "\t" + mapping.GenerateCigarString() + "\t*\t" + std::to_string(0) + "\t" + std::to_string(0) + "\t*\t*\t" + mapping.GenerateIntTagString("NM", mapping.NM) + "\tMD:Z:" + mapping.MD + "\n");
+    this->AppendMappingOutput("\tCB:Z:" + Seed2Sequence(mapping.cell_barcode, cell_barcode_length_));
   }
+  this->AppendMappingOutput("\n");
 }
 
 template <>

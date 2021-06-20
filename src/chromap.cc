@@ -1759,8 +1759,8 @@ void Chromap<MappingRecord>::ProcessBestMappingsForPairedEndReadOnOneDirection(D
 				  }
 				//printf("%d %d\n", ref_start_position1, ref_end_position1);
 				//printf("%d %d\n", ref_start_position2, ref_end_position2);
-				  EmplaceBackMappingRecord(read_id, read1_name, barcode_key, 1, ref_start_position1, rid1, flag1, first_read_direction == kPositive ? 1 : 0, is_unique, mapq, NM1, n_cigar1, cigar1, MD_tag1, &((*mappings_on_diff_ref_seqs)[rid1])); 
-				  EmplaceBackMappingRecord(read_id, read2_name, barcode_key, 1, ref_start_position2, rid2, flag2, second_read_direction == kPositive ? 1 : 0, is_unique, mapq, NM2, n_cigar2, cigar2, MD_tag2, &((*mappings_on_diff_ref_seqs)[rid2])); 
+				  EmplaceBackMappingRecord(read_id, read1_name, barcode_key, 1, ref_start_position1, rid1, flag1, first_read_direction == kPositive ? 1 : 0, is_unique, mapq, NM1, n_cigar1, cigar1, MD_tag1, read1, read_batch1.GetSequenceQualAt(pair_index), &((*mappings_on_diff_ref_seqs)[rid1])); 
+				  EmplaceBackMappingRecord(read_id, read2_name, barcode_key, 1, ref_start_position2, rid2, flag2, second_read_direction == kPositive ? 1 : 0, is_unique, mapq, NM2, n_cigar2, cigar2, MD_tag2, read2, read_batch2.GetSequenceQualAt(pair_index), &((*mappings_on_diff_ref_seqs)[rid2])); 
 				} else if (output_mapping_in_pairs_) {
 					int position1 = ref_start_position1;
 					int position2 = ref_start_position2;
@@ -2135,12 +2135,12 @@ void Chromap<PAFMapping>::EmplaceBackMappingRecord(uint32_t read_id, const char 
 }
 
 template<typename MappingRecord>
-void Chromap<MappingRecord>::EmplaceBackMappingRecord(uint32_t read_id, const char *read_name, uint32_t cell_barcode, uint8_t num_dups, int64_t position, int rid, int flag, uint8_t direction, uint8_t is_unique, uint8_t mapq, uint32_t NM, int n_cigar, uint32_t *cigar, std::string &MD_tag, std::vector<MappingRecord> *mappings_on_diff_ref_seqs) {
+void Chromap<MappingRecord>::EmplaceBackMappingRecord(uint32_t read_id, const char *read_name, uint32_t cell_barcode, uint8_t num_dups, int64_t position, int rid, int flag, uint8_t direction, uint8_t is_unique, uint8_t mapq, uint32_t NM, int n_cigar, uint32_t *cigar, std::string &MD_tag, const char* read, const char* read_qual, std::vector<MappingRecord> *mappings_on_diff_ref_seqs) {
 }
 
 template<>
-void Chromap<SAMMapping>::EmplaceBackMappingRecord(uint32_t read_id, const char *read_name, uint32_t cell_barcode, uint8_t num_dups, int64_t position, int rid, int flag, uint8_t direction, uint8_t is_unique, uint8_t mapq, uint32_t NM, int n_cigar, uint32_t *cigar, std::string &MD_tag, std::vector<SAMMapping> *mappings_on_diff_ref_seqs) {
-  mappings_on_diff_ref_seqs->emplace_back(SAMMapping{read_id, std::string(read_name), cell_barcode, num_dups, position, rid, flag, direction, 0, is_unique, mapq, NM, n_cigar, cigar, MD_tag});
+void Chromap<SAMMapping>::EmplaceBackMappingRecord(uint32_t read_id, const char *read_name, uint32_t cell_barcode, uint8_t num_dups, int64_t position, int rid, int flag, uint8_t direction, uint8_t is_unique, uint8_t mapq, uint32_t NM, int n_cigar, uint32_t *cigar, std::string &MD_tag, const char* read, const char* read_qual, std::vector<SAMMapping> *mappings_on_diff_ref_seqs) {
+  mappings_on_diff_ref_seqs->emplace_back(SAMMapping{read_id, std::string(read_name), cell_barcode, num_dups, position, rid, flag, direction, 0, is_unique, mapq, NM, n_cigar, cigar, MD_tag, std::string(read), std::string(read_qual)});
 }
 
 template <typename MappingRecord>
@@ -2437,7 +2437,7 @@ void Chromap<MappingRecord>::ProcessBestMappingsForSingleEndRead(Direction mappi
 		if (*num_best_mappings_reported >= 1) {
 			flag |= BAM_FSECONDARY;
 		}
-		EmplaceBackMappingRecord(read_id, read_name, barcode_key, 1, ref_start_position, rid, flag, 0, is_unique, mapq, NM, n_cigar, cigar, MD_tag, &((*mappings_on_diff_ref_seqs)[rid])); 
+		EmplaceBackMappingRecord(read_id, read_name, barcode_key, 1, ref_start_position, rid, flag, 0, is_unique, mapq, NM, n_cigar, cigar, MD_tag, read, read_batch.GetSequenceQualAt(read_index), &((*mappings_on_diff_ref_seqs)[rid])); 
 	} else if (output_mapping_in_PAF_) {
         	EmplaceBackMappingRecord(read_id, read_name, read_length, barcode_key, ref_start_position, ref_end_position - ref_start_position + 1, mapq, direction, is_unique, 1, &((*mappings_on_diff_ref_seqs)[rid]));
 	} else {
