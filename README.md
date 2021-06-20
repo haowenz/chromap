@@ -28,9 +28,9 @@ cd chromap && make
 ## <a name="uguide"></a>User Guide
 
 Chromap is an ultrafast method for aligning and preprocessing high throughput
-chromatin profiles. Typical use cases include: (1) triming sequencing adapters,
+chromatin profiles. Typical use cases include: (1) trimming sequencing adapters,
 mapping bulk ATAC-seq or ChIP-seq genomic reads to the human genome and removing
-duplicates; (2) triming sequencing adapters, mapping single cell ATAC-seq genomic
+duplicates; (2) trimming sequencing adapters, mapping single cell ATAC-seq genomic
 reads to the human genome, correcting barcodes, removing duplicates and performing
 Tn5 shift; (3) split alignment of Hi-C reads against a reference genome. In all
 these three cases, Chromap is 10-20 times faster while being accurate.
