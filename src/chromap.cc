@@ -707,6 +707,9 @@ void Chromap<MappingRecord>::PostProcessingInLowMemory(uint32_t num_mappings_in_
   double sort_and_dedupe_start_time = Chromap<>::GetRealTime();
   // Calculate block size and initialize
   uint64_t max_mem_size = 10 * ((uint64_t)1 << 30);
+  if (output_mapping_in_SAM_ || output_mapping_in_pairs_ || output_mapping_in_PAF_) {
+    max_mem_size = (uint64_t)1 << 30;
+  }
   for (size_t hi = 0; hi < temp_mapping_file_handles_.size(); ++hi) {
     temp_mapping_file_handles_[hi].block_size = max_mem_size / temp_mapping_file_handles_.size() / sizeof(MappingRecord);
     temp_mapping_file_handles_[hi].InitializeTempMappingLoading(num_reference_sequences);
@@ -957,6 +960,13 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
     mappings_on_diff_ref_seqs_.emplace_back(std::vector<MappingRecord>());
     deduped_mappings_on_diff_ref_seqs_.emplace_back(std::vector<MappingRecord>());
   }
+  // Preprocess barcodes for single cell data
+  if (!is_bulk_data_) {
+    if (!barcode_whitelist_file_path_.empty()) {
+      LoadBarcodeWhitelist();
+      ComputeBarcodeAbundance(initial_num_sample_barcodes_);
+    }
+  }
   // Initialize output tools
   if (output_mapping_in_BED_) {
     output_tools_ = std::unique_ptr<BEDPEOutputTools<MappingRecord> >(new BEDPEOutputTools<MappingRecord>);
@@ -970,18 +980,13 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
     output_tools_ = std::unique_ptr<PairsOutputTools<MappingRecord> >(new PairsOutputTools<MappingRecord>);
 		output_tools_->SetPairsCustomRidRank(pairs_custom_rid_rank_);
   }
-  output_tools_->InitializeMappingOutput(mapping_output_file_path_);
+  output_tools_->InitializeMappingOutput(barcode_length_, mapping_output_file_path_);
 	output_tools_->OutputHeader(num_reference_sequences, reference);
   
 	uint32_t num_mappings_in_mem = 0;
   uint64_t max_num_mappings_in_mem = 1 * ((uint64_t)1 << 30) / sizeof(MappingRecord);
-  //uint64_t max_num_mappings_in_mem = 1 * ((uint64_t)1 << 28) / sizeof(MappingRecord);
-  // Preprocess barcodes for single cell data
-  if (!is_bulk_data_) {
-    if (!barcode_whitelist_file_path_.empty()) {
-      LoadBarcodeWhitelist();
-      ComputeBarcodeAbundance(initial_num_sample_barcodes_);
-    }
+  if (output_mapping_in_SAM_ || output_mapping_in_pairs_ || output_mapping_in_PAF_) {
+    max_num_mappings_in_mem = 1 * ((uint64_t)1 << 28) / sizeof(MappingRecord);
   }
   static uint64_t thread_num_candidates = 0;
   static uint64_t thread_num_mappings = 0;
@@ -1911,6 +1916,13 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
     mappings_on_diff_ref_seqs_.emplace_back(std::vector<MappingRecord>());
     deduped_mappings_on_diff_ref_seqs_.emplace_back(std::vector<MappingRecord>());
   }
+  // Preprocess barcodes for single cell data
+  if (!is_bulk_data_) {
+    if (!barcode_whitelist_file_path_.empty()) {
+      LoadBarcodeWhitelist();
+      ComputeBarcodeAbundance(initial_num_sample_barcodes_);
+    }
+  }
   if (output_mapping_in_BED_) {
     output_tools_ = std::unique_ptr<BEDOutputTools<MappingRecord> >(new BEDOutputTools<MappingRecord>);
   } else if (output_mapping_in_TagAlign_) {
@@ -1920,7 +1932,7 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
   } else if (output_mapping_in_SAM_) {
     output_tools_ = std::unique_ptr<SAMOutputTools<MappingRecord> >(new SAMOutputTools<MappingRecord>);
   }
-  output_tools_->InitializeMappingOutput(mapping_output_file_path_);
+  output_tools_->InitializeMappingOutput(barcode_length_, mapping_output_file_path_);
   output_tools_->OutputHeader(num_reference_sequences, reference);
   mm_cache mm_to_candidates_cache(2000003);
   mm_to_candidates_cache.SetKmerLength(kmer_size_);
@@ -3875,6 +3887,11 @@ void Chromap<MappingRecord>::LoadBarcodeWhitelist() {
     std::string barcode;
     barcode_whitelist_file_line_string_stream >> barcode;
     size_t barcode_length = barcode.length();
+    if (num_barcodes == 0) {
+      barcode_length_ = barcode_length;
+    } else {
+      assert(barcode_length == barcode_length_);
+    }
     //if (first_line) {
     //  //size_t barcode_length = kmer.length();
     //  // Allocate memory to save pore model parameters
@@ -4485,6 +4502,9 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
     if (result.count("b")) {
       is_bulk_data = false;
       barcode_file_paths = result["barcode"].as<std::vector<std::string> >();
+      if (result.count("barcode-whitelist") == 0) {
+        chromap::Chromap<>::ExitWithMessage("There are input barcode files but a barcode whitelist file is missing!");
+      }
     }
     std::string barcode_whitelist_file_path;
     if (result.count("barcode-whitelist")) {

@@ -945,7 +945,8 @@ class OutputTools {
     }
     fclose(temp_mapping_file);
   }
-  inline void InitializeMappingOutput(const std::string &mapping_output_file_path) {
+  inline void InitializeMappingOutput(uint32_t cell_barcode_length, const std::string &mapping_output_file_path) {
+    cell_barcode_length_ = cell_barcode_length;
     mapping_output_file_path_ = mapping_output_file_path;
     mapping_output_file_ = fopen(mapping_output_file_path_.c_str(), "w");
     assert(mapping_output_file_ != NULL);
@@ -1256,7 +1257,11 @@ inline void SAMOutputTools<SAMMapping>::AppendMapping(uint32_t rid, const Sequen
   //std::string strand = (mapping.direction & 1) == 1 ? "+" : "-";
   //uint32_t mapping_end_position = mapping.fragment_start_position + mapping.fragment_length;
   const char *reference_sequence_name = (mapping.flag & BAM_FUNMAP) > 0 ? "*" : reference.GetSequenceNameAt(rid);
-  this->AppendMappingOutput(mapping.read_name + "\t" + std::to_string(mapping.flag) + "\t" + std::string(reference_sequence_name) + "\t" + std::to_string(mapping.GetStartPosition()) + "\t" + std::to_string(mapping.mapq) + "\t" + mapping.GenerateCigarString() + "\t*\t" + std::to_string(0) + "\t" + std::to_string(0) + "\t*\t*\t" + mapping.GenerateIntTagString("NM", mapping.NM) + "\tMD:Z:" + mapping.MD + "\tCB:Z:" + Seed2Sequence(mapping.cell_barcode, cell_barcode_length_) + "\n");
+  if (cell_barcode_length_ > 0) {
+    this->AppendMappingOutput(mapping.read_name + "\t" + std::to_string(mapping.flag) + "\t" + std::string(reference_sequence_name) + "\t" + std::to_string(mapping.GetStartPosition()) + "\t" + std::to_string(mapping.mapq) + "\t" + mapping.GenerateCigarString() + "\t*\t" + std::to_string(0) + "\t" + std::to_string(0) + "\t*\t*\t" + mapping.GenerateIntTagString("NM", mapping.NM) + "\tMD:Z:" + mapping.MD + "\tCB:Z:" + Seed2Sequence(mapping.cell_barcode, cell_barcode_length_) + "\n");
+  } else {
+    this->AppendMappingOutput(mapping.read_name + "\t" + std::to_string(mapping.flag) + "\t" + std::string(reference_sequence_name) + "\t" + std::to_string(mapping.GetStartPosition()) + "\t" + std::to_string(mapping.mapq) + "\t" + mapping.GenerateCigarString() + "\t*\t" + std::to_string(0) + "\t" + std::to_string(0) + "\t*\t*\t" + mapping.GenerateIntTagString("NM", mapping.NM) + "\tMD:Z:" + mapping.MD + "\n");
+  }
 }
 
 template <>

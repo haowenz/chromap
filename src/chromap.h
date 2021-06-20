@@ -286,6 +286,7 @@ class Chromap {
   uint64_t num_sample_barcodes_ = 0;
   uint64_t num_barcode_in_whitelist_ = 0;
   uint64_t num_corrected_barcode_ = 0;
+  uint32_t barcode_length_ = 0;
   khash_t(k32)* barcode_histogram_;
   khash_t(k32)* barcode_index_table_;
   // For peak calling
