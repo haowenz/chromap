@@ -704,6 +704,9 @@ void Chromap<MappingRecord>::PostProcessingInLowMemory(uint32_t num_mappings_in_
       mappings_on_diff_ref_seqs_[i].clear();
     }
   }
+  if (temp_mapping_file_handles_.size() == 0) {
+    return;
+	}
   double sort_and_dedupe_start_time = Chromap<>::GetRealTime();
   // Calculate block size and initialize
   uint64_t max_mem_size = 10 * ((uint64_t)1 << 30);
