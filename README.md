@@ -48,6 +48,8 @@ If you want to compile from the source, you need to have the GCC compiler, GNU m
 and zlib development files installed. Then type `make` in the source code
 directory to compile. 
 
+TRUST4 is also available form conda, including [bioconda](https://anaconda.org/bioconda/chromap). You can install Chromap with `conda install -c bioconda chromap` or `conda install -c liulab-dfci chromap`.
+
 ### <a name="general"></a>General usage
 Before mapping, an index of the reference needs to be created and saved on the disk:
 
