@@ -1744,8 +1744,8 @@ void Chromap<MappingRecord>::ProcessBestMappingsForPairedEndReadOnOneDirection(D
 				}
 				//mapq |= (uint8_t)1;
 				if (output_mapping_in_SAM_) {
-				  uint16_t flag1 = 1;
-				  uint16_t flag2 = 1;
+				  uint16_t flag1 = 3;
+				  uint16_t flag2 = 3;
 				  if (first_read_direction == kNegative) {
 				  	flag1 |= BAM_FREVERSE;
 				  	flag2 |= BAM_FMREVERSE;

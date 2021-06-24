@@ -372,18 +372,20 @@ struct SAMMapping {
     return alignment_length;
   }
   uint32_t GetStartPosition() const { // inclusive
-    if (IsPositive()) {
+    return pos + 1 ;
+    /*if (IsPositive()) {
       return pos + 1;
     } else {
-      return pos + 1 - GetAlignmentLength();
-    }
+      return pos + 1 - GetAlignmentLength() + 1;
+    }*/
   }
   uint32_t GetEndPosition() const { // exclusive
-    if (IsPositive()) {
+    return pos + GetAlignmentLength();
+    /*if (IsPositive()) {
       return pos + GetAlignmentLength();
     } else {
       return pos + 1;
-    }
+    }*/
   }
   uint16_t GetStructSize() const {
     return 2 * sizeof(uint32_t) + 2 * sizeof(uint16_t) + 2 * sizeof(uint8_t) + (read_name.length() + MD.length()) * sizeof(char) + n_cigar * sizeof(uint32_t);
@@ -1275,7 +1277,6 @@ inline void SAMOutputTools<SAMMapping>::AppendMapping(uint32_t rid, const Sequen
   //uint32_t mapping_end_position = mapping.fragment_start_position + mapping.fragment_length;
   const char *reference_sequence_name = (mapping.flag & BAM_FUNMAP) > 0 ? "*" : reference.GetSequenceNameAt(rid);
   const uint32_t mapping_start_position = mapping.GetStartPosition();
-
   this->AppendMappingOutput(mapping.read_name + "\t" + std::to_string(mapping.flag) + "\t" + std::string(reference_sequence_name) + "\t" + std::to_string(mapping_start_position) + "\t" + std::to_string(mapping.mapq) + "\t" + mapping.GenerateCigarString() + "\t*\t" + std::to_string(0) + "\t" + std::to_string(0) + "\t" + mapping.sequence + "\t" + mapping.sequence_qual + "\t" + mapping.GenerateIntTagString("NM", mapping.NM) + "\tMD:Z:" + mapping.MD);
   if (cell_barcode_length_ > 0) {
     this->AppendMappingOutput("\tCB:Z:" + Seed2Sequence(mapping.cell_barcode, cell_barcode_length_));
