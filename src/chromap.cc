@@ -2433,7 +2433,7 @@ void Chromap<MappingRecord>::ProcessBestMappingsForSingleEndRead(Direction mappi
 	//printf("%d %d\n", split_site, read_length);
 	GetRefStartEndPositionForReadFromMapping(mapping_direction, mappings[mi], effect_read, read_length, split_site, 
 		reference, &ref_start_position, &ref_end_position, &n_cigar, &cigar, &NM, MD_tag) ;
-	mapq = GetMAPQForSingleEndRead(error_threshold_, num_candidates, repetitive_seed_length, ref_end_position - ref_start_position + 1, min_num_errors, num_best_mappings, second_min_num_errors, num_second_best_mappings, read_length);
+	mapq = GetMAPQForSingleEndRead(error_threshold_, num_candidates, repetitive_seed_length, ref_end_position - ref_start_position + 1, min_num_errors, num_best_mappings, second_min_num_errors, num_second_best_mappings, error_threshold_ / 2 < 6 ? error_threshold_/2 : 6, read_length);
         
 	if (output_mapping_in_SAM_) {
 	        uint16_t flag = mapping_direction == kPositive ? 0 : BAM_FREVERSE;
@@ -2527,7 +2527,7 @@ uint32_t Chromap<MappingRecord>::LoadSingleEndReadsWithBarcodes(SequenceBatch *r
     ++num_loaded_reads;
   }
   if (num_loaded_reads > 0) {
-    std::cerr << "Loaded " << num_loaded_reads << " reads in "<< Chromap<>::GetRealTime() - real_start_time << "s. ";
+    std::cerr << "Loaded " << num_loaded_reads << " reads in "<< Chromap<>::GetRealTime() - real_start_time << "s.\n";
   } else {
     std::cerr << "No more reads.\n";
   }
@@ -3917,7 +3917,7 @@ void Chromap<MappingRecord>::LoadBarcodeWhitelist() {
 }
 
 template <typename MappingRecord>
-uint8_t Chromap<MappingRecord>::GetMAPQForSingleEndRead(int error_threshold, int num_candidates, uint32_t repetitive_seed_length, uint16_t alignment_length, int min_num_errors, int num_best_mappings, int second_min_num_errors, int num_second_best_mappings, int read_length) {
+uint8_t Chromap<MappingRecord>::GetMAPQForSingleEndRead(int error_threshold, int num_candidates, uint32_t repetitive_seed_length, uint16_t alignment_length, int min_num_errors, int num_best_mappings, int second_min_num_errors, int num_second_best_mappings, int max_num_error_difference, int read_length) {
   //int mapq_coef = 60;
   //int mapq_coef_length = 45;
   int mapq_coef_length = 50;
@@ -3945,8 +3945,8 @@ uint8_t Chromap<MappingRecord>::GetMAPQForSingleEndRead(int error_threshold, int
     //  mapq = 0;
     //}
   } else {
-    if (second_min_num_errors > min_num_errors + 2) {
-      second_min_num_errors = min_num_errors + 2;
+    if (second_min_num_errors > min_num_errors + max_num_error_difference) {
+      second_min_num_errors = min_num_errors + max_num_error_difference;
     }
     //mapq = (int)(mapq_coef * ((double)(second_min_num_errors - min_num_errors) / second_min_num_errors) + .499);
     //double tmp = alignment_identity * alignment_identity;
@@ -4089,9 +4089,9 @@ uint8_t Chromap<MappingRecord>::GetMAPQForPairedEndRead(int num_positive_candida
     }
   }
   //mapq1 = GetMAPQForSingleEndRead(error_threshold_, num_positive_candidates, repetitive_seed_length1, positive_alignment_length, min_num_errors1, num_best_mappings1, second_min_num_errors1, num_second_best_mappings1, read1_length);
-  mapq1 = GetMAPQForSingleEndRead(error_threshold_, num_positive_candidates, repetitive_seed_length1, positive_alignment_length, num_errors1, num_best_mappings1, second_min_num_errors1, num_second_best_mappings1, read1_length);
+  mapq1 = GetMAPQForSingleEndRead(error_threshold_, num_positive_candidates, repetitive_seed_length1, positive_alignment_length, num_errors1, num_best_mappings1, second_min_num_errors1, num_second_best_mappings1, 2, read1_length);
   //mapq2 = GetMAPQForSingleEndRead(error_threshold_, num_negative_candidates, repetitive_seed_length2, negative_alignment_length, min_num_errors2, num_best_mappings2, second_min_num_errors2, num_second_best_mappings2, read2_length);
-  mapq2 = GetMAPQForSingleEndRead(error_threshold_, num_negative_candidates, repetitive_seed_length2, negative_alignment_length, num_errors2, num_best_mappings2, second_min_num_errors2, num_second_best_mappings2, read2_length);
+  mapq2 = GetMAPQForSingleEndRead(error_threshold_, num_negative_candidates, repetitive_seed_length2, negative_alignment_length, num_errors2, num_best_mappings2, second_min_num_errors2, num_second_best_mappings2, 2, read2_length);
   //std::cerr << " 1:" << (int)mapq1 << " 2:" << (int)mapq2 << " mapq_pe:" << (int)mapq_pe << "\n";
   if (!split_alignment_) {
     //mapq1 = mapq1 > mapq_pe ? mapq1 : mapq_pe < mapq1 + 40? mapq_pe : mapq1 + 40;
