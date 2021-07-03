@@ -2433,7 +2433,7 @@ void Chromap<MappingRecord>::ProcessBestMappingsForSingleEndRead(Direction mappi
 	//printf("%d %d\n", split_site, read_length);
 	GetRefStartEndPositionForReadFromMapping(mapping_direction, mappings[mi], effect_read, read_length, split_site, 
 		reference, &ref_start_position, &ref_end_position, &n_cigar, &cigar, &NM, MD_tag) ;
-	mapq = GetMAPQForSingleEndRead(error_threshold_, num_candidates, repetitive_seed_length, ref_end_position - ref_start_position + 1, min_num_errors, num_best_mappings, second_min_num_errors, num_second_best_mappings, error_threshold_ / 2 < 6 ? error_threshold_/2 : 6, read_length);
+	mapq = GetMAPQForSingleEndRead(error_threshold_, num_candidates, repetitive_seed_length, ref_end_position - ref_start_position + 1, min_num_errors, num_best_mappings, second_min_num_errors, num_second_best_mappings, error_threshold_, read_length);
         
 	if (output_mapping_in_SAM_) {
 	        uint16_t flag = mapping_direction == kPositive ? 0 : BAM_FREVERSE;
