@@ -165,7 +165,7 @@ class Chromap {
   void OutputBarcodeStatistics();
   void OutputMappingStatistics();
   void OutputMappingStatistics(uint32_t num_reference_sequences, const std::vector<std::vector<MappingRecord> > &uni_mappings, const std::vector<std::vector<MappingRecord> > &multi_mappings);
-  uint8_t GetMAPQForSingleEndRead(int error_threshold, int num_candidates, uint32_t repetitive_seed_length, uint16_t alignment_length, int min_num_errors, int num_best_mappings, int second_min_num_errors, int num_second_best_mappings, int read_length);
+  uint8_t GetMAPQForSingleEndRead(int error_threshold, int num_candidates, uint32_t repetitive_seed_length, uint16_t alignment_length, int min_num_errors, int num_best_mappings, int second_min_num_errors, int num_second_best_mappings, int max_num_error_difference, int read_length);
   uint8_t GetMAPQForPairedEndRead(int num_positive_candidates, int num_negative_candidates, uint32_t repetitive_seed_length1, uint32_t repetitive_seed_length2, uint16_t positive_alignment_length, uint16_t negative_alignment_length, int min_sum_errors, int num_best_mappings, int second_min_sum_errors, int num_second_best_mappings, int num_errors1, int num_errors2, int min_num_errors1, int min_num_errors2, int num_best_mappings1, int num_best_mappings2, int second_min_num_errors1, int second_min_num_errors2, int num_second_best_mappings1, int num_second_best_mappings2, int read1_length, int read2_length, int force_mapq, uint8_t &mapq1, uint8_t &mapq2);
   void SortOutputMappings(uint32_t num_reference_sequences, std::vector<std::vector<MappingRecord> > *mappings);
   void BuildAugmentedTree(uint32_t ref_id);
