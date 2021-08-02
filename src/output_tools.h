@@ -298,7 +298,7 @@ struct PairedPAFMapping {
 struct SAMMapping {
   uint32_t read_id;
   std::string read_name;
-  uint32_t cell_barcode;
+  uint64_t cell_barcode;
   //uint16_t read_length;
   //uint32_t fragment_start_position;
   //uint16_t fragment_length;
@@ -329,7 +329,7 @@ struct SAMMapping {
   bool HasSamePosition(const SAMMapping& m) const {
     return std::tie(pos, rid, is_rev) == std::tie(m.pos, m.rid, m.is_rev);
   }
-  uint32_t GetBarcode() const {
+  uint64_t GetBarcode() const {
     return cell_barcode;
   }
   void Tn5Shift() {
@@ -396,7 +396,7 @@ struct SAMMapping {
     uint16_t read_name_length = read_name.length();
     num_written_bytes += fwrite(&read_name_length, sizeof(uint16_t), 1, temp_mapping_output_file);
     num_written_bytes += fwrite(read_name.data(), sizeof(char), read_name_length, temp_mapping_output_file);
-    num_written_bytes += fwrite(&cell_barcode, sizeof(uint32_t), 1, temp_mapping_output_file);
+    num_written_bytes += fwrite(&cell_barcode, sizeof(uint64_t), 1, temp_mapping_output_file);
     num_written_bytes += fwrite(&num_dups, sizeof(uint8_t), 1, temp_mapping_output_file);
     num_written_bytes += fwrite(&pos, sizeof(int64_t), 1, temp_mapping_output_file);
     num_written_bytes += fwrite(&rid, sizeof(int), 1, temp_mapping_output_file);
@@ -426,7 +426,7 @@ struct SAMMapping {
     num_read_bytes += fread(&read_name_length, sizeof(uint16_t), 1, temp_mapping_output_file);
     read_name = std::string(read_name_length, '\0');
     num_read_bytes += fread(&(read_name[0]), sizeof(char), read_name_length, temp_mapping_output_file);
-    num_read_bytes += fread(&cell_barcode, sizeof(uint32_t), 1, temp_mapping_output_file);
+    num_read_bytes += fread(&cell_barcode, sizeof(uint64_t), 1, temp_mapping_output_file);
     num_read_bytes += fread(&num_dups, sizeof(uint8_t), 1, temp_mapping_output_file);
     num_read_bytes += fread(&pos, sizeof(int64_t), 1, temp_mapping_output_file);
     num_read_bytes += fread(&rid, sizeof(int), 1, temp_mapping_output_file);
@@ -465,7 +465,7 @@ struct SAMMapping {
 struct PairsMapping {  
   uint32_t read_id;
   std::string read_name;
-  uint32_t cell_barcode;
+  uint64_t cell_barcode;
   int rid1;
   int rid2;
   uint32_t pos1; 
@@ -524,7 +524,7 @@ struct PairsMapping {
     uint16_t read_name_length = read_name.length();
     num_written_bytes += fwrite(&read_name_length, sizeof(uint16_t), 1, temp_mapping_output_file);
     num_written_bytes += fwrite(read_name.data(), sizeof(char), read_name_length, temp_mapping_output_file);
-    num_written_bytes += fwrite(&cell_barcode, sizeof(uint32_t), 1, temp_mapping_output_file);
+    num_written_bytes += fwrite(&cell_barcode, sizeof(uint64_t), 1, temp_mapping_output_file);
     num_written_bytes += fwrite(&rid1, sizeof(int), 1, temp_mapping_output_file);
     num_written_bytes += fwrite(&rid2, sizeof(int), 1, temp_mapping_output_file);
     num_written_bytes += fwrite(&pos1, sizeof(uint32_t), 1, temp_mapping_output_file);
@@ -542,7 +542,7 @@ struct PairsMapping {
     num_read_bytes += fread(&read_name_length, sizeof(uint16_t), 1, temp_mapping_output_file);
     read_name = std::string(read_name_length, '\0');
     num_read_bytes += fread(&(read_name[0]), sizeof(char), read_name_length, temp_mapping_output_file);
-    num_read_bytes += fread(&cell_barcode, sizeof(uint32_t), 1, temp_mapping_output_file);
+    num_read_bytes += fread(&cell_barcode, sizeof(uint64_t), 1, temp_mapping_output_file);
     num_read_bytes += fread(&rid1, sizeof(int), 1, temp_mapping_output_file);
     num_read_bytes += fread(&rid2, sizeof(int), 1, temp_mapping_output_file);
     num_read_bytes += fread(&pos1, sizeof(uint32_t), 1, temp_mapping_output_file);
@@ -560,7 +560,7 @@ struct PairsMapping {
 
 struct MappingWithBarcode {
   uint32_t read_id;
-  uint32_t cell_barcode;
+  uint64_t cell_barcode;
   uint32_t fragment_start_position;
   uint16_t fragment_length;
   uint8_t mapq : 6, direction : 1, is_unique : 1;
@@ -575,7 +575,7 @@ struct MappingWithBarcode {
   bool HasSamePosition(const MappingWithBarcode& m) const {
     return std::tie(fragment_start_position) == std::tie(m.fragment_start_position);
   }
-  uint32_t GetBarcode() const {
+  uint64_t GetBarcode() const {
     return cell_barcode;
   }
   void Tn5Shift() {
@@ -635,7 +635,7 @@ struct MappingWithoutBarcode {
 
 struct PairedEndMappingWithBarcode {
   uint32_t read_id;
-  uint32_t cell_barcode;
+  uint64_t cell_barcode;
   uint32_t fragment_start_position;
   uint16_t fragment_length;
   uint8_t mapq : 6, direction : 1, is_unique : 1;
@@ -652,7 +652,7 @@ struct PairedEndMappingWithBarcode {
   bool HasSamePosition(const PairedEndMappingWithBarcode& m) const {
     return std::tie(fragment_start_position, fragment_length) == std::tie(m.fragment_start_position, m.fragment_length);
   }
-  uint32_t GetBarcode() const {
+  uint64_t GetBarcode() const {
     return cell_barcode;
   }
   void Tn5Shift() {
@@ -1016,7 +1016,7 @@ class OutputTools {
     const char *sequence_name = reference.GetSequenceNameAt(rid);
     fprintf(peak_output_file_, "%s\t%u\t%u\n", sequence_name, peak_start_position + 1, peak_start_position + peak_length);
   }
-  void AppendBarcodeOutput(uint32_t barcode_key) {
+  void AppendBarcodeOutput(uint64_t barcode_key) {
     fprintf(barcode_output_file_, "%s-1\n", Seed2Sequence(barcode_key, cell_barcode_length_).data());
   }
   void WriteMatrixOutputHead(uint64_t num_peaks, uint64_t num_barcodes, uint64_t num_lines) {
