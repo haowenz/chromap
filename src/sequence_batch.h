@@ -13,7 +13,10 @@ namespace chromap {
 class SequenceBatch {
  public:
   KSEQ_INIT(gzFile, gzread);
-  SequenceBatch(){}
+  SequenceBatch(){
+		effective_range_[0] = 0;
+		effective_range_[1] = -1;
+	}
   SequenceBatch(uint32_t max_num_sequences) : max_num_sequences_(max_num_sequences) {
     // Construct once and use update methods when loading each batch
     sequence_batch_.reserve(max_num_sequences_);
@@ -22,6 +25,8 @@ class SequenceBatch {
       sequence_batch_.back()->f = NULL;
     }
     negative_sequence_batch_.assign(max_num_sequences_, "");
+		effective_range_[0] = 0;
+		effective_range_[1] = -1;
   }
   ~SequenceBatch(){
     if (sequence_batch_.size() > 0) {
@@ -66,6 +71,10 @@ class SequenceBatch {
 	inline int GetSequenceBatchSize() const {
 		return sequence_batch_.size();
 	}
+  inline void SetSeqEffectiveRange(int start, int end) {
+    effective_range_[0] = start;
+    effective_range_[1] = end;
+  }
 //  inline char GetReverseComplementBaseOfSequenceAt(uint32_t sequence_index, uint32_t position) {
 //    kseq_t *sequence = sequence_batch_[sequence_index];
 //    return Uint8ToChar(((uint8_t)3) ^ (CharToUint8((sequence->seq.s)[sequence->seq.l - position - 1])));
@@ -170,8 +179,23 @@ class SequenceBatch {
   kseq_t *sequence_kseq_;
   std::vector<kseq_t*> sequence_batch_;
   std::vector<std::string> negative_sequence_batch_;
+  int effective_range_[2] ; // actual range within each sequence.
   static constexpr uint8_t char_to_uint8_table_[256] = {4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 0, 4, 1, 4, 4, 4, 2, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 0, 4, 1, 4, 4, 4, 2, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4};
   static constexpr char uint8_to_char_table_[8] = {'A', 'C', 'G', 'T', 'N', 'N', 'N', 'N'};
+  void ReplaceByEffectiveRange(kstring_t &seq) {
+    if (effective_range_[0] == 0 && effective_range_[1] == -1)
+      return;
+    int i ;
+    int start = effective_range_[0];
+    int end = effective_range_[1];
+    if (effective_range_[1] == -1)
+      end = seq.l - 1;
+    for (i = 0; i < end - start + 1; ++i) {
+      seq.s[i] = seq.s[start + i];
+    }
+    seq.s[i] = '\0';
+    seq.l = end - start + 1;
+  }
 };
 } // namespace chromap
 
