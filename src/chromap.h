@@ -43,7 +43,7 @@ struct Peak {
 };
 
 KHASH_MAP_INIT_INT64(k128, uint128_t);
-KHASH_MAP_INIT_INT(k64_seq, uint64_t);
+KHASH_MAP_INIT_INT64(k64_seq, uint64_t);
 KHASH_SET_INIT_INT(k32_set);
 KHASH_MAP_INIT_INT64(kmatrix, uint32_t);
 
