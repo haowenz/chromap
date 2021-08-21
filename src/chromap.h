@@ -93,70 +93,8 @@ class Chromap {
     } else if (error_threshold_ < 16) {
       NUM_VPU_LANES_ = 4;
     }
-
-    // Parse read format
-    uint32_t i ; 
-    int j = 0;
-    int k = 0; // for read1, read2, or barcode
-    read1_format_[0] = 0; read1_format_[1] = -1 ;
-    read2_format_[0] = 0; read2_format_[1] = -1 ;
-    barcode_format_[0] = 0; barcode_format_[1] = -1 ;
-    int fields[2] = {0, -1} ;
-		char buffer[20] ;
-		int blen = 0;
-    for (i = 0; i < read_format.size(); ++i) {
-      if (read_format[i] == ',' || i == 0) {
-				if (i > 0) {
-					buffer[blen] = '\0';
-					fields[j] = atoi(buffer);
-
-					if (k == 0)
-						memcpy(read1_format_, fields, sizeof(fields));
-					else if (k == 1)
-						memcpy(read2_format_, fields, sizeof(fields));
-					else
-						memcpy(barcode_format_, fields, sizeof(fields));
-
-					++i;
-				}
-        if (read_format[i] == 'r' && read_format[i + 1] == '1') 
-          k = 0;
-        else if (read_format[i] == 'r' && read_format[i + 1] == '2') 
-          k = 1;
-        else if (read_format[i] == 'b' && read_format[i + 1] == 'c')
-          k = 2;
-        else
-          ExitWithMessage("Unknown read format: " + read_format + "\n");
-        j = 0;
-				fields[0] = fields[1] = 0;
-				i += 2;
-				blen = 0;
-      } else {
-        if (read_format[i] != ':') {
-          if (j < 2) {
-						buffer[blen] = read_format[i] ;
-						++blen;
-          }
-					else {
-						ExitWithMessage("Unknown read format: " + read_format + "\n");
-          }
-        } else {
-					buffer[blen] = '\0';
-					fields[j] = atoi(buffer);
-          ++j ;
-					blen = 0;
-        }
-      }
-    }
-		buffer[blen] = '\0';
-		fields[j] = atoi(buffer);
-    // By initialization, it is fine even if there is no read_format specified  
-    if (k == 0)
-      memcpy(read1_format_, fields, sizeof(fields));
-    else if (k == 1)
-      memcpy(read2_format_, fields, sizeof(fields));
-    else
-      memcpy(barcode_format_, fields, sizeof(fields));
+		
+    ParseReadFormat(read_format);
   }
 
   ~Chromap(){
@@ -251,6 +189,7 @@ class Chromap {
   void GetRefStartEndPositionForReadFromMapping(Direction mapping_direction, const std::pair<int, uint64_t> &mapping, const char *read, int read_length, int in_split_site, const SequenceBatch &reference, uint32_t *ref_start_position, uint32_t *ref_end_position, int *n_cigar, uint32_t **cigar, int *NM, std::string &MD_TAG);
 	void GetRidRank(const std::string rid_order_path, const SequenceBatch &reference, std::vector<int> &rid_rank);
 	void RerankCandidatesRid(std::vector<Candidate> &candidates);
+  void ParseReadFormat(const std::string &read_format);
 
   inline static double GetRealTime() {
     struct timeval tp;

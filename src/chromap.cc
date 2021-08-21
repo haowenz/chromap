@@ -4162,6 +4162,72 @@ uint8_t Chromap<MappingRecord>::GetMAPQForPairedEndRead(int num_positive_candida
   return (uint8_t)mapq;
 }
 
+template <typename MappingRecord>
+void Chromap<MappingRecord>::ParseReadFormat(const std::string &read_format) {
+    uint32_t i ; 
+    int j = 0;
+    int k = 0; // for read1, read2, or barcode
+    read1_format_[0] = 0; read1_format_[1] = -1 ;
+    read2_format_[0] = 0; read2_format_[1] = -1 ;
+    barcode_format_[0] = 0; barcode_format_[1] = -1 ;
+    int fields[2] = {0, -1} ;
+		char buffer[20] ;
+		int blen = 0;
+    for (i = 0; i < read_format.size(); ++i) {
+      if (read_format[i] == ',' || i == 0) {
+				if (i > 0) {
+					buffer[blen] = '\0';
+					fields[j] = atoi(buffer);
+
+					if (k == 0)
+						memcpy(read1_format_, fields, sizeof(fields));
+					else if (k == 1)
+						memcpy(read2_format_, fields, sizeof(fields));
+					else
+						memcpy(barcode_format_, fields, sizeof(fields));
+
+					++i;
+				}
+        if (read_format[i] == 'r' && read_format[i + 1] == '1') 
+          k = 0;
+        else if (read_format[i] == 'r' && read_format[i + 1] == '2') 
+          k = 1;
+        else if (read_format[i] == 'b' && read_format[i + 1] == 'c')
+          k = 2;
+        else
+          ExitWithMessage("Unknown read format: " + read_format + "\n");
+        j = 0;
+				fields[0] = fields[1] = 0;
+				i += 2;
+				blen = 0;
+      } else {
+        if (read_format[i] != ':') {
+          if (j < 2) {
+						buffer[blen] = read_format[i] ;
+						++blen;
+          }
+					else {
+						ExitWithMessage("Unknown read format: " + read_format + "\n");
+          }
+        } else {
+					buffer[blen] = '\0';
+					fields[j] = atoi(buffer);
+          ++j ;
+					blen = 0;
+        }
+      }
+    }
+		buffer[blen] = '\0';
+		fields[j] = atoi(buffer);
+    // By initialization, it is fine even if there is no read_format specified  
+    if (k == 0)
+      memcpy(read1_format_, fields, sizeof(fields));
+    else if (k == 1)
+      memcpy(read2_format_, fields, sizeof(fields));
+    else
+      memcpy(barcode_format_, fields, sizeof(fields));
+}
+
 void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
   cxxopts::Options options("chromap", "Fast alignment and preprocessing of chromatin profiles");
   options.add_options("Indexing")
