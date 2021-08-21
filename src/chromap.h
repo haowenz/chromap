@@ -45,15 +45,6 @@ struct Peak {
   uint32_t index;
 };
 
-enum MappingOutputFormat {
-  MAPPINGFORMAT_UNKNOWN,
-  MAPPINGFORMAT_BED,
-  MAPPINGFORMAT_TAGALIGN,
-  MAPPINGFORMAT_PAF,
-  MAPPINGFORMAT_SAM,
-  MAPPINGFORMAT_PAIRS
-};
-
 KHASH_MAP_INIT_INT64(k128, uint128_t);
 KHASH_MAP_INIT_INT64(k64_seq, uint64_t);
 KHASH_SET_INIT_INT(k32_set);
@@ -674,7 +665,7 @@ class Chromap {
   std::vector<std::vector<uint32_t> > tree_extras_on_diff_ref_seqs_;  // max
   // (max_level, # nodes)
   std::vector<std::pair<int, uint32_t> > tree_info_on_diff_ref_seqs_;
-  std::unique_ptr<OutputTools<MappingRecord> > output_tools_;
+  OutputTools<MappingRecord> output_tools_;
   // For mapping stats.
   uint64_t num_candidates_ = 0;
   uint64_t num_mappings_ = 0;

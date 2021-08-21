@@ -9,9 +9,19 @@
 #include <string>
 #include <vector>
 
-#include "chromap.h"
+#include "sequence_batch.h"
 
 namespace chromap {
+
+enum MappingOutputFormat {
+  MAPPINGFORMAT_UNKNOWN,
+  MAPPINGFORMAT_BED,
+  MAPPINGFORMAT_TAGALIGN,
+  MAPPINGFORMAT_PAF,
+  MAPPINGFORMAT_SAM,
+  MAPPINGFORMAT_PAIRS
+};
+
 /****************************
  **** CIGAR related macros ***
  *****************************/
@@ -94,9 +104,8 @@ const int8_t bam_cigar_table[256] = {
  * BAM_CBACK       0      0
  * --------------------------------
  */
-#define bam_cigar_type(o)         \
-  (BAM_CIGAR_TYPE >> ((o) << 1) & \
-   3)  // bit 1: consume query; bit 2: consume reference
+#define bam_cigar_type(o) (BAM_CIGAR_TYPE >> ((o) << 1) & 3)
+// bit 1: consume query; bit 2: consume reference
 
 /*! @abstract the read is paired in sequencing, no matter whether it is mapped
  * in a pair */
@@ -549,6 +558,8 @@ struct SAMMapping {
     return num_read_bytes;
   }
 };
+
+// TODO(Haowen) : Add PairedSAMMapping.
 
 // Format for pairtools for HiC data.
 struct PairsMapping {
@@ -1079,8 +1090,10 @@ template <typename MappingRecord>
 class OutputTools {
  public:
   OutputTools() {}
-  virtual ~OutputTools() {}
-  inline virtual void OutputTempMapping(
+  ~OutputTools() {}
+
+  // Output the mappings in a temp file.
+  inline void OutputTempMapping(
       const std::string &temp_mapping_output_file_path,
       uint32_t num_reference_sequences,
       const std::vector<std::vector<MappingRecord> > &mappings) {
@@ -1100,39 +1113,29 @@ class OutputTools {
   }
 
   inline void InitializeMappingOutput(
-      uint32_t cell_barcode_length,
-      const std::string &mapping_output_file_path) {
+      uint32_t cell_barcode_length, const std::string &mapping_output_file_path,
+      MappingOutputFormat &format) {
     cell_barcode_length_ = cell_barcode_length;
     mapping_output_file_path_ = mapping_output_file_path;
     mapping_output_file_ = fopen(mapping_output_file_path_.c_str(), "w");
     assert(mapping_output_file_ != NULL);
+    mapping_output_format_ = format;
   }
+
   inline void FinalizeMappingOutput() { fclose(mapping_output_file_); }
+
   inline void AppendMappingOutput(const std::string &line) {
     fprintf(mapping_output_file_, "%s", line.data());
   }
-  virtual void OutputHeader(uint32_t num_reference_sequences,
-                            const SequenceBatch &reference) = 0;
-  virtual void AppendMapping(uint32_t rid, const SequenceBatch &reference,
-                             const MappingRecord &mapping) = 0;
-  inline std::string GeneratePAFLine(
-      const SequenceBatch &query_batch, uint32_t query_index,
-      const int query_start, const int query_end, const char relative_strand,
-      const SequenceBatch &target_batch, uint32_t target_index,
-      const int target_start, const int target_end, const int num_matches,
-      const int alignment_length, const int mapping_quality) {
-    return std::string(query_batch.GetSequenceNameAt(query_index)) + "\t" +
-           std::to_string(query_batch.GetSequenceLengthAt(query_index)) + "\t" +
-           std::to_string(query_start) + "\t" + std::to_string(query_end) +
-           "\t" + relative_strand + "\t" +
-           std::string(target_batch.GetSequenceNameAt(target_index)) + "\t" +
-           std::to_string(target_batch.GetSequenceLengthAt(target_index)) +
-           "\t" + std::to_string(target_start) + "\t" +
-           std::to_string(target_end) + "\t" + std::to_string(num_matches) +
-           "\t" + std::to_string(alignment_length) + "\t" +
-           std::to_string(mapping_quality) + "\n";
-  }
+
+  void OutputHeader(uint32_t num_reference_sequences,
+                    const SequenceBatch &reference);
+
+  void AppendMapping(uint32_t rid, const SequenceBatch &reference,
+                     const MappingRecord &mapping);
+
   inline uint32_t GetNumMappings() const { return num_mappings_; }
+
   inline std::string Seed2Sequence(uint64_t seed, uint32_t seed_length) const {
     std::string sequence;
     sequence.reserve(seed_length);
@@ -1144,6 +1147,7 @@ class OutputTools {
     return sequence;
   }
 
+  // Below are functions to output feature matrix.
   inline void InitializeMatrixOutput(const std::string &matrix_output_prefix) {
     matrix_output_prefix_ = matrix_output_prefix;
     matrix_output_file_ =
@@ -1156,6 +1160,7 @@ class OutputTools {
         fopen((matrix_output_prefix_ + "_barcode.tsv").c_str(), "w");
     assert(barcode_output_file_ != NULL);
   }
+
   void OutputPeaks(uint32_t bin_size, uint32_t num_sequences,
                    const SequenceBatch &reference) {
     for (uint32_t rid = 0; rid < num_sequences; ++rid) {
@@ -1168,26 +1173,31 @@ class OutputTools {
       }
     }
   }
+
   void OutputPeaks(uint32_t peak_start_position, uint16_t peak_length,
                    uint32_t rid, const SequenceBatch &reference) {
     const char *sequence_name = reference.GetSequenceNameAt(rid);
     fprintf(peak_output_file_, "%s\t%u\t%u\n", sequence_name,
             peak_start_position + 1, peak_start_position + peak_length);
   }
+
   void AppendBarcodeOutput(uint64_t barcode_key) {
     fprintf(barcode_output_file_, "%s-1\n",
             Seed2Sequence(barcode_key, cell_barcode_length_).data());
   }
+
   void WriteMatrixOutputHead(uint64_t num_peaks, uint64_t num_barcodes,
                              uint64_t num_lines) {
     fprintf(matrix_output_file_, "%lu\t%lu\t%lu\n", num_peaks, num_barcodes,
             num_lines);
   }
+
   void AppendMatrixOutput(uint32_t peak_index, uint32_t barcode_index,
                           uint32_t num_mappings) {
     fprintf(matrix_output_file_, "%u\t%u\t%u\n", peak_index, barcode_index,
             num_mappings);
   }
+
   inline void FinalizeMatrixOutput() {
     fclose(matrix_output_file_);
     fclose(peak_output_file_);
@@ -1202,6 +1212,9 @@ class OutputTools {
  protected:
   std::string mapping_output_file_path_;
   FILE *mapping_output_file_;
+  // TODO(Haowen): use this variable to decide output in BED or TagAlign. It
+  // should be removed later.
+  MappingOutputFormat mapping_output_format_ = MAPPINGFORMAT_BED;
   uint32_t num_mappings_;
   uint32_t cell_barcode_length_ = 16;
   std::string matrix_output_prefix_;
@@ -1210,466 +1223,6 @@ class OutputTools {
   FILE *matrix_output_file_;
 };
 
-template <typename MappingRecord>
-class BEDOutputTools : public OutputTools<MappingRecord> {
-  void OutputHeader(uint32_t num_reference_sequences,
-                    const SequenceBatch &reference) {}
-  inline void AppendMapping(uint32_t rid, const SequenceBatch &reference,
-                            const MappingRecord &mapping) {
-    std::string strand = mapping.IsPositive() ? "+" : "-";
-    const char *reference_sequence_name = reference.GetSequenceNameAt(rid);
-    uint32_t mapping_end_position = mapping.GetEndPosition();
-    this->AppendMappingOutput(std::string(reference_sequence_name) + "\t" +
-                              std::to_string(mapping.GetStartPosition()) +
-                              "\t" + std::to_string(mapping_end_position) +
-                              "\tN\t" + std::to_string(mapping.mapq) + "\t" +
-                              strand + "\n");
-  }
-};
-
-template <>
-inline void BEDOutputTools<MappingWithBarcode>::AppendMapping(
-    uint32_t rid, const SequenceBatch &reference,
-    const MappingWithBarcode &mapping) {
-  std::string strand = mapping.IsPositive() ? "+" : "-";
-  const char *reference_sequence_name = reference.GetSequenceNameAt(rid);
-  uint32_t mapping_end_position = mapping.GetEndPosition();
-  this->AppendMappingOutput(
-      std::string(reference_sequence_name) + "\t" +
-      std::to_string(mapping.GetStartPosition()) + "\t" +
-      std::to_string(mapping_end_position) + "\t" +
-      Seed2Sequence(mapping.cell_barcode, cell_barcode_length_) + "\n");
-}
-
-template <typename MappingRecord>
-class BEDPEOutputTools : public OutputTools<MappingRecord> {
-  void OutputHeader(uint32_t num_reference_sequences,
-                    const SequenceBatch &reference) {}
-  inline void AppendMapping(uint32_t rid, const SequenceBatch &reference,
-                            const MappingRecord &mapping) {
-    std::string strand = mapping.IsPositive() ? "+" : "-";
-    const char *reference_sequence_name = reference.GetSequenceNameAt(rid);
-    uint32_t mapping_end_position = mapping.GetEndPosition();
-    this->AppendMappingOutput(std::string(reference_sequence_name) + "\t" +
-                              std::to_string(mapping.GetStartPosition()) +
-                              "\t" + std::to_string(mapping_end_position) +
-                              "\tN\t" + std::to_string(mapping.mapq) + "\t" +
-                              strand + "\n");
-  }
-};
-
-template <>
-// class BEDPEOutputTools<PairedEndMappingWithBarcode> : public
-// OutputTools<PairedEndMappingWithBarcode> {
-inline void BEDPEOutputTools<PairedEndMappingWithBarcode>::AppendMapping(
-    uint32_t rid, const SequenceBatch &reference,
-    const PairedEndMappingWithBarcode &mapping) {
-  std::string strand = mapping.IsPositive() ? "+" : "-";
-  const char *reference_sequence_name = reference.GetSequenceNameAt(rid);
-  uint32_t mapping_end_position = mapping.GetEndPosition();
-  this->AppendMappingOutput(
-      std::string(reference_sequence_name) + "\t" +
-      std::to_string(mapping.GetStartPosition()) + "\t" +
-      std::to_string(mapping_end_position) + "\t" +
-      Seed2Sequence(mapping.cell_barcode, cell_barcode_length_) + "\t" +
-      std::to_string(mapping.num_dups) + "\n");
-}
-//};
-
-template <typename MappingRecord>
-class TagAlignOutputTools : public OutputTools<MappingRecord> {
-  void OutputHeader(uint32_t num_reference_sequences,
-                    const SequenceBatch &reference) {}
-  inline void AppendMapping(uint32_t rid, const SequenceBatch &reference,
-                            const MappingRecord &mapping) {
-    std::string strand = mapping.IsPositive() ? "+" : "-";
-    const char *reference_sequence_name = reference.GetSequenceNameAt(rid);
-    uint32_t mapping_end_position = mapping.GetEndPosition();
-    this->AppendMappingOutput(std::string(reference_sequence_name) + "\t" +
-                              std::to_string(mapping.GetStartPosition()) +
-                              "\t" + std::to_string(mapping_end_position) +
-                              "\tN\t" + std::to_string(mapping.mapq) + "\t" +
-                              strand + "\n");
-  }
-};
-
-template <typename MappingRecord>
-class PairedTagAlignOutputTools : public OutputTools<MappingRecord> {
-  void OutputHeader(uint32_t num_reference_sequences,
-                    const SequenceBatch &reference) {}
-  inline void AppendMapping(uint32_t rid, const SequenceBatch &reference,
-                            const MappingRecord &mapping) {
-    bool positive_strand = mapping.IsPositive();
-    uint32_t positive_read_end =
-        mapping.fragment_start_position + mapping.positive_alignment_length;
-    uint32_t negative_read_end =
-        mapping.fragment_start_position + mapping.fragment_length;
-    uint32_t negative_read_start =
-        negative_read_end - mapping.negative_alignment_length;
-    const char *reference_sequence_name = reference.GetSequenceNameAt(rid);
-    if (positive_strand) {
-      this->AppendMappingOutput(
-          std::string(reference_sequence_name) + "\t" +
-          std::to_string(mapping.fragment_start_position) + "\t" +
-          std::to_string(positive_read_end) + "\tN\t" +
-          std::to_string(mapping.mapq) + "\t+\n" +
-          std::string(reference_sequence_name) + "\t" +
-          std::to_string(negative_read_start) + "\t" +
-          std::to_string(negative_read_end) + "\tN\t" +
-          std::to_string(mapping.mapq) + "\t-\n");
-    } else {
-      this->AppendMappingOutput(
-          std::string(reference_sequence_name) + "\t" +
-          std::to_string(negative_read_start) + "\t" +
-          std::to_string(negative_read_end) + "\tN\t" +
-          std::to_string(mapping.mapq) + "\t-\n" +
-          std::string(reference_sequence_name) + "\t" +
-          std::to_string(mapping.fragment_start_position) + "\t" +
-          std::to_string(positive_read_end) + "\tN\t" +
-          std::to_string(mapping.mapq) + "\t+\n");
-    }
-  }
-};
-
-template <>
-inline void PairedTagAlignOutputTools<SAMMapping>::AppendMapping(
-    uint32_t rid, const SequenceBatch &reference, const SAMMapping &mapping) {}
-
-template <>
-inline void PairedTagAlignOutputTools<PairsMapping>::AppendMapping(
-    uint32_t rid, const SequenceBatch &reference, const PairsMapping &mapping) {
-}
-
-template <typename MappingRecord>
-class PAFOutputTools : public OutputTools<MappingRecord> {
-  void OutputHeader(uint32_t num_reference_sequences,
-                    const SequenceBatch &reference) {}
-  inline void AppendMapping(uint32_t rid, const SequenceBatch &reference,
-                            const MappingRecord &mapping) {}
-  inline void OutputTempMapping(
-      const std::string &temp_mapping_output_file_path,
-      uint32_t num_reference_sequences,
-      const std::vector<std::vector<MappingRecord> > &mappings) {}
-};
-
-template <>
-inline void PAFOutputTools<PAFMapping>::AppendMapping(
-    uint32_t rid, const SequenceBatch &reference, const PAFMapping &mapping) {
-  const char *reference_sequence_name = reference.GetSequenceNameAt(rid);
-  uint32_t reference_sequence_length = reference.GetSequenceLengthAt(rid);
-  std::string strand = mapping.IsPositive() ? "+" : "-";
-  uint32_t mapping_end_position =
-      mapping.fragment_start_position + mapping.fragment_length;
-  this->AppendMappingOutput(
-      mapping.read_name + "\t" + std::to_string(mapping.read_length) + "\t" +
-      std::to_string(0) + "\t" + std::to_string(mapping.read_length) + "\t" +
-      strand + "\t" + std::string(reference_sequence_name) + "\t" +
-      std::to_string(reference_sequence_length) + "\t" +
-      std::to_string(mapping.fragment_start_position) + "\t" +
-      std::to_string(mapping_end_position) + "\t" +
-      std::to_string(mapping.read_length) + "\t" +
-      std::to_string(mapping.fragment_length) + "\t" +
-      std::to_string(mapping.mapq) + "\n");
-}
-
-template <>
-inline void PAFOutputTools<PAFMapping>::OutputTempMapping(
-    const std::string &temp_mapping_output_file_path,
-    uint32_t num_reference_sequences,
-    const std::vector<std::vector<PAFMapping> > &mappings) {
-  FILE *temp_mapping_output_file =
-      fopen(temp_mapping_output_file_path.c_str(), "wb");
-  assert(temp_mapping_output_file != NULL);
-  for (size_t ri = 0; ri < num_reference_sequences; ++ri) {
-    // make sure mappings[ri] exists even if its size is 0
-    size_t num_mappings = mappings[ri].size();
-    fwrite(&num_mappings, sizeof(size_t), 1, temp_mapping_output_file);
-    if (mappings[ri].size() > 0) {
-      for (size_t mi = 0; mi < num_mappings; ++mi) {
-        mappings[ri][mi].WriteToFile(temp_mapping_output_file);
-      }
-      // fwrite(mappings[ri].data(), sizeof(MappingRecord), mappings[ri].size(),
-      // temp_mapping_output_file);
-    }
-  }
-  fclose(temp_mapping_output_file);
-}
-
-template <>
-inline void PAFOutputTools<MappingWithBarcode>::AppendMapping(
-    uint32_t rid, const SequenceBatch &reference,
-    const MappingWithBarcode &mapping) {
-  const char *reference_sequence_name = reference.GetSequenceNameAt(rid);
-  uint32_t reference_sequence_length = reference.GetSequenceLengthAt(rid);
-  std::string strand = mapping.IsPositive() ? "+" : "-";
-  uint32_t mapping_end_position =
-      mapping.fragment_start_position + mapping.fragment_length;
-  this->AppendMappingOutput(
-      std::to_string(mapping.read_id) + "\t" +
-      std::to_string(mapping.fragment_length) + "\t" + std::to_string(0) +
-      "\t" + std::to_string(mapping.fragment_length) + "\t" + strand + "\t" +
-      std::string(reference_sequence_name) + "\t" +
-      std::to_string(reference_sequence_length) + "\t" +
-      std::to_string(mapping.fragment_start_position) + "\t" +
-      std::to_string(mapping_end_position) + "\t" +
-      std::to_string(mapping.fragment_length) + "\t" +
-      std::to_string(mapping.fragment_length) + "\t" +
-      std::to_string(mapping.mapq) + "\n");
-}
-
-template <>
-inline void PAFOutputTools<MappingWithoutBarcode>::AppendMapping(
-    uint32_t rid, const SequenceBatch &reference,
-    const MappingWithoutBarcode &mapping) {
-  const char *reference_sequence_name = reference.GetSequenceNameAt(rid);
-  uint32_t reference_sequence_length = reference.GetSequenceLengthAt(rid);
-  std::string strand = mapping.IsPositive() ? "+" : "-";
-  uint32_t mapping_end_position =
-      mapping.fragment_start_position + mapping.fragment_length;
-  this->AppendMappingOutput(
-      std::to_string(mapping.read_id) + "\t" +
-      std::to_string(mapping.fragment_length) + "\t" + std::to_string(0) +
-      "\t" + std::to_string(mapping.fragment_length) + "\t" + strand + "\t" +
-      std::string(reference_sequence_name) + "\t" +
-      std::to_string(reference_sequence_length) + "\t" +
-      std::to_string(mapping.fragment_start_position) + "\t" +
-      std::to_string(mapping_end_position) + "\t" +
-      std::to_string(mapping.fragment_length) + "\t" +
-      std::to_string(mapping.fragment_length) + "\t" +
-      std::to_string(mapping.mapq) + "\n");
-}
-
-template <typename MappingRecord>
-class PairedPAFOutputTools : public OutputTools<MappingRecord> {
-  void OutputHeader(uint32_t num_reference_sequences,
-                    const SequenceBatch &reference) {}
-  inline void AppendMapping(uint32_t rid, const SequenceBatch &reference,
-                            const MappingRecord &mapping) {}
-  inline void OutputTempMapping(
-      const std::string &temp_mapping_output_file_path,
-      uint32_t num_reference_sequences,
-      const std::vector<std::vector<MappingRecord> > &mappings) {}
-};
-
-template <>
-inline void PairedPAFOutputTools<PairedPAFMapping>::OutputTempMapping(
-    const std::string &temp_mapping_output_file_path,
-    uint32_t num_reference_sequences,
-    const std::vector<std::vector<PairedPAFMapping> > &mappings) {
-  FILE *temp_mapping_output_file =
-      fopen(temp_mapping_output_file_path.c_str(), "wb");
-  assert(temp_mapping_output_file != NULL);
-  for (size_t ri = 0; ri < num_reference_sequences; ++ri) {
-    // make sure mappings[ri] exists even if its size is 0
-    size_t num_mappings = mappings[ri].size();
-    fwrite(&num_mappings, sizeof(size_t), 1, temp_mapping_output_file);
-    if (mappings[ri].size() > 0) {
-      for (size_t mi = 0; mi < num_mappings; ++mi) {
-        mappings[ri][mi].WriteToFile(temp_mapping_output_file);
-      }
-      // fwrite(mappings[ri].data(), sizeof(MappingRecord), mappings[ri].size(),
-      // temp_mapping_output_file);
-    }
-  }
-  fclose(temp_mapping_output_file);
-}
-
-template <>
-inline void PairedPAFOutputTools<PairedPAFMapping>::AppendMapping(
-    uint32_t rid, const SequenceBatch &reference,
-    const PairedPAFMapping &mapping) {
-  bool positive_strand = mapping.IsPositive();
-  uint32_t positive_read_end =
-      mapping.fragment_start_position + mapping.positive_alignment_length;
-  uint32_t negative_read_end =
-      mapping.fragment_start_position + mapping.fragment_length;
-  uint32_t negative_read_start =
-      negative_read_end - mapping.negative_alignment_length;
-  const char *reference_sequence_name = reference.GetSequenceNameAt(rid);
-  uint32_t reference_sequence_length = reference.GetSequenceLengthAt(rid);
-  if (positive_strand) {
-    this->AppendMappingOutput(
-        mapping.read1_name + "\t" + std::to_string(mapping.read1_length) +
-        "\t" + std::to_string(0) + "\t" + std::to_string(mapping.read1_length) +
-        "\t" + "+" + "\t" + std::string(reference_sequence_name) + "\t" +
-        std::to_string(reference_sequence_length) + "\t" +
-        std::to_string(mapping.fragment_start_position) + "\t" +
-        std::to_string(positive_read_end) + "\t" +
-        std::to_string(mapping.read1_length) + "\t" +
-        std::to_string(mapping.positive_alignment_length) + "\t" +
-        std::to_string(mapping.mapq1) + "\n");
-    this->AppendMappingOutput(
-        mapping.read2_name + "\t" + std::to_string(mapping.read2_length) +
-        "\t" + std::to_string(0) + "\t" + std::to_string(mapping.read2_length) +
-        "\t" + "-" + "\t" + std::string(reference_sequence_name) + "\t" +
-        std::to_string(reference_sequence_length) + "\t" +
-        std::to_string(negative_read_start) + "\t" +
-        std::to_string(negative_read_end) + "\t" +
-        std::to_string(mapping.read2_length) + "\t" +
-        std::to_string(mapping.negative_alignment_length) + "\t" +
-        std::to_string(mapping.mapq2) + "\n");
-  } else {
-    this->AppendMappingOutput(
-        mapping.read1_name + "\t" + std::to_string(mapping.read1_length) +
-        "\t" + std::to_string(0) + "\t" + std::to_string(mapping.read1_length) +
-        "\t" + "-" + "\t" + std::string(reference_sequence_name) + "\t" +
-        std::to_string(reference_sequence_length) + "\t" +
-        std::to_string(negative_read_start) + "\t" +
-        std::to_string(negative_read_end) + "\t" +
-        std::to_string(mapping.read1_length) + "\t" +
-        std::to_string(mapping.negative_alignment_length) + "\t" +
-        std::to_string(mapping.mapq1) + "\n");
-    this->AppendMappingOutput(
-        mapping.read2_name + "\t" + std::to_string(mapping.read2_length) +
-        "\t" + std::to_string(0) + "\t" + std::to_string(mapping.read2_length) +
-        "\t" + "+" + "\t" + std::string(reference_sequence_name) + "\t" +
-        std::to_string(reference_sequence_length) + "\t" +
-        std::to_string(mapping.fragment_start_position) + "\t" +
-        std::to_string(positive_read_end) + "\t" +
-        std::to_string(mapping.read2_length) + "\t" +
-        std::to_string(mapping.positive_alignment_length) + "\t" +
-        std::to_string(mapping.mapq2) + "\n");
-  }
-}
-
-template <typename MappingRecord>
-class SAMOutputTools : public OutputTools<MappingRecord> {
-  inline void AppendMapping(uint32_t rid, const SequenceBatch &reference,
-                            const MappingRecord &mapping) {}
-  void OutputHeader(uint32_t num_reference_sequences,
-                    const SequenceBatch &reference) {
-    for (uint32_t rid = 0; rid < num_reference_sequences; ++rid) {
-      const char *reference_sequence_name = reference.GetSequenceNameAt(rid);
-      uint32_t reference_sequence_length = reference.GetSequenceLengthAt(rid);
-      this->AppendMappingOutput(
-          "@SQ\tSN:" + std::string(reference_sequence_name) +
-          "\tLN:" + std::to_string(reference_sequence_length) + "\n");
-    }
-  }
-  inline void OutputTempMapping(
-      const std::string &temp_mapping_output_file_path,
-      uint32_t num_reference_sequences,
-      const std::vector<std::vector<MappingRecord> > &mappings) {}
-};
-
-template <>
-inline void SAMOutputTools<SAMMapping>::AppendMapping(
-    uint32_t rid, const SequenceBatch &reference, const SAMMapping &mapping) {
-  // const char *reference_sequence_name = reference.GetSequenceNameAt(rid);
-  // uint32_t reference_sequence_length = reference.GetSequenceLengthAt(rid);
-  // std::string strand = (mapping.direction & 1) == 1 ? "+" : "-";
-  // uint32_t mapping_end_position = mapping.fragment_start_position +
-  // mapping.fragment_length;
-  const char *reference_sequence_name =
-      (mapping.flag & BAM_FUNMAP) > 0 ? "*" : reference.GetSequenceNameAt(rid);
-  const uint32_t mapping_start_position = mapping.GetStartPosition();
-  this->AppendMappingOutput(
-      mapping.read_name + "\t" + std::to_string(mapping.flag) + "\t" +
-      std::string(reference_sequence_name) + "\t" +
-      std::to_string(mapping_start_position) + "\t" +
-      std::to_string(mapping.mapq) + "\t" + mapping.GenerateCigarString() +
-      "\t*\t" + std::to_string(0) + "\t" + std::to_string(0) + "\t" +
-      mapping.sequence + "\t" + mapping.sequence_qual + "\t" +
-      mapping.GenerateIntTagString("NM", mapping.NM) + "\tMD:Z:" + mapping.MD);
-  if (cell_barcode_length_ > 0) {
-    this->AppendMappingOutput(
-        "\tCB:Z:" + Seed2Sequence(mapping.cell_barcode, cell_barcode_length_));
-  }
-  this->AppendMappingOutput("\n");
-}
-
-template <>
-inline void SAMOutputTools<SAMMapping>::OutputTempMapping(
-    const std::string &temp_mapping_output_file_path,
-    uint32_t num_reference_sequences,
-    const std::vector<std::vector<SAMMapping> > &mappings) {
-  FILE *temp_mapping_output_file =
-      fopen(temp_mapping_output_file_path.c_str(), "wb");
-  assert(temp_mapping_output_file != NULL);
-  for (size_t ri = 0; ri < num_reference_sequences; ++ri) {
-    // make sure mappings[ri] exists even if its size is 0
-    size_t num_mappings = mappings[ri].size();
-    fwrite(&num_mappings, sizeof(size_t), 1, temp_mapping_output_file);
-    if (mappings[ri].size() > 0) {
-      for (size_t mi = 0; mi < num_mappings; ++mi) {
-        mappings[ri][mi].WriteToFile(temp_mapping_output_file);
-      }
-      // fwrite(mappings[ri].data(), sizeof(MappingRecord), mappings[ri].size(),
-      // temp_mapping_output_file);
-    }
-  }
-  fclose(temp_mapping_output_file);
-}
-
-template <typename MappingRecord>
-class PairsOutputTools : public OutputTools<MappingRecord> {
-  inline void AppendMapping(uint32_t rid, const SequenceBatch &reference,
-                            const MappingRecord &mapping) {}
-  void OutputHeader(uint32_t num_reference_sequences,
-                    const SequenceBatch &reference) {
-    std::vector<uint32_t> rid_order;
-    rid_order.resize(num_reference_sequences);
-    uint32_t i;
-    for (i = 0; i < num_reference_sequences; ++i) {
-      rid_order[this->custom_rid_rank_[i]] = i;
-    }
-    this->AppendMappingOutput(
-        "## pairs format v1.0.0\n#shape: upper triangle\n");
-    for (i = 0; i < num_reference_sequences; ++i) {
-      uint32_t rid = rid_order[i];
-      const char *reference_sequence_name = reference.GetSequenceNameAt(rid);
-      uint32_t reference_sequence_length = reference.GetSequenceLengthAt(rid);
-      this->AppendMappingOutput(
-          "#chromsize: " + std::string(reference_sequence_name) + " " +
-          std::to_string(reference_sequence_length) + "\n");
-    }
-    this->AppendMappingOutput(
-        "#columns: readID chrom1 pos1 chrom2 pos2 strand1 strand2 pair_type\n");
-  }
-  inline void OutputTempMapping(
-      const std::string &temp_mapping_output_file_path,
-      uint32_t num_reference_sequences,
-      const std::vector<std::vector<MappingRecord> > &mappings) {}
-};
-
-template <>
-inline void PairsOutputTools<PairsMapping>::AppendMapping(
-    uint32_t rid, const SequenceBatch &reference, const PairsMapping &mapping) {
-  const char *reference_sequence_name1 =
-      reference.GetSequenceNameAt(mapping.rid1);
-  const char *reference_sequence_name2 =
-      reference.GetSequenceNameAt(mapping.rid2);
-  this->AppendMappingOutput(mapping.read_name + "\t" +
-                            std::string(reference_sequence_name1) + "\t" +
-                            std::to_string(mapping.GetPosition(1)) + "\t" +
-                            std::string(reference_sequence_name2) + "\t" +
-                            std::to_string(mapping.GetPosition(2)) + "\t" +
-                            std::string(1, mapping.GetDirection(1)) + "\t" +
-                            std::string(1, mapping.GetDirection(2)) + "\tUU\n");
-}
-
-template <>
-inline void PairsOutputTools<PairsMapping>::OutputTempMapping(
-    const std::string &temp_mapping_output_file_path,
-    uint32_t num_reference_sequences,
-    const std::vector<std::vector<PairsMapping> > &mappings) {
-  FILE *temp_mapping_output_file =
-      fopen(temp_mapping_output_file_path.c_str(), "wb");
-  assert(temp_mapping_output_file != NULL);
-  for (size_t ri = 0; ri < num_reference_sequences; ++ri) {
-    // make sure mappings[ri] exists even if its size is 0
-    size_t num_mappings = mappings[ri].size();
-    fwrite(&num_mappings, sizeof(size_t), 1, temp_mapping_output_file);
-    if (mappings[ri].size() > 0) {
-      for (size_t mi = 0; mi < num_mappings; ++mi) {
-        mappings[ri][mi].WriteToFile(temp_mapping_output_file);
-      }
-      // fwrite(mappings[ri].data(), sizeof(MappingRecord), mappings[ri].size(),
-      // temp_mapping_output_file);
-    }
-  }
-  fclose(temp_mapping_output_file);
-}
-
 }  // namespace chromap
+
 #endif  // OUTPUTTOOLS_H_

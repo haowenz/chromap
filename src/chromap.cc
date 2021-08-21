@@ -419,8 +419,8 @@ uint32_t Chromap<PairedEndMappingWithBarcode>::CallPeaks(
         peaks_on_diff_ref_seqs_[ri].emplace_back(
             Peak{peak_start_position, peak_length, peak_count});
         tree_extras_on_diff_ref_seqs_[ri].emplace_back(0);
-        output_tools_->OutputPeaks(peak_start_position, peak_length, ri,
-                                   reference);
+        output_tools_.OutputPeaks(peak_start_position, peak_length, ri,
+                                  reference);
         ++peak_count;
         peak_length = 0;
       }
@@ -442,7 +442,7 @@ void Chromap<PairedEndMappingWithBarcode>::OutputFeatureMatrix(
     uint32_t num_sequences, const SequenceBatch &reference) {
   uint32_t num_peaks = 0;
   if (cell_by_bin_) {
-    output_tools_->OutputPeaks(bin_size_, num_sequences, reference);
+    output_tools_.OutputPeaks(bin_size_, num_sequences, reference);
     for (uint32_t i = 0; i < num_sequences; ++i) {
       uint32_t ref_seq_length = reference.GetSequenceLengthAt(i);
       num_peaks += ref_seq_length / bin_size_;
@@ -474,7 +474,7 @@ void Chromap<PairedEndMappingWithBarcode>::OutputFeatureMatrix(
         kh_value(barcode_index_table_, barcode_index_table_iterator) =
             barcode_index;
         ++barcode_index;
-        output_tools_->AppendBarcodeOutput(barcode_key);
+        output_tools_.AppendBarcodeOutput(barcode_key);
       }
     }
   }
@@ -521,8 +521,8 @@ void Chromap<PairedEndMappingWithBarcode>::OutputFeatureMatrix(
             << Chromap<>::GetRealTime() - real_start_time << "s.\n";
   // Output matrix
   real_start_time = GetRealTime();
-  output_tools_->WriteMatrixOutputHead(num_peaks, kh_size(barcode_index_table_),
-                                       kh_size(matrix));
+  output_tools_.WriteMatrixOutputHead(num_peaks, kh_size(barcode_index_table_),
+                                      kh_size(matrix));
   uint64_t key;
   uint32_t value;
   std::vector<std::pair<uint64_t, uint32_t>> feature_matrix;
@@ -534,9 +534,9 @@ void Chromap<PairedEndMappingWithBarcode>::OutputFeatureMatrix(
   kh_destroy(kmatrix, matrix);
   std::sort(feature_matrix.begin(), feature_matrix.end());
   for (size_t i = 0; i < feature_matrix.size(); ++i) {
-    output_tools_->AppendMatrixOutput((uint32_t)feature_matrix[i].first,
-                                      (uint32_t)(feature_matrix[i].first >> 32),
-                                      feature_matrix[i].second);
+    output_tools_.AppendMatrixOutput((uint32_t)feature_matrix[i].first,
+                                     (uint32_t)(feature_matrix[i].first >> 32),
+                                     feature_matrix[i].second);
   }
   std::cerr << "Output feature matrix in "
             << Chromap<>::GetRealTime() - real_start_time << "s.\n";
@@ -944,9 +944,9 @@ void Chromap<MappingRecord>::PostProcessingInLowMemory(
     temp_mapping_file_handles_.emplace_back(temp_mapping_file_handle);
     SortOutputMappings(num_reference_sequences, &mappings_on_diff_ref_seqs_);
     // double output_temp_mapping_start_time = Chromap<>::GetRealTime();
-    output_tools_->OutputTempMapping(temp_mapping_file_handle.file_path,
-                                     num_reference_sequences,
-                                     mappings_on_diff_ref_seqs_);
+    output_tools_.OutputTempMapping(temp_mapping_file_handle.file_path,
+                                    num_reference_sequences,
+                                    mappings_on_diff_ref_seqs_);
     // std::cerr << "Output temp mappings in " << Chromap<>::GetRealTime() -
     // output_temp_mapping_start_time << "s.\n";
     num_mappings_in_mem = 0;
@@ -1077,7 +1077,7 @@ void Chromap<MappingRecord>::PostProcessingInLowMemory(
               // last_mapping.negative_alignment_length -= 5;
               last_mapping.Tn5Shift();
             }
-            output_tools_->AppendMapping(last_rid, reference, last_mapping);
+            output_tools_.AppendMapping(last_rid, reference, last_mapping);
             ++num_mappings_passing_filters;
             //}
           }
@@ -1150,7 +1150,7 @@ void Chromap<MappingRecord>::PostProcessingInLowMemory(
       // last_mapping.negative_alignment_length -= 5;
       last_mapping.Tn5Shift();
     }
-    output_tools_->AppendMapping(last_rid, reference, last_mapping);
+    output_tools_.AppendMapping(last_rid, reference, last_mapping);
     ++num_mappings_passing_filters;
     //}
   }
@@ -1309,36 +1309,13 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
   }
 
   // Initialize output tools
-  switch (mapping_output_format_) {
-    case MAPPINGFORMAT_BED:
-      output_tools_ = std::unique_ptr<BEDPEOutputTools<MappingRecord>>(
-          new BEDPEOutputTools<MappingRecord>);
-      break;
-    case MAPPINGFORMAT_TAGALIGN:
-      output_tools_ = std::unique_ptr<PairedTagAlignOutputTools<MappingRecord>>(
-          new PairedTagAlignOutputTools<MappingRecord>);
-      break;
-    case MAPPINGFORMAT_PAF:
-      output_tools_ = std::unique_ptr<PairedPAFOutputTools<MappingRecord>>(
-          new PairedPAFOutputTools<MappingRecord>);
-      break;
-    case MAPPINGFORMAT_SAM:
-      output_tools_ = std::unique_ptr<SAMOutputTools<MappingRecord>>(
-          new SAMOutputTools<MappingRecord>);
-      break;
-    case MAPPINGFORMAT_PAIRS:
-      output_tools_ = std::unique_ptr<PairsOutputTools<MappingRecord>>(
-          new PairsOutputTools<MappingRecord>);
-      output_tools_->SetPairsCustomRidRank(pairs_custom_rid_rank_);
-      break;
-    default:
-      chromap::Chromap<>::ExitWithMessage("Unknown mapping output format!");
-      break;
+  if (mapping_output_format_ == MAPPINGFORMAT_PAIRS) {
+    output_tools_.SetPairsCustomRidRank(pairs_custom_rid_rank_);
   }
 
-  output_tools_->InitializeMappingOutput(barcode_length_,
-                                         mapping_output_file_path_);
-  output_tools_->OutputHeader(num_reference_sequences, reference);
+  output_tools_.InitializeMappingOutput(
+      barcode_length_, mapping_output_file_path_, mapping_output_format_);
+  output_tools_.OutputHeader(num_reference_sequences, reference);
 
   uint32_t num_mappings_in_mem = 0;
   uint64_t max_num_mappings_in_mem =
@@ -1906,7 +1883,7 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
               temp_mapping_file_handles_.emplace_back(temp_mapping_file_handle);
               SortOutputMappings(num_reference_sequences,
                                  &mappings_on_diff_ref_seqs_);
-              output_tools_->OutputTempMapping(
+              output_tools_.OutputTempMapping(
                   temp_mapping_file_handle.file_path, num_reference_sequences,
                   mappings_on_diff_ref_seqs_);
               num_mappings_in_mem = 0;
@@ -1975,12 +1952,12 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
       OutputMappings(num_reference_sequences, reference, mappings);
     }
     if (!is_bulk_data_ && !matrix_output_prefix_.empty()) {
-      output_tools_->InitializeMatrixOutput(matrix_output_prefix_);
+      output_tools_.InitializeMatrixOutput(matrix_output_prefix_);
       OutputFeatureMatrix(num_reference_sequences, reference);
-      output_tools_->FinalizeMatrixOutput();
+      output_tools_.FinalizeMatrixOutput();
     }
   }
-  output_tools_->FinalizeMappingOutput();
+  output_tools_.FinalizeMappingOutput();
   reference.FinalizeLoading();
   std::cerr << "Total time: " << Chromap<>::GetRealTime() - real_start_time
             << "s.\n";
@@ -1999,7 +1976,7 @@ void Chromap<MappingRecord>::OutputMappingsInVector(
       if (mapq >= mapq_threshold) {
         // if (allocate_multi_mappings_ || (only_output_unique_mappings_ &&
         // is_unique == 1)) {
-        output_tools_->AppendMapping(ri, reference, *it);
+        output_tools_.AppendMapping(ri, reference, *it);
         ++num_mappings_passing_filters;
         //}
       }
@@ -2863,34 +2840,10 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
     }
   }
 
-  switch (mapping_output_format_) {
-    case MAPPINGFORMAT_BED:
-      output_tools_ = std::unique_ptr<BEDOutputTools<MappingRecord>>(
-          new BEDOutputTools<MappingRecord>);
-      break;
-    case MAPPINGFORMAT_TAGALIGN:
-      output_tools_ = std::unique_ptr<TagAlignOutputTools<MappingRecord>>(
-          new TagAlignOutputTools<MappingRecord>);
-      break;
-    case MAPPINGFORMAT_PAF:
-      output_tools_ = std::unique_ptr<PAFOutputTools<MappingRecord>>(
-          new PAFOutputTools<MappingRecord>);
-      break;
-    case MAPPINGFORMAT_SAM:
-      output_tools_ = std::unique_ptr<SAMOutputTools<MappingRecord>>(
-          new SAMOutputTools<MappingRecord>);
-      break;
-    case MAPPINGFORMAT_PAIRS:
-      chromap::Chromap<>::ExitWithMessage("No support for single-end HiC!");
-      break;
-    default:
-      chromap::Chromap<>::ExitWithMessage("Unknown mapping output format!");
-      break;
-  }
+  output_tools_.InitializeMappingOutput(
+      barcode_length_, mapping_output_file_path_, mapping_output_format_);
+  output_tools_.OutputHeader(num_reference_sequences, reference);
 
-  output_tools_->InitializeMappingOutput(barcode_length_,
-                                         mapping_output_file_path_);
-  output_tools_->OutputHeader(num_reference_sequences, reference);
   mm_cache mm_to_candidates_cache(2000003);
   mm_to_candidates_cache.SetKmerLength(kmer_size_);
   struct _mm_history *mm_history = new struct _mm_history[read_batch_size_];
@@ -3138,7 +3091,7 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
                                : mappings_on_diff_ref_seqs_;
     OutputMappings(num_reference_sequences, reference, mappings);
   }
-  output_tools_->FinalizeMappingOutput();
+  output_tools_.FinalizeMappingOutput();
   reference.FinalizeLoading();
   std::cerr << "Total time: " << Chromap<>::GetRealTime() - real_start_time
             << "s.\n";
