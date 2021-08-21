@@ -115,6 +115,13 @@ threshold to make a correction by setting **--bc-probability-threshold**
 corrections. For scATAC-seq data with multiple read and barcode files, you can
 use "," to concatenate multiple input files as the example [above](#general). 
 
+Chromap also supports user-defined barcode format, including mixed barcode and genomic 
+data case. User can specify the sequence structure through option **--read-format**. The value
+is comma-separated string, each field is also semi-comma-splitted string: [r1|r2|bc]:start:end.
+The start and end(inclusive, -1 means to the read end). For the example that the barcode is in read1's 
+first 16bp, one can use the option 
+`-1 read1.fq.gz -2 read2.fq.gz --barcode read1.fq.gz --read-format bc:0:15,r1:16:-1`
+
 The BED format (fragment file) for bulk and single-cell is different except for the first
 three columns. For bulk data, the columns are
 
