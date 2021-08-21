@@ -918,7 +918,8 @@ inline void TempMappingFileHandle<PAFMapping>::LoadTempMappingBlock(
         num_mappings_to_load_on_current_rid = block_size;
       }
       // std::cerr << num_mappings_to_load_on_current_rid << " " <<
-      // num_loaded_mappings_on_current_rid << " " << num_mappings_on_current_rid
+      // num_loaded_mappings_on_current_rid << " " <<
+      // num_mappings_on_current_rid
       // << "\n"; std::cerr << mappings.size() << "\n";
       for (size_t mi = 0; mi < num_mappings_to_load_on_current_rid; ++mi) {
         mappings[mi].LoadFromFile(file);
@@ -960,7 +961,8 @@ inline void TempMappingFileHandle<PairedPAFMapping>::LoadTempMappingBlock(
         num_mappings_to_load_on_current_rid = block_size;
       }
       // std::cerr << num_mappings_to_load_on_current_rid << " " <<
-      // num_loaded_mappings_on_current_rid << " " << num_mappings_on_current_rid
+      // num_loaded_mappings_on_current_rid << " " <<
+      // num_mappings_on_current_rid
       // << "\n"; std::cerr << mappings.size() << "\n";
       for (size_t mi = 0; mi < num_mappings_to_load_on_current_rid; ++mi) {
         mappings[mi].LoadFromFile(file);
@@ -1002,7 +1004,8 @@ inline void TempMappingFileHandle<SAMMapping>::LoadTempMappingBlock(
         num_mappings_to_load_on_current_rid = block_size;
       }
       // std::cerr << num_mappings_to_load_on_current_rid << " " <<
-      // num_loaded_mappings_on_current_rid << " " << num_mappings_on_current_rid
+      // num_loaded_mappings_on_current_rid << " " <<
+      // num_mappings_on_current_rid
       // << "\n"; std::cerr << mappings.size() << "\n";
       for (size_t mi = 0; mi < num_mappings_to_load_on_current_rid; ++mi) {
         mappings[mi].LoadFromFile(file);
@@ -1044,7 +1047,8 @@ inline void TempMappingFileHandle<PairsMapping>::LoadTempMappingBlock(
         num_mappings_to_load_on_current_rid = block_size;
       }
       // std::cerr << num_mappings_to_load_on_current_rid << " " <<
-      // num_loaded_mappings_on_current_rid << " " << num_mappings_on_current_rid
+      // num_loaded_mappings_on_current_rid << " " <<
+      // num_mappings_on_current_rid
       // << "\n"; std::cerr << mappings.size() << "\n";
       for (size_t mi = 0; mi < num_mappings_to_load_on_current_rid; ++mi) {
         mappings[mi].LoadFromFile(file);
@@ -1094,27 +1098,7 @@ class OutputTools {
     }
     fclose(temp_mapping_output_file);
   }
-  inline virtual void LoadBinaryTempMapping(
-      const std::string &temp_mapping_file_path,
-      uint32_t num_reference_sequences,
-      std::vector<std::vector<MappingRecord> > &mappings) {
-    FILE *temp_mapping_file = fopen(temp_mapping_file_path.c_str(), "rb");
-    assert(temp_mapping_file != NULL);
-    for (size_t ri = 0; ri < num_reference_sequences; ++ri) {
-      size_t num_mappings = 0;
-      fread(&num_mappings, sizeof(size_t), 1, temp_mapping_file);
-      if (num_mappings > 0) {
-        mappings.emplace_back(std::vector<MappingRecord>(num_mappings));
-        // fread(&(mappings[ri].data()), sizeof(MappingRecord), num_mappings,
-        // temp_mapping_file);
-        fread(mappings[ri].data(), sizeof(MappingRecord), num_mappings,
-              temp_mapping_file);
-      } else {
-        mappings.emplace_back(std::vector<MappingRecord>());
-      }
-    }
-    fclose(temp_mapping_file);
-  }
+
   inline void InitializeMappingOutput(
       uint32_t cell_barcode_length,
       const std::string &mapping_output_file_path) {
@@ -1366,10 +1350,6 @@ class PAFOutputTools : public OutputTools<MappingRecord> {
       const std::string &temp_mapping_output_file_path,
       uint32_t num_reference_sequences,
       const std::vector<std::vector<MappingRecord> > &mappings) {}
-  inline void LoadBinaryTempMapping(
-      const std::string &temp_mapping_file_path,
-      uint32_t num_reference_sequences,
-      std::vector<std::vector<MappingRecord> > &mappings) {}
 };
 
 template <>
@@ -1413,31 +1393,6 @@ inline void PAFOutputTools<PAFMapping>::OutputTempMapping(
     }
   }
   fclose(temp_mapping_output_file);
-}
-
-template <>
-inline void PAFOutputTools<PAFMapping>::LoadBinaryTempMapping(
-    const std::string &temp_mapping_file_path, uint32_t num_reference_sequences,
-    std::vector<std::vector<PAFMapping> > &mappings) {
-  FILE *temp_mapping_file = fopen(temp_mapping_file_path.c_str(), "rb");
-  assert(temp_mapping_file != NULL);
-  for (size_t ri = 0; ri < num_reference_sequences; ++ri) {
-    size_t num_mappings = 0;
-    fread(&num_mappings, sizeof(size_t), 1, temp_mapping_file);
-    if (num_mappings > 0) {
-      mappings.emplace_back(std::vector<PAFMapping>(num_mappings));
-      for (size_t mi = 0; mi < num_mappings; ++mi) {
-        mappings[ri][mi].LoadFromFile(temp_mapping_file);
-      }
-      // mappings.emplace_back(std::vector<MappingRecord>(num_mappings));
-      // fread(&(mappings[ri].data()), sizeof(MappingRecord), num_mappings,
-      // temp_mapping_file); fread(mappings[ri].data(), sizeof(MappingRecord),
-      // num_mappings, temp_mapping_file);
-    } else {
-      mappings.emplace_back(std::vector<PAFMapping>());
-    }
-  }
-  fclose(temp_mapping_file);
 }
 
 template <>
@@ -1595,10 +1550,6 @@ class SAMOutputTools : public OutputTools<MappingRecord> {
       const std::string &temp_mapping_output_file_path,
       uint32_t num_reference_sequences,
       const std::vector<std::vector<MappingRecord> > &mappings) {}
-  inline void LoadBinaryTempMapping(
-      const std::string &temp_mapping_file_path,
-      uint32_t num_reference_sequences,
-      std::vector<std::vector<MappingRecord> > &mappings) {}
 };
 
 template <>
@@ -1650,31 +1601,6 @@ inline void SAMOutputTools<SAMMapping>::OutputTempMapping(
   fclose(temp_mapping_output_file);
 }
 
-template <>
-inline void SAMOutputTools<SAMMapping>::LoadBinaryTempMapping(
-    const std::string &temp_mapping_file_path, uint32_t num_reference_sequences,
-    std::vector<std::vector<SAMMapping> > &mappings) {
-  FILE *temp_mapping_file = fopen(temp_mapping_file_path.c_str(), "rb");
-  assert(temp_mapping_file != NULL);
-  for (size_t ri = 0; ri < num_reference_sequences; ++ri) {
-    size_t num_mappings = 0;
-    fread(&num_mappings, sizeof(size_t), 1, temp_mapping_file);
-    if (num_mappings > 0) {
-      mappings.emplace_back(std::vector<SAMMapping>(num_mappings));
-      for (size_t mi = 0; mi < num_mappings; ++mi) {
-        mappings[ri][mi].LoadFromFile(temp_mapping_file);
-      }
-      // mappings.emplace_back(std::vector<MappingRecord>(num_mappings));
-      // fread(&(mappings[ri].data()), sizeof(MappingRecord), num_mappings,
-      // temp_mapping_file); fread(mappings[ri].data(), sizeof(MappingRecord),
-      // num_mappings, temp_mapping_file);
-    } else {
-      mappings.emplace_back(std::vector<SAMMapping>());
-    }
-  }
-  fclose(temp_mapping_file);
-}
-
 template <typename MappingRecord>
 class PairsOutputTools : public OutputTools<MappingRecord> {
   inline void AppendMapping(uint32_t rid, const SequenceBatch &reference,
@@ -1704,10 +1630,6 @@ class PairsOutputTools : public OutputTools<MappingRecord> {
       const std::string &temp_mapping_output_file_path,
       uint32_t num_reference_sequences,
       const std::vector<std::vector<MappingRecord> > &mappings) {}
-  inline void LoadBinaryTempMapping(
-      const std::string &temp_mapping_file_path,
-      uint32_t num_reference_sequences,
-      std::vector<std::vector<MappingRecord> > &mappings) {}
 };
 
 template <>
@@ -1749,29 +1671,5 @@ inline void PairsOutputTools<PairsMapping>::OutputTempMapping(
   fclose(temp_mapping_output_file);
 }
 
-template <>
-inline void PairsOutputTools<PairsMapping>::LoadBinaryTempMapping(
-    const std::string &temp_mapping_file_path, uint32_t num_reference_sequences,
-    std::vector<std::vector<PairsMapping> > &mappings) {
-  FILE *temp_mapping_file = fopen(temp_mapping_file_path.c_str(), "rb");
-  assert(temp_mapping_file != NULL);
-  for (size_t ri = 0; ri < num_reference_sequences; ++ri) {
-    size_t num_mappings = 0;
-    fread(&num_mappings, sizeof(size_t), 1, temp_mapping_file);
-    if (num_mappings > 0) {
-      mappings.emplace_back(std::vector<PairsMapping>(num_mappings));
-      for (size_t mi = 0; mi < num_mappings; ++mi) {
-        mappings[ri][mi].LoadFromFile(temp_mapping_file);
-      }
-      // mappings.emplace_back(std::vector<MappingRecord>(num_mappings));
-      // fread(&(mappings[ri].data()), sizeof(MappingRecord), num_mappings,
-      // temp_mapping_file); fread(mappings[ri].data(), sizeof(MappingRecord),
-      // num_mappings, temp_mapping_file);
-    } else {
-      mappings.emplace_back(std::vector<PairsMapping>());
-    }
-  }
-  fclose(temp_mapping_file);
-}
 }  // namespace chromap
 #endif  // OUTPUTTOOLS_H_
