@@ -260,7 +260,8 @@ bool Chromap<MappingRecord>::CorrectBarcodeAt(
                     SequenceBatch::Uint8ToChar(base_to_change2), score});
                 // std::cerr << "2score: " << score << " pos1: " <<
                 // barcode_length - 1 - i << " b1: " << base_to_change1 << "
-                // pos2: " << barcode_length - 1 -j << " b2: " << base_to_change2
+                // pos2: " << barcode_length - 1 -j << " b2: " <<
+                // base_to_change2
                 // << "\n";
               }
             }
@@ -345,16 +346,16 @@ bool Chromap<MappingRecord>::CorrectBarcodeAt(
         // std::cerr << "score: " <<
         // corrected_barcodes_with_quals[best_corrected_barcode_index].score <<
         // "\n"; std::cerr << "best score: " <<
-        // corrected_barcodes_with_quals[best_corrected_barcode_index].score << "
-        // sum score: " << sum_score << "\n";
+        // corrected_barcodes_with_quals[best_corrected_barcode_index].score <<
+        // " sum score: " << sum_score << "\n";
         ++(*num_corrected_barcode);
         return true;
       } else {
         // std::cerr << "Didnt pass filter: " <<
         // corrected_barcodes_with_quals[best_corrected_barcode_index].score /
         // sum_score << "\n"; std::cerr << "best score: " <<
-        // corrected_barcodes_with_quals[best_corrected_barcode_index].score << "
-        // sum score: " << sum_score << "\n";
+        // corrected_barcodes_with_quals[best_corrected_barcode_index].score <<
+        // " sum score: " << sum_score << "\n";
         return false;
       }
     }
@@ -3483,10 +3484,11 @@ void Chromap<MappingRecord>::GetRefStartEndPositionForReadFromMapping(
       // gap_open_penalties_[0], gap_extension_penalties_[0],
       // gap_open_penalties_[1], gap_extension_penalties_[1], error_threshold_ *
       // 2 + 1, &n_cigar, &cigar, &mapping_start_position,
-      // &mapping_end_position); mapq = GetMAPQForSingleEndRead(error_threshold_,
-      // 0, 0, mapping_end_position - mapping_start_position + 1, min_num_errors,
-      // num_best_mappings, second_min_num_errors, num_second_best_mappings);
-      // uint32_t fragment_start_position = verification_window_start_position +
+      // &mapping_end_position); mapq =
+      // GetMAPQForSingleEndRead(error_threshold_, 0, 0, mapping_end_position -
+      // mapping_start_position + 1, min_num_errors, num_best_mappings,
+      // second_min_num_errors, num_second_best_mappings); uint32_t
+      // fragment_start_position = verification_window_start_position +
       // mapping_start_position; uint16_t fragment_length = mapping_end_position
       // - mapping_start_position + 1;
       if (!split_alignment_) {
@@ -4504,7 +4506,7 @@ void Chromap<MappingRecord>::VerifyCandidatesOnOneDirection(
           // mappings->emplace_back(num_errors, candidates[ci].position +
           // error_threshold_ - 1 - mapping_end_position
           //					+ read_mapping_length - 1 -
-          //gap_beginning);
+          // gap_beginning);
           mappings->emplace_back(num_errors,
                                  candidates[ci].position - gap_beginning);
         } else {
@@ -5470,8 +5472,8 @@ void Chromap<MappingRecord>::LoadBarcodeWhitelist() {
         barcode.data(), barcode_length, 0, barcode_length);
     // PoreModelParameters &pore_model_parameters =
     // pore_models_[kmer_hash_value]; barcode_whitelist_file_line_string_stream
-    // >> pore_model_parameters.level_mean >> pore_model_parameters.level_stdv >>
-    // pore_model_parameters.sd_mean >> pore_model_parameters.sd_stdv;
+    // >> pore_model_parameters.level_mean >> pore_model_parameters.level_stdv
+    // >> pore_model_parameters.sd_mean >> pore_model_parameters.sd_stdv;
     int khash_return_code;
     khiter_t barcode_whitelist_lookup_table_iterator =
         kh_put(k64_seq, barcode_whitelist_lookup_table_, barcode_key,
@@ -5524,8 +5526,8 @@ uint8_t Chromap<MappingRecord>::GetMAPQForSingleEndRead(
     }
     // mapq = (int)(mapq_coef * ((double)(second_min_num_errors -
     // min_num_errors) / second_min_num_errors) + .499); double tmp =
-    // alignment_identity * alignment_identity; tmp = tmp * tmp; tmp = tmp * tmp;
-    // mapq = alignment_identity < 0.98 ? (int)(mapq * tmp + .499) : mapq;
+    // alignment_identity * alignment_identity; tmp = tmp * tmp; tmp = tmp *
+    // tmp; mapq = alignment_identity < 0.98 ? (int)(mapq * tmp + .499) : mapq;
     double tmp = alignment_length < mapq_coef_length
                      ? 1.0
                      : mapq_coef_fraction / log(alignment_length);
@@ -5625,13 +5627,16 @@ uint8_t Chromap<MappingRecord>::GetMAPQForPairedEndRead(
     int num_second_best_mappings2, int read1_length, int read2_length,
     int force_mapq, uint8_t &mapq1, uint8_t &mapq2) {
   // std::cerr << " rl1:" << (int)repetitive_seed_length1 << " rl2:" <<
-  // (int)repetitive_seed_length2 << " pal:" << (int)positive_alignment_length <<
-  // " nal:" << (int)negative_alignment_length << " me:" << min_sum_errors << "
-  // #bm:" << num_best_mappings << " sme:" << second_min_sum_errors << " #sbm:"
+  // (int)repetitive_seed_length2 << " pal:" << (int)positive_alignment_length
+  // << " nal:" << (int)negative_alignment_length << " me:" << min_sum_errors <<
+  // " #bm:" << num_best_mappings << " sme:" << second_min_sum_errors << "
+  // #sbm:"
   // << num_second_best_mappings << " ne1:" << num_errors1 << " ne2:" <<
-  // num_errors2 << " me1:" << min_num_errors1 << " me2:" << min_num_errors2 << "
-  // #bm1:" << num_best_mappings1 << " #bm2:" << num_best_mappings2 << " sme1:"
-  // << second_min_num_errors1 << " sme2:" << second_min_num_errors2 << " #sbm1:"
+  // num_errors2 << " me1:" << min_num_errors1 << " me2:" << min_num_errors2 <<
+  // " #bm1:" << num_best_mappings1 << " #bm2:" << num_best_mappings2 << "
+  // sme1:"
+  // << second_min_num_errors1 << " sme2:" << second_min_num_errors2 << "
+  // #sbm1:"
   // << num_second_best_mappings1 << " #sbm2:" << num_second_best_mappings2 <<
   // "\n";
   uint8_t mapq_pe = 0;
@@ -5644,7 +5649,8 @@ uint8_t Chromap<MappingRecord>::GetMAPQForPairedEndRead(
             ? second_min_sum_errors
             : min_num_unpaired_sum_errors;
     // mapq_pe = GetMAPQForSingleEndRead(2 * error_threshold_,
-    // num_positive_candidates + num_negative_candidates, repetitive_seed_length1
+    // num_positive_candidates + num_negative_candidates,
+    // repetitive_seed_length1
     // + repetitive_seed_length2, positive_alignment_length +
     // negative_alignment_length, min_sum_errors, num_best_mappings,
     // second_min_sum_errors, num_second_best_mappings, read1_length +
@@ -5779,8 +5785,8 @@ uint8_t Chromap<MappingRecord>::GetMAPQForPairedEndRead(
   // second_min_num_errors2) + .499); uint8_t max_mapq1 = 30 - 34.0 /
   // error_threshold_ + 34.0 / error_threshold_ * (second_min_num_errors1 -
   // min_num_errors1); uint8_t max_mapq2 = 30 - 34.0 / error_threshold_ + 34.0 /
-  // error_threshold_ * (second_min_num_errors2 - min_num_errors2); mapq1 = mapq1
-  // < max_mapq1 ? mapq1 : max_mapq1; mapq2 = mapq2 < max_mapq2 ? mapq2 :
+  // error_threshold_ * (second_min_num_errors2 - min_num_errors2); mapq1 =
+  // mapq1 < max_mapq1 ? mapq1 : max_mapq1; mapq2 = mapq2 < max_mapq2 ? mapq2 :
   // max_mapq2; mapq1 = mapq1 < raw_mapq(second_min_num_errors1 -
   // min_num_errors1, 1) ? mapq1 : raw_mapq(second_min_num_errors1 -
   // min_num_errors1, 1); if (second_min_num_errors1 < num_errors1) {
@@ -5789,7 +5795,7 @@ uint8_t Chromap<MappingRecord>::GetMAPQForPairedEndRead(
   // mapq1 = mapq1 < raw_mapq(second_min_num_errors1 - num_errors1, 1) ? mapq1 :
   // raw_mapq(second_min_num_errors1 - num_errors1, 1);
   ////mapq2 = mapq2 < raw_mapq(second_min_num_errors2 - min_num_errors2, 1) ?
-  ///mapq2 : raw_mapq(second_min_num_errors2 - min_num_errors2, 1);
+  /// mapq2 : raw_mapq(second_min_num_errors2 - min_num_errors2, 1);
   // if (second_min_num_errors2 < num_errors2) {
   //  second_min_num_errors2 = num_errors2;
   //}
@@ -5908,16 +5914,16 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
       //("B,mismatch-penalty", "Mismatch penalty [4]", cxxopts::value<int>(),
       //"INT")
       //("O,gap-open-penalties", "Gap open penalty [6,6]",
-      //cxxopts::value<std::vector<int>>(), "INT[,INT]")
+      // cxxopts::value<std::vector<int>>(), "INT[,INT]")
       //("E,gap-extension-penalties", "Gap extension penalty [1,1]",
-      //cxxopts::value<std::vector<int>>(), "INT[,INT]")
+      // cxxopts::value<std::vector<int>>(), "INT[,INT]")
       ("s,min-num-seeds", "Min # seeds to try to map a read [2]",
        cxxopts::value<int>(),
        "INT")("f,max-seed-frequencies",
               "Max seed frequencies for a seed to be selected [500,1000]",
               cxxopts::value<std::vector<int>>(), "INT[,INT]")
       //("n,max-num-best-mappings", "Only report n best mappings [1]",
-      //cxxopts::value<int>(), "INT")
+      // cxxopts::value<int>(), "INT")
       ("l,max-insert-size",
        "Max insert size, only for paired-end read mapping [1000]",
        cxxopts::value<int>(),
@@ -5927,10 +5933,10 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
               "INT")("min-read-length", "Min read length [30]",
                      cxxopts::value<int>(), "INT")
       //("multi-mapping-allocation-distance", "Uni-mappings within this distance
-      //from any end of multi-mappings are used for allocation [0]",
-      //cxxopts::value<int>(), "INT")
+      // from any end of multi-mappings are used for allocation [0]",
+      // cxxopts::value<int>(), "INT")
       //("multi-mapping-allocation-seed", "Seed for random number generator in
-      //multi-mapping allocation [11]", cxxopts::value<int>(), "INT")
+      // multi-mapping allocation [11]", cxxopts::value<int>(), "INT")
       //("drop-repetitive-reads", "Drop reads with too many best mappings
       //[500000]", cxxopts::value<int>(), "INT")
       ("trim-adapters", "Try to trim adapters on 3'")("remove-pcr-duplicates",
@@ -5977,7 +5983,7 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
   options.add_options("Output")("o,output", "Output file",
                                 cxxopts::value<std::string>(), "FILE")
       //("p,matrix-output-prefix", "Prefix of matrix output files",
-      //cxxopts::value<std::string>(), "FILE")
+      // cxxopts::value<std::string>(), "FILE")
       ("output-mappings-not-in-whitelist",
        "Output mappings with barcode not in the whitelist")(
           "chr-order", "custom chromsome order", cxxopts::value<std::string>(),
@@ -6023,66 +6029,35 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
     return;
   }
   // Parameters and their default
+  MappingParameters mapping_parameters;
   int min_fragment_length = 30;
   int kmer_size = 17;
   int window_size = 7;
-  int error_threshold = 8;
-  int match_score = 1;
-  int mismatch_penalty = 4;
-  std::vector<int> gap_open_penalties = {6, 6};
-  std::vector<int> gap_extension_penalties = {1, 1};
-  int min_num_seeds_required_for_mapping = 2;
-  std::vector<int> max_seed_frequencies = {500, 1000};
-  int max_num_best_mappings = 1;
-  int max_insert_size = 1000;
-  uint8_t mapq_threshold = 30;
-  int num_threads = 1;
-  int min_read_length = 30;
-  int barcode_correction_error_threshold = 1;
-  double barcode_correction_probability_threshold = 0.9;
-  int multi_mapping_allocation_distance = 0;
-  int multi_mapping_allocation_seed = 11;
-  int drop_repetitive_reads = 500000;
-  bool trim_adapters = false;
-  bool remove_pcr_duplicates = false;
-  bool remove_pcr_duplicates_at_bulk_level = true;
-  bool only_output_unique_mappings = true;
-  bool output_mappings_not_in_whitelist = false;
-  bool allocate_multi_mappings = false;
-  bool Tn5_shift = false;
-  bool split_alignment = false;
-  bool output_mapping_in_BED = false;
-  bool output_mapping_in_TagAlign = false;
-  bool output_mapping_in_PAF = false;
-  bool output_mapping_in_SAM = false;
-  bool output_mapping_in_pairs = false;
-  bool low_memory_mode = false;
 
-  std::string read_type;
   if (result.count("preset")) {
-    read_type = result["preset"].as<std::string>();
+    std::string read_type = result["preset"].as<std::string>();
     if (read_type == "atac") {
       std::cerr << "Preset parameters for ATAC-seq/scATAC-seq are used.\n";
-      max_insert_size = 2000;
-      trim_adapters = true;
-      remove_pcr_duplicates = true;
-      remove_pcr_duplicates_at_bulk_level = false;
-      Tn5_shift = true;
-      output_mapping_in_BED = true;
-      low_memory_mode = true;
+      mapping_parameters.max_insert_size = 2000;
+      mapping_parameters.trim_adapters = true;
+      mapping_parameters.remove_pcr_duplicates = true;
+      mapping_parameters.remove_pcr_duplicates_at_bulk_level = false;
+      mapping_parameters.Tn5_shift = true;
+      mapping_parameters.output_mapping_in_BED = true;
+      mapping_parameters.low_memory_mode = true;
     } else if (read_type == "chip") {
       std::cerr << "Preset parameters for ChIP-seq are used.\n";
-      max_insert_size = 2000;
-      remove_pcr_duplicates = true;
-      low_memory_mode = true;
-      output_mapping_in_BED = true;
+      mapping_parameters.max_insert_size = 2000;
+      mapping_parameters.remove_pcr_duplicates = true;
+      mapping_parameters.low_memory_mode = true;
+      mapping_parameters.output_mapping_in_BED = true;
     } else if (read_type == "hic") {
       std::cerr << "Preset parameters for Hi-C are used.\n";
-      error_threshold = 4;
-      mapq_threshold = 1;
-      split_alignment = true;
-      low_memory_mode = true;
-      output_mapping_in_pairs = true;
+      mapping_parameters.error_threshold = 4;
+      mapping_parameters.mapq_threshold = 1;
+      mapping_parameters.split_alignment = true;
+      mapping_parameters.low_memory_mode = true;
+      mapping_parameters.output_mapping_in_pairs = true;
     } else {
       chromap::Chromap<>::ExitWithMessage("Unrecognized preset parameters " +
                                           read_type + "\n");
@@ -6109,148 +6084,150 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
     window_size = result["window"].as<int>();
   }
   if (result.count("e")) {
-    error_threshold = result["error-threshold"].as<int>();
+    mapping_parameters.error_threshold = result["error-threshold"].as<int>();
   }
   if (result.count("A")) {
-    match_score = result["match-score"].as<int>();
+    mapping_parameters.match_score = result["match-score"].as<int>();
   }
   if (result.count("B")) {
-    mismatch_penalty = result["mismatch-penalty"].as<int>();
+    mapping_parameters.mismatch_penalty = result["mismatch-penalty"].as<int>();
   }
   if (result.count("O")) {
-    gap_open_penalties = result["gap-open-penalties"].as<std::vector<int>>();
+    mapping_parameters.gap_open_penalties =
+        result["gap-open-penalties"].as<std::vector<int>>();
   }
   if (result.count("E")) {
-    gap_extension_penalties =
+    mapping_parameters.gap_extension_penalties =
         result["gap-extension-penalties"].as<std::vector<int>>();
   }
   if (result.count("s")) {
-    min_num_seeds_required_for_mapping = result["min-num-seeds"].as<int>();
+    mapping_parameters.min_num_seeds_required_for_mapping =
+        result["min-num-seeds"].as<int>();
   }
   if (result.count("f")) {
-    max_seed_frequencies =
+    mapping_parameters.max_seed_frequencies =
         result["max-seed-frequencies"].as<std::vector<int>>();
   }
   if (result.count("n")) {
-    max_num_best_mappings = result["max-num-best-mappings"].as<int>();
+    mapping_parameters.max_num_best_mappings =
+        result["max-num-best-mappings"].as<int>();
   }
   if (result.count("l")) {
-    max_insert_size = result["max-insert-size"].as<int>();
+    mapping_parameters.max_insert_size = result["max-insert-size"].as<int>();
   }
   if (result.count("q")) {
-    mapq_threshold = result["MAPQ-threshold"].as<uint8_t>();
+    mapping_parameters.mapq_threshold = result["MAPQ-threshold"].as<uint8_t>();
   }
   if (result.count("t")) {
-    num_threads = result["num-threads"].as<int>();
+    mapping_parameters.num_threads = result["num-threads"].as<int>();
   }
   if (result.count("min-read-length")) {
-    min_read_length = result["min-read-length"].as<int>();
+    mapping_parameters.min_read_length = result["min-read-length"].as<int>();
   }
   if (result.count("bc-error-threshold")) {
-    barcode_correction_error_threshold = result["bc-error-threshold"].as<int>();
+    mapping_parameters.barcode_correction_error_threshold =
+        result["bc-error-threshold"].as<int>();
   }
   if (result.count("bc-probability-threshold")) {
-    barcode_correction_probability_threshold =
+    mapping_parameters.barcode_correction_probability_threshold =
         result["bc-probability-threshold"].as<double>();
   }
   if (result.count("multi-mapping-allocation-distance")) {
-    multi_mapping_allocation_distance =
+    mapping_parameters.multi_mapping_allocation_distance =
         result["multi-mapping-allocation-distance"].as<int>();
   }
   if (result.count("multi-mapping-allocation-seed")) {
-    multi_mapping_allocation_seed =
+    mapping_parameters.multi_mapping_allocation_seed =
         result["multi-mapping-allocation-seed"].as<int>();
   }
   if (result.count("drop-repetitive-reads")) {
-    drop_repetitive_reads = result["drop-repetitive-reads"].as<int>();
+    mapping_parameters.drop_repetitive_reads =
+        result["drop-repetitive-reads"].as<int>();
   }
   if (result.count("trim-adapters")) {
-    trim_adapters = true;
+    mapping_parameters.trim_adapters = true;
   }
   if (result.count("remove-pcr-duplicates")) {
-    remove_pcr_duplicates = true;
+    mapping_parameters.remove_pcr_duplicates = true;
   }
   if (result.count("remove-pcr-duplicates-at-bulk-level")) {
-    remove_pcr_duplicates_at_bulk_level = true;
+    mapping_parameters.remove_pcr_duplicates_at_bulk_level = true;
   }
   if (result.count("remove-pcr-duplicates-at-cell-level")) {
-    remove_pcr_duplicates_at_bulk_level = false;
+    mapping_parameters.remove_pcr_duplicates_at_bulk_level = false;
   }
   if (result.count("allocate-multi-mappings")) {
-    allocate_multi_mappings = true;
-    only_output_unique_mappings = false;
+    mapping_parameters.allocate_multi_mappings = true;
+    mapping_parameters.only_output_unique_mappings = false;
   }
   if (result.count("Tn5-shift")) {
-    Tn5_shift = true;
+    mapping_parameters.Tn5_shift = true;
   }
   if (result.count("split-alignment")) {
-    split_alignment = true;
+    mapping_parameters.split_alignment = true;
   }
   if (result.count("output-mappings-not-in-whitelist")) {
-    output_mappings_not_in_whitelist = true;
+    mapping_parameters.output_mappings_not_in_whitelist = true;
   }
   if (result.count("BED")) {
-    output_mapping_in_BED = true;
-    output_mapping_in_SAM = false;
-    output_mapping_in_TagAlign = false;
-    output_mapping_in_PAF = false;
-    output_mapping_in_pairs = false;
+    mapping_parameters.output_mapping_in_BED = true;
+    mapping_parameters.output_mapping_in_SAM = false;
+    mapping_parameters.output_mapping_in_TagAlign = false;
+    mapping_parameters.output_mapping_in_PAF = false;
+    mapping_parameters.output_mapping_in_pairs = false;
   }
   if (result.count("TagAlign")) {
-    output_mapping_in_TagAlign = true;
-    output_mapping_in_BED = false;
-    output_mapping_in_SAM = false;
-    output_mapping_in_PAF = false;
-    output_mapping_in_pairs = false;
+    mapping_parameters.output_mapping_in_TagAlign = true;
+    mapping_parameters.output_mapping_in_BED = false;
+    mapping_parameters.output_mapping_in_SAM = false;
+    mapping_parameters.output_mapping_in_PAF = false;
+    mapping_parameters.output_mapping_in_pairs = false;
   }
   if (result.count("PAF")) {
-    output_mapping_in_PAF = true;
-    output_mapping_in_TagAlign = false;
-    output_mapping_in_BED = false;
-    output_mapping_in_SAM = false;
-    output_mapping_in_pairs = false;
+    mapping_parameters.output_mapping_in_PAF = true;
+    mapping_parameters.output_mapping_in_TagAlign = false;
+    mapping_parameters.output_mapping_in_BED = false;
+    mapping_parameters.output_mapping_in_SAM = false;
+    mapping_parameters.output_mapping_in_pairs = false;
   }
   if (result.count("pairs")) {
-    output_mapping_in_pairs = true;
-    output_mapping_in_BED = false;
-    output_mapping_in_SAM = false;
-    output_mapping_in_TagAlign = false;
-    output_mapping_in_PAF = false;
+    mapping_parameters.output_mapping_in_pairs = true;
+    mapping_parameters.output_mapping_in_BED = false;
+    mapping_parameters.output_mapping_in_SAM = false;
+    mapping_parameters.output_mapping_in_TagAlign = false;
+    mapping_parameters.output_mapping_in_PAF = false;
   }
   if (result.count("SAM")) {
-    output_mapping_in_SAM = true;
-    output_mapping_in_BED = false;
-    output_mapping_in_TagAlign = false;
-    output_mapping_in_PAF = false;
-    output_mapping_in_pairs = false;
+    mapping_parameters.output_mapping_in_SAM = true;
+    mapping_parameters.output_mapping_in_BED = false;
+    mapping_parameters.output_mapping_in_TagAlign = false;
+    mapping_parameters.output_mapping_in_PAF = false;
+    mapping_parameters.output_mapping_in_pairs = false;
   }
-  if (!output_mapping_in_SAM && !output_mapping_in_BED &&
-      !output_mapping_in_TagAlign && !output_mapping_in_PAF &&
-      !output_mapping_in_pairs) {
-    output_mapping_in_BED = true;
+  if (!mapping_parameters.output_mapping_in_SAM && !mapping_parameters.output_mapping_in_BED &&
+      !mapping_parameters.output_mapping_in_TagAlign && !mapping_parameters.output_mapping_in_PAF &&
+      !mapping_parameters.output_mapping_in_pairs) {
+    mapping_parameters.output_mapping_in_BED = true;
   }
   if (result.count("low-mem")) {
-    low_memory_mode = true;
+    mapping_parameters.low_memory_mode = true;
   }
-  bool cell_by_bin = false;
   if (result.count("cell-by-bin")) {
-    cell_by_bin = true;
+    mapping_parameters.cell_by_bin = true;
   }
-  int bin_size = 5000;
   if (result.count("bin-size")) {
-    bin_size = result["bin-size"].as<int>();
+    mapping_parameters.bin_size = result["bin-size"].as<int>();
   }
-  uint16_t depth_cutoff_to_call_peak = 3;
   if (result.count("depth-cutoff")) {
-    depth_cutoff_to_call_peak = result["depth-cutoff"].as<uint16_t>();
+    mapping_parameters.depth_cutoff_to_call_peak =
+        result["depth-cutoff"].as<uint16_t>();
   }
-  int peak_min_length = 30;
   if (result.count("peak-min-length")) {
-    peak_min_length = result["peak-min-length"].as<int>();
+    mapping_parameters.peak_min_length = result["peak-min-length"].as<int>();
   }
-  int peak_merge_max_length = 30;
   if (result.count("peak-merge-max-length")) {
-    peak_merge_max_length = result["peak-merge-max-length"].as<int>();
+    mapping_parameters.peak_merge_max_length =
+        result["peak-merge-max-length"].as<int>();
   }
 
   std::cerr << std::setprecision(2) << std::fixed;
@@ -6272,82 +6249,75 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
               << ", window size: " << window_size << "\n";
     std::cerr << "Reference file: " << reference_file_path << "\n";
     std::cerr << "Output file: " << output_file_path << "\n";
-    chromap::Chromap<> chromap_for_indexing(kmer_size, window_size, num_threads,
-                                            reference_file_path,
-                                            output_file_path);
+    chromap::Chromap<> chromap_for_indexing(
+        kmer_size, window_size, /*num_threads=*/1, reference_file_path,
+        output_file_path);
     chromap_for_indexing.ConstructIndex();
   } else if (result.count("1")) {
     std::cerr << "Start to map reads.\n";
-    std::string reference_file_path;
     if (result.count("r")) {
-      reference_file_path = result["ref"].as<std::string>();
+      mapping_parameters.reference_file_path = result["ref"].as<std::string>();
     } else {
       chromap::Chromap<>::ExitWithMessage("No reference specified!");
     }
-    std::string output_file_path;
     if (result.count("o")) {
-      output_file_path = result["output"].as<std::string>();
+      mapping_parameters.mapping_output_file_path = result["output"].as<std::string>();
     } else {
       chromap::Chromap<>::ExitWithMessage("No output file specified!");
     }
-    std::string index_file_path;
     if (result.count("x")) {
-      index_file_path = result["index"].as<std::string>();
+      mapping_parameters.index_file_path = result["index"].as<std::string>();
     } else {
       chromap::Chromap<>::ExitWithMessage("No index file specified!");
     }
-    std::vector<std::string> read_file1_paths;
     if (result.count("1")) {
-      read_file1_paths = result["read1"].as<std::vector<std::string>>();
+      mapping_parameters.read_file1_paths =
+          result["read1"].as<std::vector<std::string>>();
     } else {
       chromap::Chromap<>::ExitWithMessage("No read file specified!");
     }
-    std::vector<std::string> read_file2_paths;
     if (result.count("2")) {
-      read_file2_paths = result["read2"].as<std::vector<std::string>>();
+      mapping_parameters.read_file2_paths =
+          result["read2"].as<std::vector<std::string>>();
     }
-    std::vector<std::string> barcode_file_paths;
-    bool is_bulk_data = true;
     if (result.count("b")) {
-      is_bulk_data = false;
-      barcode_file_paths = result["barcode"].as<std::vector<std::string>>();
+      mapping_parameters.is_bulk_data = false;
+      mapping_parameters.barcode_file_paths =
+          result["barcode"].as<std::vector<std::string>>();
       if (result.count("barcode-whitelist") == 0) {
         chromap::Chromap<>::ExitWithMessage(
             "There are input barcode files but a barcode whitelist file is "
             "missing!");
       }
     }
-    std::string barcode_whitelist_file_path;
     if (result.count("barcode-whitelist")) {
-      if (is_bulk_data) {
+      if (mapping_parameters.is_bulk_data) {
         chromap::Chromap<>::ExitWithMessage(
             "No barcode file specified but the barcode whitelist file is "
             "given!");
       }
-      barcode_whitelist_file_path =
+      mapping_parameters.barcode_whitelist_file_path =
           result["barcode-whitelist"].as<std::string>();
     }
-    std::string matrix_output_prefix;
     if (result.count("p")) {
-      matrix_output_prefix = result["matrix-output-prefix"].as<std::string>();
-      if (is_bulk_data) {
+      mapping_parameters.matrix_output_prefix =
+          result["matrix-output-prefix"].as<std::string>();
+      if (mapping_parameters.is_bulk_data) {
         chromap::Chromap<>::ExitWithMessage(
             "No barcode file specified but asked to output matrix files!");
       }
     }
-    std::string read_format("");
     if (result.count("read-format")) {
-      read_format = result["read-format"].as<std::string>();
+      mapping_parameters.read_format = result["read-format"].as<std::string>();
     }
 
-    std::string custom_rid_order_path("");
     if (result.count("chr-order")) {
-      custom_rid_order_path = result["chr-order"].as<std::string>();
+      mapping_parameters.custom_rid_order_path =
+          result["chr-order"].as<std::string>();
     }
 
-    std::string pairs_custom_rid_order_path("");
     if (result.count("pairs-natural-chr-order")) {
-      pairs_custom_rid_order_path =
+      mapping_parameters.pairs_custom_rid_order_path =
           result["pairs-natural-chr-order"].as<std::string>();
     }
 
@@ -6366,47 +6336,53 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
     // multi_mapping_allocation_distance << ", multi-mapping-allocation-seed: "
     // << multi_mapping_allocation_seed << ", drop-repetitive-reads: " <<
     // drop_repetitive_reads << "\n";
-    std::cerr << "Parameters: error threshold: " << error_threshold
-              << ", min-num-seeds: " << min_num_seeds_required_for_mapping
-              << ", max-seed-frequency: " << max_seed_frequencies[0] << ","
-              << max_seed_frequencies[1]
-              << ", max-num-best-mappings: " << max_num_best_mappings
-              << ", max-insert-size: " << max_insert_size
-              << ", MAPQ-threshold: " << (int)mapq_threshold
-              << ", min-read-length: " << min_read_length
-              << ", bc-error-threshold: " << barcode_correction_error_threshold
+    std::cerr << "Parameters: error threshold: "
+              << mapping_parameters.error_threshold << ", min-num-seeds: "
+              << mapping_parameters.min_num_seeds_required_for_mapping
+              << ", max-seed-frequency: "
+              << mapping_parameters.max_seed_frequencies[0] << ","
+              << mapping_parameters.max_seed_frequencies[1]
+              << ", max-num-best-mappings: "
+              << mapping_parameters.max_num_best_mappings
+              << ", max-insert-size: " << mapping_parameters.max_insert_size
+              << ", MAPQ-threshold: " << (int)mapping_parameters.mapq_threshold
+              << ", min-read-length: " << mapping_parameters.min_read_length
+              << ", bc-error-threshold: "
+              << mapping_parameters.barcode_correction_error_threshold
               << ", bc-probability-threshold: "
-              << barcode_correction_probability_threshold << "\n";
-    std::cerr << "Number of threads: " << num_threads << "\n";
-    if (is_bulk_data) {
+              << mapping_parameters.barcode_correction_probability_threshold
+              << "\n";
+    std::cerr << "Number of threads: " << mapping_parameters.num_threads
+              << "\n";
+    if (mapping_parameters.is_bulk_data) {
       std::cerr << "Analyze bulk data.\n";
     } else {
       std::cerr << "Analyze single-cell data.\n";
     }
-    if (trim_adapters) {
+    if (mapping_parameters.trim_adapters) {
       std::cerr << "Will try to remove adapters on 3'.\n";
     } else {
       std::cerr << "Won't try to remove adapters on 3'.\n";
     }
-    if (remove_pcr_duplicates) {
+    if (mapping_parameters.remove_pcr_duplicates) {
       std::cerr << "Will remove PCR duplicates after mapping.\n";
     } else {
       std::cerr << "Won't remove PCR duplicates after mapping.\n";
     }
-    if (remove_pcr_duplicates_at_bulk_level) {
+    if (mapping_parameters.remove_pcr_duplicates_at_bulk_level) {
       std::cerr << "Will remove PCR duplicates at bulk level.\n";
     } else {
       std::cerr << "Will remove PCR duplicates at cell level.\n";
     }
-    if (allocate_multi_mappings) {
+    if (mapping_parameters.allocate_multi_mappings) {
       std::cerr << "Will allocate multi-mappings after mapping.\n";
     } else {
       std::cerr << "Won't allocate multi-mappings after mapping.\n";
     }
-    if (only_output_unique_mappings) {
+    if (mapping_parameters.only_output_unique_mappings) {
       std::cerr << "Only output unique mappings after mapping.\n";
     }
-    if (!output_mappings_not_in_whitelist) {
+    if (!mapping_parameters.output_mappings_not_in_whitelist) {
       std::cerr << "Only output mappings of which barcodes are in whitelist.\n";
     } else {
       std::cerr << "No filtering of mappings based on whether their barcodes "
@@ -6418,269 +6394,108 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
     //  multi-mappings and will only output unique mappings.\n";
     //  allocate_multi_mappings = false;
     //}
-    if (max_num_best_mappings > drop_repetitive_reads) {
+    if (mapping_parameters.max_num_best_mappings >
+        mapping_parameters.drop_repetitive_reads) {
       std::cerr << "WARNING: you want to drop mapped reads with more than "
-                << drop_repetitive_reads
+                << mapping_parameters.drop_repetitive_reads
                 << " mappings. But you want to output top "
-                << max_num_best_mappings
+                << mapping_parameters.max_num_best_mappings
                 << " best mappings. In this case, only reads with <="
-                << drop_repetitive_reads << " best mappings will be output.\n";
-      max_num_best_mappings = drop_repetitive_reads;
+                << mapping_parameters.drop_repetitive_reads
+                << " best mappings will be output.\n";
+      mapping_parameters.max_num_best_mappings =
+          mapping_parameters.drop_repetitive_reads;
     }
-    if (Tn5_shift) {
+    if (mapping_parameters.Tn5_shift) {
       std::cerr << "Perform Tn5 shift.\n";
     }
-    if (split_alignment) {
+    if (mapping_parameters.split_alignment) {
       std::cerr << "Allow split alignment.\n";
     }
-    if (output_mapping_in_BED) {
+    if (mapping_parameters.output_mapping_in_BED) {
       std::cerr << "Output mappings in BED/BEDPE format.\n";
-    } else if (output_mapping_in_TagAlign) {
+    } else if (mapping_parameters.output_mapping_in_TagAlign) {
       std::cerr << "Output mappings in TagAlign/PairedTagAlign format.\n";
-    } else if (output_mapping_in_PAF) {
+    } else if (mapping_parameters.output_mapping_in_PAF) {
       std::cerr << "Output mappings in PAF format.\n";
-    } else if (output_mapping_in_SAM) {
+    } else if (mapping_parameters.output_mapping_in_SAM) {
       std::cerr << "Output mappings in SAM format.\n";
-    } else if (output_mapping_in_pairs) {
+    } else if (mapping_parameters.output_mapping_in_pairs) {
       std::cerr << "Output mappings in pairs format.\n";
     } else {
       chromap::Chromap<>::ExitWithMessage("No output format specified!");
     }
-    std::cerr << "Reference file: " << reference_file_path << "\n";
-    std::cerr << "Index file: " << index_file_path << "\n";
-    for (size_t i = 0; i < read_file1_paths.size(); ++i) {
-      std::cerr << i + 1 << "th read 1 file: " << read_file1_paths[i] << "\n";
+    std::cerr << "Reference file: " << mapping_parameters.reference_file_path
+              << "\n";
+    std::cerr << "Index file: " << mapping_parameters.index_file_path << "\n";
+    for (size_t i = 0; i < mapping_parameters.read_file1_paths.size(); ++i) {
+      std::cerr << i + 1
+                << "th read 1 file: " << mapping_parameters.read_file1_paths[i]
+                << "\n";
     }
     if (result.count("2") != 0) {
-      for (size_t i = 0; i < read_file2_paths.size(); ++i) {
-        std::cerr << i + 1 << "th read 2 file: " << read_file2_paths[i] << "\n";
+      for (size_t i = 0; i < mapping_parameters.read_file2_paths.size(); ++i) {
+        std::cerr << i + 1 << "th read 2 file: "
+                  << mapping_parameters.read_file2_paths[i] << "\n";
       }
     }
     if (result.count("b") != 0) {
-      for (size_t i = 0; i < barcode_file_paths.size(); ++i) {
-        std::cerr << i + 1 << "th cell barcode file: " << barcode_file_paths[i]
-                  << "\n";
+      for (size_t i = 0; i < mapping_parameters.barcode_file_paths.size();
+           ++i) {
+        std::cerr << i + 1 << "th cell barcode file: "
+                  << mapping_parameters.barcode_file_paths[i] << "\n";
       }
     }
     if (result.count("barcode-whitelist") != 0) {
       std::cerr << "Cell barcode whitelist file: "
-                << barcode_whitelist_file_path << "\n";
+                << mapping_parameters.barcode_whitelist_file_path << "\n";
     }
-    std::cerr << "Output file: " << output_file_path << "\n";
+    std::cerr << "Output file: " << mapping_parameters.mapping_output_file_path << "\n";
     if (result.count("matrix-output-prefix") != 0) {
-      std::cerr << "Matrix output prefix: " << matrix_output_prefix << "\n";
+      std::cerr << "Matrix output prefix: "
+                << mapping_parameters.matrix_output_prefix << "\n";
     }
     if (result.count("2") == 0) {
-      if (output_mapping_in_PAF) {
+      if (mapping_parameters.output_mapping_in_PAF) {
         chromap::Chromap<chromap::PAFMapping> chromap_for_mapping(
-            error_threshold, match_score, mismatch_penalty, gap_open_penalties,
-            gap_extension_penalties, min_num_seeds_required_for_mapping,
-            max_seed_frequencies, max_num_best_mappings, max_insert_size,
-            mapq_threshold, num_threads, min_read_length,
-            barcode_correction_error_threshold,
-            barcode_correction_probability_threshold,
-            multi_mapping_allocation_distance, multi_mapping_allocation_seed,
-            drop_repetitive_reads, trim_adapters, remove_pcr_duplicates,
-            remove_pcr_duplicates_at_bulk_level, is_bulk_data,
-            allocate_multi_mappings, only_output_unique_mappings,
-            output_mappings_not_in_whitelist, Tn5_shift, split_alignment,
-            output_mapping_in_BED, output_mapping_in_TagAlign,
-            output_mapping_in_PAF, output_mapping_in_SAM,
-            output_mapping_in_pairs, low_memory_mode, cell_by_bin, bin_size,
-            depth_cutoff_to_call_peak, peak_min_length, peak_merge_max_length,
-            reference_file_path, index_file_path, read_file1_paths,
-            read_file2_paths, barcode_file_paths, barcode_whitelist_file_path,
-            read_format, output_file_path, matrix_output_prefix,
-            custom_rid_order_path, pairs_custom_rid_order_path);
+            mapping_parameters);
         chromap_for_mapping.MapSingleEndReads();
-      } else if (output_mapping_in_SAM) {
+      } else if (mapping_parameters.output_mapping_in_SAM) {
         chromap::Chromap<chromap::SAMMapping> chromap_for_mapping(
-            error_threshold, match_score, mismatch_penalty, gap_open_penalties,
-            gap_extension_penalties, min_num_seeds_required_for_mapping,
-            max_seed_frequencies, max_num_best_mappings, max_insert_size,
-            mapq_threshold, num_threads, min_read_length,
-            barcode_correction_error_threshold,
-            barcode_correction_probability_threshold,
-            multi_mapping_allocation_distance, multi_mapping_allocation_seed,
-            drop_repetitive_reads, trim_adapters, remove_pcr_duplicates,
-            remove_pcr_duplicates_at_bulk_level, is_bulk_data,
-            allocate_multi_mappings, only_output_unique_mappings,
-            output_mappings_not_in_whitelist, Tn5_shift, split_alignment,
-            output_mapping_in_BED, output_mapping_in_TagAlign,
-            output_mapping_in_PAF, output_mapping_in_SAM,
-            output_mapping_in_pairs, low_memory_mode, cell_by_bin, bin_size,
-            depth_cutoff_to_call_peak, peak_min_length, peak_merge_max_length,
-            reference_file_path, index_file_path, read_file1_paths,
-            read_file2_paths, barcode_file_paths, barcode_whitelist_file_path,
-            read_format, output_file_path, matrix_output_prefix,
-            custom_rid_order_path, pairs_custom_rid_order_path);
+            mapping_parameters);
         chromap_for_mapping.MapSingleEndReads();
       } else {
         if (result.count("b") != 0) {
           chromap::Chromap<chromap::MappingWithBarcode> chromap_for_mapping(
-              error_threshold, match_score, mismatch_penalty,
-              gap_open_penalties, gap_extension_penalties,
-              min_num_seeds_required_for_mapping, max_seed_frequencies,
-              max_num_best_mappings, max_insert_size, mapq_threshold,
-              num_threads, min_read_length, barcode_correction_error_threshold,
-              barcode_correction_probability_threshold,
-              multi_mapping_allocation_distance, multi_mapping_allocation_seed,
-              drop_repetitive_reads, trim_adapters, remove_pcr_duplicates,
-              remove_pcr_duplicates_at_bulk_level, is_bulk_data,
-              allocate_multi_mappings, only_output_unique_mappings,
-              output_mappings_not_in_whitelist, Tn5_shift, split_alignment,
-              output_mapping_in_BED, output_mapping_in_TagAlign,
-              output_mapping_in_PAF, output_mapping_in_SAM,
-              output_mapping_in_pairs, low_memory_mode, cell_by_bin, bin_size,
-              depth_cutoff_to_call_peak, peak_min_length, peak_merge_max_length,
-              reference_file_path, index_file_path, read_file1_paths,
-              read_file2_paths, barcode_file_paths, barcode_whitelist_file_path,
-              read_format, output_file_path, matrix_output_prefix,
-              custom_rid_order_path, pairs_custom_rid_order_path);
+              mapping_parameters);
           chromap_for_mapping.MapSingleEndReads();
         } else {
           chromap::Chromap<chromap::MappingWithoutBarcode> chromap_for_mapping(
-              error_threshold, match_score, mismatch_penalty,
-              gap_open_penalties, gap_extension_penalties,
-              min_num_seeds_required_for_mapping, max_seed_frequencies,
-              max_num_best_mappings, max_insert_size, mapq_threshold,
-              num_threads, min_read_length, barcode_correction_error_threshold,
-              barcode_correction_probability_threshold,
-              multi_mapping_allocation_distance, multi_mapping_allocation_seed,
-              drop_repetitive_reads, trim_adapters, remove_pcr_duplicates,
-              remove_pcr_duplicates_at_bulk_level, is_bulk_data,
-              allocate_multi_mappings, only_output_unique_mappings,
-              output_mappings_not_in_whitelist, Tn5_shift, split_alignment,
-              output_mapping_in_BED, output_mapping_in_TagAlign,
-              output_mapping_in_PAF, output_mapping_in_SAM,
-              output_mapping_in_pairs, low_memory_mode, cell_by_bin, bin_size,
-              depth_cutoff_to_call_peak, peak_min_length, peak_merge_max_length,
-              reference_file_path, index_file_path, read_file1_paths,
-              read_file2_paths, barcode_file_paths, barcode_whitelist_file_path,
-              read_format, output_file_path, matrix_output_prefix,
-              custom_rid_order_path, pairs_custom_rid_order_path);
+              mapping_parameters);
           chromap_for_mapping.MapSingleEndReads();
         }
       }
     } else {
-      if (output_mapping_in_PAF) {
+      if (mapping_parameters.output_mapping_in_PAF) {
         chromap::Chromap<chromap::PairedPAFMapping> chromap_for_mapping(
-            error_threshold, match_score, mismatch_penalty, gap_open_penalties,
-            gap_extension_penalties, min_num_seeds_required_for_mapping,
-            max_seed_frequencies, max_num_best_mappings, max_insert_size,
-            mapq_threshold, num_threads, min_read_length,
-            barcode_correction_error_threshold,
-            barcode_correction_probability_threshold,
-            multi_mapping_allocation_distance, multi_mapping_allocation_seed,
-            drop_repetitive_reads, trim_adapters, remove_pcr_duplicates,
-            remove_pcr_duplicates_at_bulk_level, is_bulk_data,
-            allocate_multi_mappings, only_output_unique_mappings,
-            output_mappings_not_in_whitelist, Tn5_shift, split_alignment,
-            output_mapping_in_BED, output_mapping_in_TagAlign,
-            output_mapping_in_PAF, output_mapping_in_SAM,
-            output_mapping_in_pairs, low_memory_mode, cell_by_bin, bin_size,
-            depth_cutoff_to_call_peak, peak_min_length, peak_merge_max_length,
-            reference_file_path, index_file_path, read_file1_paths,
-            read_file2_paths, barcode_file_paths, barcode_whitelist_file_path,
-            read_format, output_file_path, matrix_output_prefix,
-            custom_rid_order_path, pairs_custom_rid_order_path);
+            mapping_parameters);
         chromap_for_mapping.MapPairedEndReads();
-      } else if (output_mapping_in_SAM) {
+      } else if (mapping_parameters.output_mapping_in_SAM) {
         chromap::Chromap<chromap::SAMMapping> chromap_for_mapping(
-            error_threshold, match_score, mismatch_penalty, gap_open_penalties,
-            gap_extension_penalties, min_num_seeds_required_for_mapping,
-            max_seed_frequencies, max_num_best_mappings, max_insert_size,
-            mapq_threshold, num_threads, min_read_length,
-            barcode_correction_error_threshold,
-            barcode_correction_probability_threshold,
-            multi_mapping_allocation_distance, multi_mapping_allocation_seed,
-            drop_repetitive_reads, trim_adapters, remove_pcr_duplicates,
-            remove_pcr_duplicates_at_bulk_level, is_bulk_data,
-            allocate_multi_mappings, only_output_unique_mappings,
-            output_mappings_not_in_whitelist, Tn5_shift, split_alignment,
-            output_mapping_in_BED, output_mapping_in_TagAlign,
-            output_mapping_in_PAF, output_mapping_in_SAM,
-            output_mapping_in_pairs, low_memory_mode, cell_by_bin, bin_size,
-            depth_cutoff_to_call_peak, peak_min_length, peak_merge_max_length,
-            reference_file_path, index_file_path, read_file1_paths,
-            read_file2_paths, barcode_file_paths, barcode_whitelist_file_path,
-            read_format, output_file_path, matrix_output_prefix,
-            custom_rid_order_path, pairs_custom_rid_order_path);
+            mapping_parameters);
         chromap_for_mapping.MapPairedEndReads();
-      } else if (output_mapping_in_pairs) {
+      } else if (mapping_parameters.output_mapping_in_pairs) {
         chromap::Chromap<chromap::PairsMapping> chromap_for_mapping(
-            error_threshold, match_score, mismatch_penalty, gap_open_penalties,
-            gap_extension_penalties, min_num_seeds_required_for_mapping,
-            max_seed_frequencies, max_num_best_mappings, max_insert_size,
-            mapq_threshold, num_threads, min_read_length,
-            barcode_correction_error_threshold,
-            barcode_correction_probability_threshold,
-            multi_mapping_allocation_distance, multi_mapping_allocation_seed,
-            drop_repetitive_reads, trim_adapters, remove_pcr_duplicates,
-            remove_pcr_duplicates_at_bulk_level, is_bulk_data,
-            allocate_multi_mappings, only_output_unique_mappings,
-            output_mappings_not_in_whitelist, Tn5_shift, split_alignment,
-            output_mapping_in_BED, output_mapping_in_TagAlign,
-            output_mapping_in_PAF, output_mapping_in_SAM,
-            output_mapping_in_pairs, low_memory_mode, cell_by_bin, bin_size,
-            depth_cutoff_to_call_peak, peak_min_length, peak_merge_max_length,
-            reference_file_path, index_file_path, read_file1_paths,
-            read_file2_paths, barcode_file_paths, barcode_whitelist_file_path,
-            read_format, output_file_path, matrix_output_prefix,
-            custom_rid_order_path, pairs_custom_rid_order_path);
+            mapping_parameters);
         chromap_for_mapping.MapPairedEndReads();
       } else {
         if (result.count("b") != 0) {
           chromap::Chromap<chromap::PairedEndMappingWithBarcode>
-              chromap_for_mapping(
-                  error_threshold, match_score, mismatch_penalty,
-                  gap_open_penalties, gap_extension_penalties,
-                  min_num_seeds_required_for_mapping, max_seed_frequencies,
-                  max_num_best_mappings, max_insert_size, mapq_threshold,
-                  num_threads, min_read_length,
-                  barcode_correction_error_threshold,
-                  barcode_correction_probability_threshold,
-                  multi_mapping_allocation_distance,
-                  multi_mapping_allocation_seed, drop_repetitive_reads,
-                  trim_adapters, remove_pcr_duplicates,
-                  remove_pcr_duplicates_at_bulk_level, is_bulk_data,
-                  allocate_multi_mappings, only_output_unique_mappings,
-                  output_mappings_not_in_whitelist, Tn5_shift, split_alignment,
-                  output_mapping_in_BED, output_mapping_in_TagAlign,
-                  output_mapping_in_PAF, output_mapping_in_SAM,
-                  output_mapping_in_pairs, low_memory_mode, cell_by_bin,
-                  bin_size, depth_cutoff_to_call_peak, peak_min_length,
-                  peak_merge_max_length, reference_file_path, index_file_path,
-                  read_file1_paths, read_file2_paths, barcode_file_paths,
-                  barcode_whitelist_file_path, read_format, output_file_path,
-                  matrix_output_prefix, custom_rid_order_path,
-                  pairs_custom_rid_order_path);
+              chromap_for_mapping(mapping_parameters);
           chromap_for_mapping.MapPairedEndReads();
         } else {
           chromap::Chromap<chromap::PairedEndMappingWithoutBarcode>
-              chromap_for_mapping(
-                  error_threshold, match_score, mismatch_penalty,
-                  gap_open_penalties, gap_extension_penalties,
-                  min_num_seeds_required_for_mapping, max_seed_frequencies,
-                  max_num_best_mappings, max_insert_size, mapq_threshold,
-                  num_threads, min_read_length,
-                  barcode_correction_error_threshold,
-                  barcode_correction_probability_threshold,
-                  multi_mapping_allocation_distance,
-                  multi_mapping_allocation_seed, drop_repetitive_reads,
-                  trim_adapters, remove_pcr_duplicates,
-                  remove_pcr_duplicates_at_bulk_level, is_bulk_data,
-                  allocate_multi_mappings, only_output_unique_mappings,
-                  output_mappings_not_in_whitelist, Tn5_shift, split_alignment,
-                  output_mapping_in_BED, output_mapping_in_TagAlign,
-                  output_mapping_in_PAF, output_mapping_in_SAM,
-                  output_mapping_in_pairs, low_memory_mode, cell_by_bin,
-                  bin_size, depth_cutoff_to_call_peak, peak_min_length,
-                  peak_merge_max_length, reference_file_path, index_file_path,
-                  read_file1_paths, read_file2_paths, barcode_file_paths,
-                  barcode_whitelist_file_path, read_format, output_file_path,
-                  matrix_output_prefix, custom_rid_order_path,
-                  pairs_custom_rid_order_path);
+              chromap_for_mapping(mapping_parameters);
           chromap_for_mapping.MapPairedEndReads();
         }
       }

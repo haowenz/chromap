@@ -64,6 +64,57 @@ struct BarcodeWithQual {
   }
 };
 
+struct MappingParameters {
+  int error_threshold = 8;
+  int match_score = 1;
+  int mismatch_penalty = 4;
+  std::vector<int> gap_open_penalties = {6, 6};
+  std::vector<int> gap_extension_penalties = {1, 1};
+  int min_num_seeds_required_for_mapping = 2;
+  std::vector<int> max_seed_frequencies = {500, 1000};
+  int max_num_best_mappings = 1;
+  int max_insert_size = 1000;
+  uint8_t mapq_threshold = 30;
+  int num_threads = 1;
+  int min_read_length = 30;
+  int barcode_correction_error_threshold = 1;
+  double barcode_correction_probability_threshold = 0.9;
+  int multi_mapping_allocation_distance = 0;
+  int multi_mapping_allocation_seed = 11;
+  int drop_repetitive_reads = 500000;
+  bool trim_adapters = false;
+  bool remove_pcr_duplicates = false;
+  bool remove_pcr_duplicates_at_bulk_level = true;
+  bool is_bulk_data = true;
+  bool allocate_multi_mappings = false;
+  bool only_output_unique_mappings = true;
+  bool output_mappings_not_in_whitelist = false;
+  bool Tn5_shift = false;
+  bool split_alignment = false;
+  bool output_mapping_in_BED = false;
+  bool output_mapping_in_TagAlign = false;
+  bool output_mapping_in_PAF = false;
+  bool output_mapping_in_SAM = false;
+  bool output_mapping_in_pairs = false;
+  bool low_memory_mode = false;
+  bool cell_by_bin = false;
+  int bin_size = 5000;
+  uint16_t depth_cutoff_to_call_peak = 3;
+  int peak_min_length = 30;
+  int peak_merge_max_length = 30;
+  std::string reference_file_path;
+  std::string index_file_path;
+  std::vector<std::string> read_file1_paths;
+  std::vector<std::string> read_file2_paths;
+  std::vector<std::string> barcode_file_paths;
+  std::string barcode_whitelist_file_path;
+  std::string read_format;
+  std::string mapping_output_file_path;
+  std::string matrix_output_prefix;
+  std::string custom_rid_order_path;
+  std::string pairs_custom_rid_order_path;
+};
+
 #define SortMappingWithoutBarcode(m)                                    \
   (((((m).fragment_start_position << 16) | (m).fragment_length) << 8) | \
    (m).mapq)
@@ -95,90 +146,71 @@ class Chromap {
   }
 
   // For mapping
-  Chromap(int error_threshold, int match_score, int mismatch_penalty,
-          const std::vector<int> &gap_open_penalties,
-          const std::vector<int> &gap_extension_penalties,
-          int min_num_seeds_required_for_mapping,
-          const std::vector<int> &max_seed_frequencies,
-          int max_num_best_mappings, int max_insert_size,
-          uint8_t mapq_threshold, int num_threads, int min_read_length,
-          int barcode_correction_error_threshold,
-          double barcode_correction_probability_threshold,
-          int multi_mapping_allocation_distance,
-          int multi_mapping_allocation_seed, int drop_repetitive_reads,
-          bool trim_adapters, bool remove_pcr_duplicates,
-          bool remove_pcr_duplicates_at_bulk_level, bool is_bulk_data,
-          bool allocate_multi_mappings, bool only_output_unique_mappings,
-          bool output_mappings_not_in_whitelist, bool Tn5_shift,
-          bool split_alignment, bool output_mapping_in_BED,
-          bool output_mapping_in_TagAlign, bool output_mapping_in_PAF,
-          bool output_mapping_in_SAM, bool output_mapping_in_pairs,
-          bool low_memory_mode, bool cell_by_bin, int bin_size,
-          uint16_t depth_cutoff_to_call_peak, int peak_min_length,
-          int peak_merge_max_length, const std::string &reference_file_path,
-          const std::string &index_file_path,
-          const std::vector<std::string> &read_file1_paths,
-          const std::vector<std::string> &read_file2_paths,
-          const std::vector<std::string> &barcode_file_paths,
-          const std::string &barcode_whitelist_file_path,
-          const std::string &read_format,
-          const std::string &mapping_output_file_path,
-          const std::string &matrix_output_prefix,
-          const std::string &custom_rid_order_path,
-          const std::string &pairs_custom_rid_order_path)
-      : error_threshold_(error_threshold),
-        match_score_(match_score),
-        mismatch_penalty_(mismatch_penalty),
-        gap_open_penalties_(gap_open_penalties),
-        gap_extension_penalties_(gap_extension_penalties),
-        min_num_seeds_required_for_mapping_(min_num_seeds_required_for_mapping),
-        max_seed_frequencies_(max_seed_frequencies),
-        max_num_best_mappings_(max_num_best_mappings),
-        max_insert_size_(max_insert_size),
-        mapq_threshold_(mapq_threshold),
-        num_threads_(num_threads),
-        min_read_length_(min_read_length),
-        barcode_correction_error_threshold_(barcode_correction_error_threshold),
+  Chromap(const MappingParameters &mapping_parameters)
+      : error_threshold_(mapping_parameters.error_threshold),
+        match_score_(mapping_parameters.match_score),
+        mismatch_penalty_(mapping_parameters.mismatch_penalty),
+        gap_open_penalties_(mapping_parameters.gap_open_penalties),
+        gap_extension_penalties_(mapping_parameters.gap_extension_penalties),
+        min_num_seeds_required_for_mapping_(
+            mapping_parameters.min_num_seeds_required_for_mapping),
+        max_seed_frequencies_(mapping_parameters.max_seed_frequencies),
+        max_num_best_mappings_(mapping_parameters.max_num_best_mappings),
+        max_insert_size_(mapping_parameters.max_insert_size),
+        mapq_threshold_(mapping_parameters.mapq_threshold),
+        num_threads_(mapping_parameters.num_threads),
+        min_read_length_(mapping_parameters.min_read_length),
+        barcode_correction_error_threshold_(
+            mapping_parameters.barcode_correction_error_threshold),
         barcode_correction_probability_threshold_(
-            barcode_correction_probability_threshold),
-        multi_mapping_allocation_distance_(multi_mapping_allocation_distance),
-        multi_mapping_allocation_seed_(multi_mapping_allocation_seed),
-        drop_repetitive_reads_(drop_repetitive_reads),
-        trim_adapters_(trim_adapters),
-        remove_pcr_duplicates_(remove_pcr_duplicates),
+            mapping_parameters.barcode_correction_probability_threshold),
+        multi_mapping_allocation_distance_(
+            mapping_parameters.multi_mapping_allocation_distance),
+        multi_mapping_allocation_seed_(
+            mapping_parameters.multi_mapping_allocation_seed),
+        drop_repetitive_reads_(mapping_parameters.drop_repetitive_reads),
+        trim_adapters_(mapping_parameters.trim_adapters),
+        remove_pcr_duplicates_(mapping_parameters.remove_pcr_duplicates),
         remove_pcr_duplicates_at_bulk_level_(
-            remove_pcr_duplicates_at_bulk_level),
-        is_bulk_data_(is_bulk_data),
-        allocate_multi_mappings_(allocate_multi_mappings),
-        only_output_unique_mappings_(only_output_unique_mappings),
-        output_mappings_not_in_whitelist_(output_mappings_not_in_whitelist),
-        Tn5_shift_(Tn5_shift),
-        split_alignment_(split_alignment),
-        output_mapping_in_BED_(output_mapping_in_BED),
-        output_mapping_in_TagAlign_(output_mapping_in_TagAlign),
-        output_mapping_in_PAF_(output_mapping_in_PAF),
-        output_mapping_in_SAM_(output_mapping_in_SAM),
-        output_mapping_in_pairs_(output_mapping_in_pairs),
-        low_memory_mode_(low_memory_mode),
-        cell_by_bin_(cell_by_bin),
-        bin_size_(bin_size),
-        depth_cutoff_to_call_peak_(depth_cutoff_to_call_peak),
-        peak_min_length_(peak_min_length),
-        peak_merge_max_length_(peak_merge_max_length),
-        reference_file_path_(reference_file_path),
-        index_file_path_(index_file_path),
-        read_file1_paths_(read_file1_paths),
-        read_file2_paths_(read_file2_paths),
-        barcode_file_paths_(barcode_file_paths),
-        barcode_whitelist_file_path_(barcode_whitelist_file_path),
-        mapping_output_file_path_(mapping_output_file_path),
-        matrix_output_prefix_(matrix_output_prefix),
-        custom_rid_order_path_(custom_rid_order_path),
-        pairs_custom_rid_order_path_(pairs_custom_rid_order_path) {
+            mapping_parameters.remove_pcr_duplicates_at_bulk_level),
+        is_bulk_data_(mapping_parameters.is_bulk_data),
+        allocate_multi_mappings_(mapping_parameters.allocate_multi_mappings),
+        only_output_unique_mappings_(
+            mapping_parameters.only_output_unique_mappings),
+        output_mappings_not_in_whitelist_(
+            mapping_parameters.output_mappings_not_in_whitelist),
+        Tn5_shift_(mapping_parameters.Tn5_shift),
+        split_alignment_(mapping_parameters.split_alignment),
+        output_mapping_in_BED_(mapping_parameters.output_mapping_in_BED),
+        output_mapping_in_TagAlign_(
+            mapping_parameters.output_mapping_in_TagAlign),
+        output_mapping_in_PAF_(mapping_parameters.output_mapping_in_PAF),
+        output_mapping_in_SAM_(mapping_parameters.output_mapping_in_SAM),
+        output_mapping_in_pairs_(mapping_parameters.output_mapping_in_pairs),
+        low_memory_mode_(mapping_parameters.low_memory_mode),
+        cell_by_bin_(mapping_parameters.cell_by_bin),
+        bin_size_(mapping_parameters.bin_size),
+        depth_cutoff_to_call_peak_(
+            mapping_parameters.depth_cutoff_to_call_peak),
+        peak_min_length_(mapping_parameters.peak_min_length),
+        peak_merge_max_length_(mapping_parameters.peak_merge_max_length),
+        reference_file_path_(mapping_parameters.reference_file_path),
+        index_file_path_(mapping_parameters.index_file_path),
+        read_file1_paths_(mapping_parameters.read_file1_paths),
+        read_file2_paths_(mapping_parameters.read_file2_paths),
+        barcode_file_paths_(mapping_parameters.barcode_file_paths),
+        barcode_whitelist_file_path_(
+            mapping_parameters.barcode_whitelist_file_path),
+        mapping_output_file_path_(mapping_parameters.mapping_output_file_path),
+        matrix_output_prefix_(mapping_parameters.matrix_output_prefix),
+        custom_rid_order_path_(mapping_parameters.custom_rid_order_path),
+        pairs_custom_rid_order_path_(
+            mapping_parameters.pairs_custom_rid_order_path) {
     barcode_lookup_table_ = kh_init(k64_seq);
     barcode_whitelist_lookup_table_ = kh_init(k64_seq);
     barcode_histogram_ = kh_init(k64_seq);
     barcode_index_table_ = kh_init(k64_seq);
+
     NUM_VPU_LANES_ = 0;
     if (error_threshold_ < 8) {
       NUM_VPU_LANES_ = 8;
@@ -186,7 +218,7 @@ class Chromap {
       NUM_VPU_LANES_ = 4;
     }
 
-    ParseReadFormat(read_format);
+    ParseReadFormat(mapping_parameters.read_format);
   }
 
   ~Chromap() {
@@ -570,8 +602,9 @@ class Chromap {
   std::vector<int> gap_extension_penalties_;
   int min_num_seeds_required_for_mapping_;
   std::vector<int> max_seed_frequencies_;
-  int max_num_best_mappings_;  // Read with # best mappings greater than it will
-                               // have this number of best mappings reported.
+  // Read with # best mappings greater than it will have this number of best
+  // mappings reported.
+  int max_num_best_mappings_;
   int max_insert_size_;
   uint8_t mapq_threshold_;
   int num_threads_;
@@ -580,8 +613,8 @@ class Chromap {
   double barcode_correction_probability_threshold_;
   int multi_mapping_allocation_distance_;
   int multi_mapping_allocation_seed_;
-  int drop_repetitive_reads_;  // Read with more than this number of mappings
-                               // will be dropped.
+  // Read with more than this number of mappings will be dropped.
+  int drop_repetitive_reads_;
   bool trim_adapters_;
   bool remove_pcr_duplicates_;
   bool remove_pcr_duplicates_at_bulk_level_;
@@ -596,9 +629,9 @@ class Chromap {
   bool output_mapping_in_PAF_;
   bool output_mapping_in_SAM_;
   bool output_mapping_in_pairs_;
-  uint32_t read_batch_size_ =
-      500000;  // default batch size, # reads for single-end reads, # read pairs
-               // for paired-end reads
+  // Default batch size, # reads for single-end reads, # read pairs for
+  // paired-end reads.
+  uint32_t read_batch_size_ = 500000;
   bool low_memory_mode_;
   bool cell_by_bin_;
   int bin_size_;
@@ -611,15 +644,16 @@ class Chromap {
   std::vector<std::string> read_file2_paths_;
   std::vector<std::string> barcode_file_paths_;
   std::string barcode_whitelist_file_path_;
-  int barcode_format_[2];  // 0-start,1-end(includsive)
+  int barcode_format_[2];  // 0-start, 1-end (includsive)
   int read1_format_[2];
   int read2_format_[2];
   std::string mapping_output_file_path_;
   FILE *mapping_output_file_;
   std::string matrix_output_prefix_;
-  std::string custom_rid_order_path_;  // the order for general sorting
-  std::string
-      pairs_custom_rid_order_path_;  // the order for pairs format flipping
+  // The order for general sorting.
+  std::string custom_rid_order_path_;
+  // The order for pairs format flipping.
+  std::string pairs_custom_rid_order_path_;
   std::vector<int> custom_rid_rank_;
   std::vector<int> pairs_custom_rid_rank_;
   // khash_t(k32_set)* barcode_whitelist_lookup_table_;
@@ -636,10 +670,10 @@ class Chromap {
   std::vector<std::pair<uint32_t, MappingRecord> > multi_mappings_;
   std::vector<std::vector<MappingRecord> > allocated_mappings_on_diff_ref_seqs_;
   std::vector<std::vector<uint32_t> > tree_extras_on_diff_ref_seqs_;  // max
-  std::vector<std::pair<int, uint32_t> >
-      tree_info_on_diff_ref_seqs_;  // (max_level, # nodes)
+  // (max_level, # nodes)
+  std::vector<std::pair<int, uint32_t> > tree_info_on_diff_ref_seqs_;
   std::unique_ptr<OutputTools<MappingRecord> > output_tools_;
-  // For mapping stats
+  // For mapping stats.
   uint64_t num_candidates_ = 0;
   uint64_t num_mappings_ = 0;
   uint64_t num_mapped_reads_ = 0;
