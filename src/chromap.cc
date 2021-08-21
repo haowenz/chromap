@@ -6029,10 +6029,8 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
     return;
   }
   // Parameters and their default
+  IndexParameters index_parameters;
   MappingParameters mapping_parameters;
-  int min_fragment_length = 30;
-  int kmer_size = 17;
-  int window_size = 7;
 
   if (result.count("preset")) {
     std::string read_type = result["preset"].as<std::string>();
@@ -6065,23 +6063,23 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
   }
   // Optional parameters
   if (result.count("min-frag-length")) {
-    min_fragment_length = result["min-frag-length"].as<int>();
+    int min_fragment_length = result["min-frag-length"].as<int>();
     if (min_fragment_length <= 60) {
-      kmer_size = 17;
-      window_size = 7;
+      index_parameters.kmer_size = 17;
+      index_parameters.window_size = 7;
     } else if (min_fragment_length <= 80) {
-      kmer_size = 19;
-      window_size = 10;
+      index_parameters.kmer_size = 19;
+      index_parameters.window_size = 10;
     } else {
-      kmer_size = 23;
-      window_size = 11;
+      index_parameters.kmer_size = 23;
+      index_parameters.window_size = 11;
     }
   }
   if (result.count("k")) {
-    kmer_size = result["kmer"].as<int>();
+    index_parameters.kmer_size = result["kmer"].as<int>();
   }
   if (result.count("w")) {
-    window_size = result["window"].as<int>();
+    index_parameters.window_size = result["window"].as<int>();
   }
   if (result.count("e")) {
     mapping_parameters.error_threshold = result["error-threshold"].as<int>();
@@ -6232,26 +6230,22 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
 
   std::cerr << std::setprecision(2) << std::fixed;
   if (result.count("i")) {
-    std::string reference_file_path;
     if (result.count("r")) {
-      reference_file_path = result["ref"].as<std::string>();
+      index_parameters.reference_file_path = result["ref"].as<std::string>();
     } else {
       chromap::Chromap<>::ExitWithMessage("No reference specified!");
     }
-    std::string output_file_path;
     if (result.count("o")) {
-      output_file_path = result["output"].as<std::string>();
+      index_parameters.index_output_file_path = result["output"].as<std::string>();
     } else {
       chromap::Chromap<>::ExitWithMessage("No output file specified!");
     }
     std::cerr << "Build index for the reference.\n";
-    std::cerr << "Kmer length: " << kmer_size
-              << ", window size: " << window_size << "\n";
-    std::cerr << "Reference file: " << reference_file_path << "\n";
-    std::cerr << "Output file: " << output_file_path << "\n";
-    chromap::Chromap<> chromap_for_indexing(
-        kmer_size, window_size, /*num_threads=*/1, reference_file_path,
-        output_file_path);
+    std::cerr << "Kmer length: " << index_parameters.kmer_size
+              << ", window size: " << index_parameters.window_size << "\n";
+    std::cerr << "Reference file: " << index_parameters.reference_file_path << "\n";
+    std::cerr << "Output file: " << index_parameters.index_output_file_path << "\n";
+    chromap::Chromap<> chromap_for_indexing(index_parameters);
     chromap_for_indexing.ConstructIndex();
   } else if (result.count("1")) {
     std::cerr << "Start to map reads.\n";

@@ -64,6 +64,14 @@ struct BarcodeWithQual {
   }
 };
 
+struct IndexParameters {
+  int kmer_size = 17;
+  int window_size = 7;
+  int num_threads = 1;
+  std::string reference_file_path;
+  std::string index_output_file_path;
+};
+
 struct MappingParameters {
   int error_threshold = 8;
   int match_score = 1;
@@ -131,14 +139,12 @@ template <typename MappingRecord = MappingWithoutBarcode>
 class Chromap {
  public:
   // For index construction
-  Chromap(int kmer_size, int window_size, int num_threads,
-          const std::string &reference_file_path,
-          const std::string &index_file_path)
-      : kmer_size_(kmer_size),
-        window_size_(window_size),
-        num_threads_(num_threads),
-        reference_file_path_(reference_file_path),
-        index_file_path_(index_file_path) {
+  Chromap(const IndexParameters &index_parameters)
+      : kmer_size_(index_parameters.kmer_size),
+        window_size_(index_parameters.window_size),
+        num_threads_(index_parameters.num_threads),
+        reference_file_path_(index_parameters.reference_file_path),
+        index_file_path_(index_parameters.index_output_file_path) {
     barcode_lookup_table_ = NULL;
     barcode_whitelist_lookup_table_ = NULL;
     barcode_histogram_ = NULL;
