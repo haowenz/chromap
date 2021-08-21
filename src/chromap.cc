@@ -960,8 +960,9 @@ void Chromap<MappingRecord>::PostProcessingInLowMemory(
   double sort_and_dedupe_start_time = Chromap<>::GetRealTime();
   // Calculate block size and initialize
   uint64_t max_mem_size = 10 * ((uint64_t)1 << 30);
-  if (output_mapping_in_SAM_ || output_mapping_in_pairs_ ||
-      output_mapping_in_PAF_) {
+  if (mapping_output_format_ == MAPPINGFORMAT_SAM ||
+      mapping_output_format_ == MAPPINGFORMAT_PAIRS ||
+      mapping_output_format_ == MAPPINGFORMAT_PAF) {
     max_mem_size = (uint64_t)1 << 30;
   }
   for (size_t hi = 0; hi < temp_mapping_file_handles_.size(); ++hi) {
@@ -1259,7 +1260,7 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
     GetRidRank(custom_rid_order_path_, reference, custom_rid_rank_);
     reference.ReorderSequences(custom_rid_rank_);
   }
-  if (output_mapping_in_pairs_) {
+  if (mapping_output_format_ == MAPPINGFORMAT_PAIRS) {
     GetRidRank(pairs_custom_rid_order_path_, reference, pairs_custom_rid_rank_);
   }
 
@@ -1306,24 +1307,35 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
       ComputeBarcodeAbundance(initial_num_sample_barcodes_);
     }
   }
+
   // Initialize output tools
-  if (output_mapping_in_BED_) {
-    output_tools_ = std::unique_ptr<BEDPEOutputTools<MappingRecord>>(
-        new BEDPEOutputTools<MappingRecord>);
-  } else if (output_mapping_in_TagAlign_) {
-    output_tools_ = std::unique_ptr<PairedTagAlignOutputTools<MappingRecord>>(
-        new PairedTagAlignOutputTools<MappingRecord>);
-  } else if (output_mapping_in_PAF_) {
-    output_tools_ = std::unique_ptr<PairedPAFOutputTools<MappingRecord>>(
-        new PairedPAFOutputTools<MappingRecord>);
-  } else if (output_mapping_in_SAM_) {
-    output_tools_ = std::unique_ptr<SAMOutputTools<MappingRecord>>(
-        new SAMOutputTools<MappingRecord>);
-  } else if (output_mapping_in_pairs_) {
-    output_tools_ = std::unique_ptr<PairsOutputTools<MappingRecord>>(
-        new PairsOutputTools<MappingRecord>);
-    output_tools_->SetPairsCustomRidRank(pairs_custom_rid_rank_);
+  switch (mapping_output_format_) {
+    case MAPPINGFORMAT_BED:
+      output_tools_ = std::unique_ptr<BEDPEOutputTools<MappingRecord>>(
+          new BEDPEOutputTools<MappingRecord>);
+      break;
+    case MAPPINGFORMAT_TAGALIGN:
+      output_tools_ = std::unique_ptr<PairedTagAlignOutputTools<MappingRecord>>(
+          new PairedTagAlignOutputTools<MappingRecord>);
+      break;
+    case MAPPINGFORMAT_PAF:
+      output_tools_ = std::unique_ptr<PairedPAFOutputTools<MappingRecord>>(
+          new PairedPAFOutputTools<MappingRecord>);
+      break;
+    case MAPPINGFORMAT_SAM:
+      output_tools_ = std::unique_ptr<SAMOutputTools<MappingRecord>>(
+          new SAMOutputTools<MappingRecord>);
+      break;
+    case MAPPINGFORMAT_PAIRS:
+      output_tools_ = std::unique_ptr<PairsOutputTools<MappingRecord>>(
+          new PairsOutputTools<MappingRecord>);
+      output_tools_->SetPairsCustomRidRank(pairs_custom_rid_rank_);
+      break;
+    default:
+      chromap::Chromap<>::ExitWithMessage("Unknown mapping output format!");
+      break;
   }
+
   output_tools_->InitializeMappingOutput(barcode_length_,
                                          mapping_output_file_path_);
   output_tools_->OutputHeader(num_reference_sequences, reference);
@@ -1331,8 +1343,9 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
   uint32_t num_mappings_in_mem = 0;
   uint64_t max_num_mappings_in_mem =
       1 * ((uint64_t)1 << 30) / sizeof(MappingRecord);
-  if (output_mapping_in_SAM_ || output_mapping_in_pairs_ ||
-      output_mapping_in_PAF_) {
+  if (mapping_output_format_ == MAPPINGFORMAT_SAM ||
+      mapping_output_format_ == MAPPINGFORMAT_PAF ||
+      mapping_output_format_ == MAPPINGFORMAT_PAIRS) {
     max_num_mappings_in_mem = 1 * ((uint64_t)1 << 29) / sizeof(MappingRecord);
   }
   static uint64_t thread_num_candidates = 0;
@@ -2505,7 +2518,7 @@ void Chromap<MappingRecord>::ProcessBestMappingsForPairedEndReadOnOneDirection(
           direction = 0;
         }
         // mapq |= (uint8_t)1;
-        if (output_mapping_in_SAM_) {
+        if (mapping_output_format_ == MAPPINGFORMAT_SAM) {
           uint16_t flag1 = 3;
           uint16_t flag2 = 3;
           if (first_read_direction == kNegative) {
@@ -2536,7 +2549,7 @@ void Chromap<MappingRecord>::ProcessBestMappingsForPairedEndReadOnOneDirection(
               mapq, NM2, n_cigar2, cigar2, MD_tag2, read2,
               read_batch2.GetSequenceQualAt(pair_index),
               &((*mappings_on_diff_ref_seqs)[rid2]));
-        } else if (output_mapping_in_pairs_) {
+        } else if (mapping_output_format_ == MAPPINGFORMAT_PAIRS) {
           int position1 = ref_start_position1;
           int position2 = ref_start_position2;
 
@@ -2562,7 +2575,7 @@ void Chromap<MappingRecord>::ProcessBestMappingsForPairedEndReadOnOneDirection(
                                      direction, mapq, is_unique, 1,
                                      &((*mappings_on_diff_ref_seqs)[rid2]));
           }
-        } else if (output_mapping_in_PAF_) {
+        } else if (mapping_output_format_ == MAPPINGFORMAT_PAF) {
           uint32_t fragment_start_position = ref_start_position1;
           uint16_t fragment_length =
               ref_end_position2 - ref_start_position1 + 1;
@@ -2849,19 +2862,32 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
       ComputeBarcodeAbundance(initial_num_sample_barcodes_);
     }
   }
-  if (output_mapping_in_BED_) {
-    output_tools_ = std::unique_ptr<BEDOutputTools<MappingRecord>>(
-        new BEDOutputTools<MappingRecord>);
-  } else if (output_mapping_in_TagAlign_) {
-    output_tools_ = std::unique_ptr<TagAlignOutputTools<MappingRecord>>(
-        new TagAlignOutputTools<MappingRecord>);
-  } else if (output_mapping_in_PAF_) {
-    output_tools_ = std::unique_ptr<PAFOutputTools<MappingRecord>>(
-        new PAFOutputTools<MappingRecord>);
-  } else if (output_mapping_in_SAM_) {
-    output_tools_ = std::unique_ptr<SAMOutputTools<MappingRecord>>(
-        new SAMOutputTools<MappingRecord>);
+
+  switch (mapping_output_format_) {
+    case MAPPINGFORMAT_BED:
+      output_tools_ = std::unique_ptr<BEDOutputTools<MappingRecord>>(
+          new BEDOutputTools<MappingRecord>);
+      break;
+    case MAPPINGFORMAT_TAGALIGN:
+      output_tools_ = std::unique_ptr<TagAlignOutputTools<MappingRecord>>(
+          new TagAlignOutputTools<MappingRecord>);
+      break;
+    case MAPPINGFORMAT_PAF:
+      output_tools_ = std::unique_ptr<PAFOutputTools<MappingRecord>>(
+          new PAFOutputTools<MappingRecord>);
+      break;
+    case MAPPINGFORMAT_SAM:
+      output_tools_ = std::unique_ptr<SAMOutputTools<MappingRecord>>(
+          new SAMOutputTools<MappingRecord>);
+      break;
+    case MAPPINGFORMAT_PAIRS:
+      chromap::Chromap<>::ExitWithMessage("No support for single-end HiC!");
+      break;
+    default:
+      chromap::Chromap<>::ExitWithMessage("Unknown mapping output format!");
+      break;
   }
+
   output_tools_->InitializeMappingOutput(barcode_length_,
                                          mapping_output_file_path_);
   output_tools_->OutputHeader(num_reference_sequences, reference);
@@ -3351,7 +3377,8 @@ void Chromap<MappingRecord>::GetRefStartEndPositionForReadFromMapping(
     verification_window_start_position = 0;
   }
   if (split_alignment_) {
-    if (split_site < full_read_length && output_mapping_in_SAM_ &&
+    if (split_site < full_read_length &&
+        mapping_output_format_ == MAPPINGFORMAT_SAM &&
         split_site > 3 * error_threshold_) {
       split_site -= 3 * error_threshold_;
     }
@@ -3359,7 +3386,7 @@ void Chromap<MappingRecord>::GetRefStartEndPositionForReadFromMapping(
   }
   int mapping_start_position;
   if (mapping_direction == kPositive) {
-    if (output_mapping_in_SAM_) {
+    if (mapping_output_format_ == MAPPINGFORMAT_SAM) {
       *n_cigar = 0;
       int mapping_end_position;
       ksw_semi_global3(
@@ -3418,7 +3445,7 @@ void Chromap<MappingRecord>::GetRefStartEndPositionForReadFromMapping(
     }
   } else {  // reverse strand
     int read_start_site = full_read_length - split_site;
-    if (output_mapping_in_SAM_) {
+    if (mapping_output_format_ == MAPPINGFORMAT_SAM) {
       *n_cigar = 0;
       int mapping_end_position;
 
@@ -3593,7 +3620,7 @@ void Chromap<MappingRecord>::ProcessBestMappingsForSingleEndRead(
             num_best_mappings, second_min_num_errors, num_second_best_mappings,
             error_threshold_, read_length);
 
-        if (output_mapping_in_SAM_) {
+        if (mapping_output_format_ == MAPPINGFORMAT_SAM) {
           uint16_t flag = mapping_direction == kPositive ? 0 : BAM_FREVERSE;
           if (*num_best_mappings_reported >= 1) {
             flag |= BAM_FSECONDARY;
@@ -3603,7 +3630,7 @@ void Chromap<MappingRecord>::ProcessBestMappingsForSingleEndRead(
                                    mapq, NM, n_cigar, cigar, MD_tag, read,
                                    read_batch.GetSequenceQualAt(read_index),
                                    &((*mappings_on_diff_ref_seqs)[rid]));
-        } else if (output_mapping_in_PAF_) {
+        } else if (mapping_output_format_ == MAPPINGFORMAT_PAF) {
           EmplaceBackMappingRecord(
               read_id, read_name, read_length, barcode_key, ref_start_position,
               ref_end_position - ref_start_position + 1, mapq, direction,
@@ -4502,7 +4529,7 @@ void Chromap<MappingRecord>::VerifyCandidatesOnOneDirection(
             num_errors,
             candidates[ci].position - error_threshold_ + mapping_end_position);
       } else {
-        if (split_alignment_ && !output_mapping_in_SAM_) {
+        if (split_alignment_ && mapping_output_format_ != MAPPINGFORMAT_SAM) {
           // mappings->emplace_back(num_errors, candidates[ci].position +
           // error_threshold_ - 1 - mapping_end_position
           //					+ read_mapping_length - 1 -
@@ -6041,21 +6068,21 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
       mapping_parameters.remove_pcr_duplicates = true;
       mapping_parameters.remove_pcr_duplicates_at_bulk_level = false;
       mapping_parameters.Tn5_shift = true;
-      mapping_parameters.output_mapping_in_BED = true;
+      mapping_parameters.mapping_output_format = MAPPINGFORMAT_BED;
       mapping_parameters.low_memory_mode = true;
     } else if (read_type == "chip") {
       std::cerr << "Preset parameters for ChIP-seq are used.\n";
       mapping_parameters.max_insert_size = 2000;
       mapping_parameters.remove_pcr_duplicates = true;
       mapping_parameters.low_memory_mode = true;
-      mapping_parameters.output_mapping_in_BED = true;
+      mapping_parameters.mapping_output_format = MAPPINGFORMAT_BED;
     } else if (read_type == "hic") {
       std::cerr << "Preset parameters for Hi-C are used.\n";
       mapping_parameters.error_threshold = 4;
       mapping_parameters.mapq_threshold = 1;
       mapping_parameters.split_alignment = true;
       mapping_parameters.low_memory_mode = true;
-      mapping_parameters.output_mapping_in_pairs = true;
+      mapping_parameters.mapping_output_format = MAPPINGFORMAT_PAIRS;
     } else {
       chromap::Chromap<>::ExitWithMessage("Unrecognized preset parameters " +
                                           read_type + "\n");
@@ -6168,44 +6195,19 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
     mapping_parameters.output_mappings_not_in_whitelist = true;
   }
   if (result.count("BED")) {
-    mapping_parameters.output_mapping_in_BED = true;
-    mapping_parameters.output_mapping_in_SAM = false;
-    mapping_parameters.output_mapping_in_TagAlign = false;
-    mapping_parameters.output_mapping_in_PAF = false;
-    mapping_parameters.output_mapping_in_pairs = false;
+    mapping_parameters.mapping_output_format = MAPPINGFORMAT_BED;
   }
   if (result.count("TagAlign")) {
-    mapping_parameters.output_mapping_in_TagAlign = true;
-    mapping_parameters.output_mapping_in_BED = false;
-    mapping_parameters.output_mapping_in_SAM = false;
-    mapping_parameters.output_mapping_in_PAF = false;
-    mapping_parameters.output_mapping_in_pairs = false;
+    mapping_parameters.mapping_output_format = MAPPINGFORMAT_TAGALIGN;
   }
   if (result.count("PAF")) {
-    mapping_parameters.output_mapping_in_PAF = true;
-    mapping_parameters.output_mapping_in_TagAlign = false;
-    mapping_parameters.output_mapping_in_BED = false;
-    mapping_parameters.output_mapping_in_SAM = false;
-    mapping_parameters.output_mapping_in_pairs = false;
+    mapping_parameters.mapping_output_format = MAPPINGFORMAT_PAF;
   }
   if (result.count("pairs")) {
-    mapping_parameters.output_mapping_in_pairs = true;
-    mapping_parameters.output_mapping_in_BED = false;
-    mapping_parameters.output_mapping_in_SAM = false;
-    mapping_parameters.output_mapping_in_TagAlign = false;
-    mapping_parameters.output_mapping_in_PAF = false;
+    mapping_parameters.mapping_output_format = MAPPINGFORMAT_PAIRS;
   }
   if (result.count("SAM")) {
-    mapping_parameters.output_mapping_in_SAM = true;
-    mapping_parameters.output_mapping_in_BED = false;
-    mapping_parameters.output_mapping_in_TagAlign = false;
-    mapping_parameters.output_mapping_in_PAF = false;
-    mapping_parameters.output_mapping_in_pairs = false;
-  }
-  if (!mapping_parameters.output_mapping_in_SAM && !mapping_parameters.output_mapping_in_BED &&
-      !mapping_parameters.output_mapping_in_TagAlign && !mapping_parameters.output_mapping_in_PAF &&
-      !mapping_parameters.output_mapping_in_pairs) {
-    mapping_parameters.output_mapping_in_BED = true;
+    mapping_parameters.mapping_output_format = MAPPINGFORMAT_SAM;
   }
   if (result.count("low-mem")) {
     mapping_parameters.low_memory_mode = true;
@@ -6236,15 +6238,18 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
       chromap::Chromap<>::ExitWithMessage("No reference specified!");
     }
     if (result.count("o")) {
-      index_parameters.index_output_file_path = result["output"].as<std::string>();
+      index_parameters.index_output_file_path =
+          result["output"].as<std::string>();
     } else {
       chromap::Chromap<>::ExitWithMessage("No output file specified!");
     }
     std::cerr << "Build index for the reference.\n";
     std::cerr << "Kmer length: " << index_parameters.kmer_size
               << ", window size: " << index_parameters.window_size << "\n";
-    std::cerr << "Reference file: " << index_parameters.reference_file_path << "\n";
-    std::cerr << "Output file: " << index_parameters.index_output_file_path << "\n";
+    std::cerr << "Reference file: " << index_parameters.reference_file_path
+              << "\n";
+    std::cerr << "Output file: " << index_parameters.index_output_file_path
+              << "\n";
     chromap::Chromap<> chromap_for_indexing(index_parameters);
     chromap_for_indexing.ConstructIndex();
   } else if (result.count("1")) {
@@ -6255,7 +6260,8 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
       chromap::Chromap<>::ExitWithMessage("No reference specified!");
     }
     if (result.count("o")) {
-      mapping_parameters.mapping_output_file_path = result["output"].as<std::string>();
+      mapping_parameters.mapping_output_file_path =
+          result["output"].as<std::string>();
     } else {
       chromap::Chromap<>::ExitWithMessage("No output file specified!");
     }
@@ -6406,19 +6412,28 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
     if (mapping_parameters.split_alignment) {
       std::cerr << "Allow split alignment.\n";
     }
-    if (mapping_parameters.output_mapping_in_BED) {
-      std::cerr << "Output mappings in BED/BEDPE format.\n";
-    } else if (mapping_parameters.output_mapping_in_TagAlign) {
-      std::cerr << "Output mappings in TagAlign/PairedTagAlign format.\n";
-    } else if (mapping_parameters.output_mapping_in_PAF) {
-      std::cerr << "Output mappings in PAF format.\n";
-    } else if (mapping_parameters.output_mapping_in_SAM) {
-      std::cerr << "Output mappings in SAM format.\n";
-    } else if (mapping_parameters.output_mapping_in_pairs) {
-      std::cerr << "Output mappings in pairs format.\n";
-    } else {
-      chromap::Chromap<>::ExitWithMessage("No output format specified!");
+
+    switch (mapping_parameters.mapping_output_format) {
+      case MAPPINGFORMAT_BED:
+        std::cerr << "Output mappings in BED/BEDPE format.\n";
+        break;
+      case MAPPINGFORMAT_TAGALIGN:
+        std::cerr << "Output mappings in TagAlign/PairedTagAlign format.\n";
+        break;
+      case MAPPINGFORMAT_PAF:
+        std::cerr << "Output mappings in PAF format.\n";
+        break;
+      case MAPPINGFORMAT_SAM:
+        std::cerr << "Output mappings in SAM format.\n";
+        break;
+      case MAPPINGFORMAT_PAIRS:
+        std::cerr << "Output mappings in pairs format.\n";
+        break;
+      default:
+        chromap::Chromap<>::ExitWithMessage("Unknown mapping output format!");
+        break;
     }
+
     std::cerr << "Reference file: " << mapping_parameters.reference_file_path
               << "\n";
     std::cerr << "Index file: " << mapping_parameters.index_file_path << "\n";
@@ -6444,54 +6459,84 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
       std::cerr << "Cell barcode whitelist file: "
                 << mapping_parameters.barcode_whitelist_file_path << "\n";
     }
-    std::cerr << "Output file: " << mapping_parameters.mapping_output_file_path << "\n";
+    std::cerr << "Output file: " << mapping_parameters.mapping_output_file_path
+              << "\n";
     if (result.count("matrix-output-prefix") != 0) {
       std::cerr << "Matrix output prefix: "
                 << mapping_parameters.matrix_output_prefix << "\n";
     }
+
     if (result.count("2") == 0) {
-      if (mapping_parameters.output_mapping_in_PAF) {
-        chromap::Chromap<chromap::PAFMapping> chromap_for_mapping(
-            mapping_parameters);
-        chromap_for_mapping.MapSingleEndReads();
-      } else if (mapping_parameters.output_mapping_in_SAM) {
-        chromap::Chromap<chromap::SAMMapping> chromap_for_mapping(
-            mapping_parameters);
-        chromap_for_mapping.MapSingleEndReads();
-      } else {
-        if (result.count("b") != 0) {
-          chromap::Chromap<chromap::MappingWithBarcode> chromap_for_mapping(
+      // Single-end reads.
+      switch (mapping_parameters.mapping_output_format) {
+        case MAPPINGFORMAT_PAF: {
+          chromap::Chromap<chromap::PAFMapping> chromap_for_mapping(
               mapping_parameters);
           chromap_for_mapping.MapSingleEndReads();
-        } else {
-          chromap::Chromap<chromap::MappingWithoutBarcode> chromap_for_mapping(
-              mapping_parameters);
-          chromap_for_mapping.MapSingleEndReads();
+          break;
         }
+        case MAPPINGFORMAT_SAM: {
+          chromap::Chromap<chromap::SAMMapping> chromap_for_mapping(
+              mapping_parameters);
+          chromap_for_mapping.MapSingleEndReads();
+          break;
+        }
+        case MAPPINGFORMAT_PAIRS:
+          chromap::Chromap<>::ExitWithMessage(
+              "No support for single-end HiC yet!");
+          break;
+        case MAPPINGFORMAT_BED:
+        case MAPPINGFORMAT_TAGALIGN:
+          if (result.count("b") != 0) {
+            chromap::Chromap<chromap::MappingWithBarcode> chromap_for_mapping(
+                mapping_parameters);
+            chromap_for_mapping.MapSingleEndReads();
+          } else {
+            chromap::Chromap<chromap::MappingWithoutBarcode>
+                chromap_for_mapping(mapping_parameters);
+            chromap_for_mapping.MapSingleEndReads();
+          }
+          break;
+        default:
+          chromap::Chromap<>::ExitWithMessage("Unknown mapping output format!");
+          break;
       }
     } else {
-      if (mapping_parameters.output_mapping_in_PAF) {
-        chromap::Chromap<chromap::PairedPAFMapping> chromap_for_mapping(
-            mapping_parameters);
-        chromap_for_mapping.MapPairedEndReads();
-      } else if (mapping_parameters.output_mapping_in_SAM) {
-        chromap::Chromap<chromap::SAMMapping> chromap_for_mapping(
-            mapping_parameters);
-        chromap_for_mapping.MapPairedEndReads();
-      } else if (mapping_parameters.output_mapping_in_pairs) {
-        chromap::Chromap<chromap::PairsMapping> chromap_for_mapping(
-            mapping_parameters);
-        chromap_for_mapping.MapPairedEndReads();
-      } else {
-        if (result.count("b") != 0) {
-          chromap::Chromap<chromap::PairedEndMappingWithBarcode>
-              chromap_for_mapping(mapping_parameters);
+      // Paired-end reads.
+      switch (mapping_parameters.mapping_output_format) {
+        case MAPPINGFORMAT_PAF: {
+          chromap::Chromap<chromap::PairedPAFMapping> chromap_for_mapping(
+              mapping_parameters);
           chromap_for_mapping.MapPairedEndReads();
-        } else {
-          chromap::Chromap<chromap::PairedEndMappingWithoutBarcode>
-              chromap_for_mapping(mapping_parameters);
-          chromap_for_mapping.MapPairedEndReads();
+          break;
         }
+        case MAPPINGFORMAT_SAM: {
+          chromap::Chromap<chromap::SAMMapping> chromap_for_mapping(
+              mapping_parameters);
+          chromap_for_mapping.MapPairedEndReads();
+          break;
+        }
+        case MAPPINGFORMAT_PAIRS: {
+          chromap::Chromap<chromap::PairsMapping> chromap_for_mapping(
+              mapping_parameters);
+          chromap_for_mapping.MapPairedEndReads();
+          break;
+        }
+        case MAPPINGFORMAT_BED:
+        case MAPPINGFORMAT_TAGALIGN:
+          if (result.count("b") != 0) {
+            chromap::Chromap<chromap::PairedEndMappingWithBarcode>
+                chromap_for_mapping(mapping_parameters);
+            chromap_for_mapping.MapPairedEndReads();
+          } else {
+            chromap::Chromap<chromap::PairedEndMappingWithoutBarcode>
+                chromap_for_mapping(mapping_parameters);
+            chromap_for_mapping.MapPairedEndReads();
+          }
+          break;
+        default:
+          chromap::Chromap<>::ExitWithMessage("Unknown mapping output format!");
+          break;
       }
     }
   } else {

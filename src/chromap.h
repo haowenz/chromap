@@ -45,6 +45,15 @@ struct Peak {
   uint32_t index;
 };
 
+enum MappingOutputFormat {
+  MAPPINGFORMAT_UNKNOWN,
+  MAPPINGFORMAT_BED,
+  MAPPINGFORMAT_TAGALIGN,
+  MAPPINGFORMAT_PAF,
+  MAPPINGFORMAT_SAM,
+  MAPPINGFORMAT_PAIRS
+};
+
 KHASH_MAP_INIT_INT64(k128, uint128_t);
 KHASH_MAP_INIT_INT64(k64_seq, uint64_t);
 KHASH_SET_INIT_INT(k32_set);
@@ -99,11 +108,7 @@ struct MappingParameters {
   bool output_mappings_not_in_whitelist = false;
   bool Tn5_shift = false;
   bool split_alignment = false;
-  bool output_mapping_in_BED = false;
-  bool output_mapping_in_TagAlign = false;
-  bool output_mapping_in_PAF = false;
-  bool output_mapping_in_SAM = false;
-  bool output_mapping_in_pairs = false;
+  MappingOutputFormat mapping_output_format = MAPPINGFORMAT_BED;
   bool low_memory_mode = false;
   bool cell_by_bin = false;
   int bin_size = 5000;
@@ -187,12 +192,7 @@ class Chromap {
             mapping_parameters.output_mappings_not_in_whitelist),
         Tn5_shift_(mapping_parameters.Tn5_shift),
         split_alignment_(mapping_parameters.split_alignment),
-        output_mapping_in_BED_(mapping_parameters.output_mapping_in_BED),
-        output_mapping_in_TagAlign_(
-            mapping_parameters.output_mapping_in_TagAlign),
-        output_mapping_in_PAF_(mapping_parameters.output_mapping_in_PAF),
-        output_mapping_in_SAM_(mapping_parameters.output_mapping_in_SAM),
-        output_mapping_in_pairs_(mapping_parameters.output_mapping_in_pairs),
+        mapping_output_format_(mapping_parameters.mapping_output_format),
         low_memory_mode_(mapping_parameters.low_memory_mode),
         cell_by_bin_(mapping_parameters.cell_by_bin),
         bin_size_(mapping_parameters.bin_size),
@@ -630,11 +630,7 @@ class Chromap {
   bool output_mappings_not_in_whitelist_;
   bool Tn5_shift_;
   bool split_alignment_;
-  bool output_mapping_in_BED_;
-  bool output_mapping_in_TagAlign_;
-  bool output_mapping_in_PAF_;
-  bool output_mapping_in_SAM_;
-  bool output_mapping_in_pairs_;
+  MappingOutputFormat mapping_output_format_;
   // Default batch size, # reads for single-end reads, # read pairs for
   // paired-end reads.
   uint32_t read_batch_size_ = 500000;
