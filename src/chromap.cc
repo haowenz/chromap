@@ -4213,6 +4213,7 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
     ("pairs-natural-chr-order", "natural chromosome order for pairs flipping", cxxopts::value<std::string>(), "FILE");
     //("PAF", "Output mappings in PAF format (only for test)");
   options.add_options()
+    ("v,version", "Print version")
     ("h,help", "Print help");
   options.add_options("Development options")
     ("A,match-score", "Match score [1]", cxxopts::value<int>(), "INT")
@@ -4227,6 +4228,14 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
     ("PAF", "Output mappings in PAF format (only for test)");
     
   auto result = options.parse(argc, argv);
+  if (result.count("h")) {
+    std::cerr << options.help({"", "Indexing", "Mapping", "Peak", "Input", "Output"});
+    return;
+  } 
+  if (result.count("v")) {
+    std::cerr << CHROMAP_VERSION << "\n";
+    return;
+  }
   // Parameters and their default
   int min_fragment_length = 30;
   int kmer_size = 17;
@@ -4655,8 +4664,6 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
         }
       }
     }
-  } else if (result.count("h")) {
-    std::cerr << options.help({"", "Indexing", "Mapping", "Peak", "Input", "Output"});
   } else {
     std::cerr << options.help({"", "Indexing", "Mapping", "Peak", "Input", "Output"});
   }
