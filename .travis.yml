@@ -1,8 +1,4 @@
-matrix:
-  include:
-    - language: cpp
-      compiler: gcc
-      script: make
-    - language: cpp
-      compiler: clang
-      script: make
+dist: bionic
+language: cpp
+compiler: gcc
+script: make
