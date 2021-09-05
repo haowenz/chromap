@@ -31,7 +31,7 @@ struct StackCell {
 };
 
 struct _mm_history {
-	bool skip;
+	unsigned int timestamp;
 	std::vector<std::pair<uint64_t, uint64_t> > minimizers;
 	std::vector<Candidate> positive_candidates;
 	std::vector<Candidate> negative_candidates;
