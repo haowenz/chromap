@@ -1,0 +1,285 @@
+.TH chromap 1 "15 Sept 2021" "chromap-0.1 (r208)" "Bioinformatics tools"
+.SH NAME
+.PP
+chromap - fast alignment and preprocessing of chromatin profiles
+.SH SYNOPSIS
+* Indexing the reference genome:
+.RS 4
+chromap
+.B -i
+.RB [ -k
+.IR kmer ]
+.RB [ -w
+.IR miniWinSize ]
+.B -r
+.I ref.fa
+.B -o
+.I ref.index
+.RE
+
+* Mapping (sc)ATAC-seq reads:
+.RS 4
+chromap
+.B --preset
+.I atac
+.B -r
+.I ref.fa
+.B -x
+.I ref.index
+.B -1 
+.I read1.fq
+.B -2
+.I read2.fq
+.B -o 
+.I aln.bed
+.RB [ -b 
+.IR barcode.fq.gz ] 
+.RB [ --barcode-whitelist 
+.IR whitelist.txt ]
+.RE
+
+* Mapping ChIP-seq reads:
+.RS 4
+chromap
+.B --preset
+.I chip
+.B -r
+.I ref.fa
+.B -x
+.I ref.index
+.B -1
+.I read1.fq
+.B -2
+.I read2.fq
+.B -o
+.I aln.bed
+.RE
+
+* Mapping Hi-C reads:
+.RS 4
+chromap 
+.B --preset
+.I hic
+.B -r
+.I ref.fa
+.B -x
+.I ref.index
+.B -1
+.I read1.fq
+.B -2
+.I read2.fq
+.B -o
+.I aln.pairs
+.br
+chromap 
+.B --preset
+.I hic
+.B -r
+.I ref.fa
+.B -x
+.I ref.index
+.B -1
+.I read1.fq
+.B -2
+.I read2.fq
+.B --SAM
+.B -o
+.I aln.sam
+.RE
+
+.SH DESCRIPTION
+.PP
+Chromap is an ultrafast method for aligning and preprocessing high throughput
+chromatin profiles. Typical use cases include: (1) trimming sequencing adapters,
+mapping bulk ATAC-seq or ChIP-seq genomic reads to the human genome and removing
+duplicates; (2) trimming sequencing adapters, mapping single cell ATAC-seq
+genomic reads to the human genome, correcting barcodes, removing duplicates and
+performing Tn5 shift; (3) split alignment of Hi-C reads against a reference
+genome. In all these three cases, Chromap is 10-20 times faster while being
+accurate.
+.SH OPTIONS
+.SS Indexing options
+.TP 10
+.BI -k \ INT
+Minimizer k-mer length [17].
+.TP
+.BI -w \ INT
+Minimizer window size [7]. A minimizer is the smallest k-mer
+in a window of w consecutive k-mers.
+.TP
+.B --min-frag-length
+Min fragment length for choosing k and w automatically [30]. Users can increase
+this value when the min length of the fragments of interest is long, which can
+increase the mapping speed. Note that the default value 30 is the min fragment
+length that chromap can map. 
+
+.SS Mapping options
+.TP 10
+.BI --split-alignment
+Allow split alignments. This option should be set only when mapping Hi-C reads.
+.TP
+.BI -e \ INT
+Max edit distance allowed to map a read [8].
+.TP
+.BI -s \ INT
+Min number of minimizers required to map a read [2].
+.TP
+.BI -f \ INT1 [, INT2 ]
+Ignore minimizers occuring more than
+.I INT1
+[500] times.
+.I INT2
+[1000] is the threshold for a second round of seeding.
+.TP
+.BI -l \ INT
+Max insert size, only for paired-end read mapping [1000].
+.TP
+.BI -q \ INT
+Min MAPQ in range [0, 60] for mappings to be output [30].
+.TP
+.BI --min-read-length \ INT
+Skip mapping the reads of length less than  
+.I INT 
+[30]. Note that this is different from the index option
+.BR --min-frag-length
+, which set
+.BR -k
+and
+.BR -w
+for indexing the genome.
+.TP
+.BI --trim-adapters
+Try to trim adapters on 3'. This only works for paired-end reads. When the
+fragment length indicated by the read pair is less than the length of the reads,
+the two mates are overlapped with each other. Then the regions outside the
+overlap are regarded as adapters and trimmed.
+.TP
+.BI --remove-pcr-duplicates
+Remove PCR duplicates.
+.TP
+.BI --remove-pcr-duplicates-at-bulk-level
+Remove PCR duplicates at bulk level for single cell data.
+.TP
+.BI --remove-pcr-duplicates-at-cell-level
+Remove PCR duplicates at cell level for single cell data.
+.TP
+.BI --Tn5-shift
+Perform Tn5 shift. When this option is turned on, the forward mapping start
+positions are increased by 4bp and the reverse mapping end positions are
+decreased by 5bp. Note that this works only when
+.BR --SAM
+is NOT set.
+.TP
+.BI --low-mem
+Use low memory mode. When this option is set, multiple temporary intermediate
+mapping files might be generated on disk and they are merged at the end of
+processing to reduce memory usage. When this is NOT set, all the mapping results
+are kept in the memory before they are saved on disk, which works more
+efficiently for datasets that are not too large.
+.TP
+.BI --bc-error-threshold \ INT
+Max Hamming distance allowed to correct a barcode [1]. Note that the max 
+supported threshold is 2.
+.TP
+.BI --bc-probability-threshold \ FLT
+Min probability to correct a barcode [0.9]. When there are multiple whitelisted
+barcodes with the same Hamming distance to the barcode to correct, chromap will
+process the base quality of the mismatched bases, and compute a probability that
+the correction is right.
+.TP
+.BI -t \ INT
+The number of threads for mapping [1].
+
+.SS Input options
+.TP 10
+.BI -r \ FILE
+Reference file.
+.TP
+.BI -x \ FILE
+Index file.
+.TP
+.BI -1 \ FILE
+Single-end read files or paired-end read files 1. Chromap supports mulitple
+input files concatenate by ",". For example, setting this option to 
+"read11.fq,read12.fq,read13.fq" will make all three files as input and map them 
+in this order. Similarly,
+.BR -2
+and
+.BR -b
+also support multiple input files. And the ordering of the input files for all
+the three options should match.
+.TP
+.BI -2 \ FILE
+Paired-end read files 2.
+.TP
+.BI -b \ FILE
+Cell barcode files.
+.TP
+.BI --barcode-whitelist \ FILE
+Cell barcode whitelist file. This is supposed to be a txt file where each line
+is a whitelisted barcode.
+.TP
+.BI --read-format \ STR
+Format for read files and barcode files ["r1:0:-1,bc:0:-1"] as 10x Genomics 
+single-end format.
+
+.SS Output options
+.TP 10
+.BR -o \ FILE
+Output file.
+.TP
+.BR --output-mappings-not-in-whitelist
+Output mappings with barcode not in the whitelist.
+.TP
+.BR --chr-order \ FILE          
+Customized chromsome order.
+.TP
+.BR --BED
+Output mappings in BED/BEDPE format. Note that only one of the formats should be
+set.
+.TP
+.BR --TagAlign
+Output mappings in TagAlign/PairedTagAlign format.
+.TP
+.BR --SAM
+Output mappings in SAM format.
+.TP
+.BR --pairs
+Output mappings in pairs format (defined by 4DN for HiC data).
+.TP
+.BR --pairs-natural-chr-order \ FILE
+Natural chromosome order for pairs flipping.
+.TP
+.B -v
+Print version number to stdout.
+
+.SS Preset options
+.TP 10
+.BI --preset \ STR
+Preset []. This option applies multiple options at the same time. It should be
+applied before other options because options applied later will overwrite the
+values set by
+.BR --preset .
+Available
+.I STR
+are:
+.RS
+.TP 10
+.B chip 
+Mapping ChIP-seq reads
+.RB ( -l2000
+.B --remove-pcr-duplicates --low_memory
+.BR --BED ).
+.TP
+.B atac
+Mapping ATAC-seq/scATAC-seq reads
+.RB ( -l2000
+.B --remove-pcr-duplicates --low_memory --trim-adapters
+.B --remove-pcr-duplicates-at-cell-level
+.BR --BED ).
+.TP
+.B hic
+Mapping Hi-C reads
+.RB ( -e4
+.B -q1 --low_memory --split-alignment
+.BR --pairs ).
