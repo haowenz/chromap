@@ -1,4 +1,4 @@
-.TH chromap 1 "15 Sept 2021" "chromap-0.1.1 (r234)" "Bioinformatics tools"
+.TH chromap 1 "17 Sept 2021" "chromap-0.1.1 (r234)" "Bioinformatics tools"
 .SH NAME
 .PP
 chromap - fast alignment and preprocessing of chromatin profiles
@@ -267,19 +267,24 @@ are:
 .TP 10
 .B chip 
 Mapping ChIP-seq reads
-.RB ( -l2000
-.B --remove-pcr-duplicates --low_memory
+.RB ( -l
+.I 2000
+.B --remove-pcr-duplicates --low-mem
 .BR --BED ).
 .TP
 .B atac
 Mapping ATAC-seq/scATAC-seq reads
-.RB ( -l2000
-.B --remove-pcr-duplicates --low_memory --trim-adapters
+.RB ( -l 
+.I 2000
+.B --remove-pcr-duplicates --low-mem --trim-adapters --Tn5-shift
 .B --remove-pcr-duplicates-at-cell-level
 .BR --BED ).
 .TP
 .B hic
 Mapping Hi-C reads
-.RB ( -e4
-.B -q1 --low_memory --split-alignment
+.RB ( -e 
+.I 4
+.B -q
+.I 1 
+.B --low-mem --split-alignment
 .BR --pairs ).
