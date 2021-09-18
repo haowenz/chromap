@@ -1223,6 +1223,108 @@ class OutputTools {
   FILE *matrix_output_file_;
 };
 
+// Specialization for BED format.
+template <>
+void OutputTools<MappingWithBarcode>::OutputHeader(
+    uint32_t num_reference_sequences, const SequenceBatch &reference);
+
+template <>
+void OutputTools<MappingWithBarcode>::AppendMapping(
+    uint32_t rid, const SequenceBatch &reference,
+    const MappingWithBarcode &mapping);
+
+template <>
+void OutputTools<MappingWithoutBarcode>::OutputHeader(
+    uint32_t num_reference_sequences, const SequenceBatch &reference);
+
+template <>
+void OutputTools<MappingWithoutBarcode>::AppendMapping(
+    uint32_t rid, const SequenceBatch &reference,
+    const MappingWithoutBarcode &mapping);
+
+// Specialization for BEDPE format.
+template <>
+void OutputTools<PairedEndMappingWithoutBarcode>::OutputHeader(
+    uint32_t num_reference_sequences, const SequenceBatch &reference);
+
+template <>
+void OutputTools<PairedEndMappingWithoutBarcode>::AppendMapping(
+    uint32_t rid, const SequenceBatch &reference,
+    const PairedEndMappingWithoutBarcode &mapping);
+
+template <>
+void OutputTools<PairedEndMappingWithBarcode>::OutputHeader(
+    uint32_t num_reference_sequences, const SequenceBatch &reference);
+
+template <>
+void OutputTools<PairedEndMappingWithBarcode>::AppendMapping(
+    uint32_t rid, const SequenceBatch &reference,
+    const PairedEndMappingWithBarcode &mapping);
+
+// Specialization for PAF format.
+template <>
+void OutputTools<PAFMapping>::OutputHeader(uint32_t num_reference_sequences,
+                                           const SequenceBatch &reference);
+
+template <>
+void OutputTools<PAFMapping>::AppendMapping(uint32_t rid,
+                                            const SequenceBatch &reference,
+                                            const PAFMapping &mapping);
+
+template <>
+void OutputTools<PAFMapping>::OutputTempMapping(
+    const std::string &temp_mapping_output_file_path,
+    uint32_t num_reference_sequences,
+    const std::vector<std::vector<PAFMapping> > &mappings);
+
+// Specialization for PairedPAF format.
+template <>
+void OutputTools<PairedPAFMapping>::OutputHeader(
+    uint32_t num_reference_sequences, const SequenceBatch &reference);
+
+template <>
+void OutputTools<PairedPAFMapping>::OutputTempMapping(
+    const std::string &temp_mapping_output_file_path,
+    uint32_t num_reference_sequences,
+    const std::vector<std::vector<PairedPAFMapping> > &mappings);
+
+template <>
+void OutputTools<PairedPAFMapping>::AppendMapping(
+    uint32_t rid, const SequenceBatch &reference,
+    const PairedPAFMapping &mapping);
+
+// Specialization for SAM format.
+template <>
+void OutputTools<SAMMapping>::OutputHeader(uint32_t num_reference_sequences,
+                                           const SequenceBatch &reference);
+
+template <>
+void OutputTools<SAMMapping>::AppendMapping(uint32_t rid,
+                                            const SequenceBatch &reference,
+                                            const SAMMapping &mapping);
+
+template <>
+void OutputTools<SAMMapping>::OutputTempMapping(
+    const std::string &temp_mapping_output_file_path,
+    uint32_t num_reference_sequences,
+    const std::vector<std::vector<SAMMapping> > &mappings);
+
+// Specialization for pairs format.
+template <>
+void OutputTools<PairsMapping>::OutputHeader(uint32_t num_reference_sequences,
+                                             const SequenceBatch &reference);
+
+template <>
+void OutputTools<PairsMapping>::AppendMapping(uint32_t rid,
+                                              const SequenceBatch &reference,
+                                              const PairsMapping &mapping);
+
+template <>
+void OutputTools<PairsMapping>::OutputTempMapping(
+    const std::string &temp_mapping_output_file_path,
+    uint32_t num_reference_sequences,
+    const std::vector<std::vector<PairsMapping> > &mappings);
+
 }  // namespace chromap
 
 #endif  // OUTPUTTOOLS_H_

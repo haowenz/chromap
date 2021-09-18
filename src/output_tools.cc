@@ -163,6 +163,7 @@ void OutputTools<PairedEndMappingWithBarcode>::AppendMapping(
   }
 }
 
+// Specialization for PAF format.
 template <>
 void OutputTools<PAFMapping>::OutputHeader(uint32_t num_reference_sequences,
                                            const SequenceBatch &reference) {}
@@ -211,6 +212,7 @@ void OutputTools<PAFMapping>::OutputTempMapping(
   fclose(temp_mapping_output_file);
 }
 
+// Specialization for PairedPAF format.
 template <>
 void OutputTools<PairedPAFMapping>::OutputHeader(
     uint32_t num_reference_sequences, const SequenceBatch &reference) {}
@@ -296,6 +298,7 @@ void OutputTools<PairedPAFMapping>::AppendMapping(
   }
 }
 
+// Specialization for SAM format.
 template <>
 void OutputTools<SAMMapping>::OutputHeader(uint32_t num_reference_sequences,
                                            const SequenceBatch &reference) {
@@ -358,6 +361,7 @@ void OutputTools<SAMMapping>::OutputTempMapping(
   fclose(temp_mapping_output_file);
 }
 
+// Specialization for pairs format.
 template <>
 void OutputTools<PairsMapping>::OutputHeader(uint32_t num_reference_sequences,
                                              const SequenceBatch &reference) {
