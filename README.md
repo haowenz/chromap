@@ -37,14 +37,7 @@ these three cases, Chromap is 10-20 times faster while being accurate.
 
 ### <a name="install"></a>Installation
 
-You can acquire precompiled binaries from
-the [release page][release] with:
-
-```sh
-curl -L https://github.com/haowenz/chromap/releases/download/v0.1/chromap-0.1_x64-linux.tar.bz2 | tar -jxvf -
-./chromap-0.1_x64-linux/chromap
-```
-If you want to compile from the source, you need to have the GCC compiler, GNU make
+To compile from the source, you need to have the GCC compiler, GNU make
 and zlib development files installed. Then type `make` in the source code
 directory to compile. 
 
@@ -94,9 +87,21 @@ parameters at the same time.
 ```sh
 chromap --preset chip -x index -r ref.fa -1 read1.fq.gz -2 read2.fq.gz -o aln.bed      # ChIP-seq reads
 ```
-This set of parameters is tuned for mapping ChIP-seq reads. Chromap will trim the
-adapters on 3' end, map the paired-end reads with max insert size (**-l**) up to
-2000 and then remove duplicates.
+This set of parameters is tuned for mapping ChIP-seq reads. Chromap will map the 
+paired-end reads with max insert size up to 2000 (**-l 2000**) and then remove
+duplicates (**--remove-pcr-duplicates**) using the low memory mode
+(**--low-mem**). The output is in BED format (**--BED**). In the output BED file,
+each row is a mapping of a fragment (i.e., a read pair) and the columns are
+
+    chrom chrom_start chrom_end N mapq strand
+The strand here is the strand of the first read in a read pair (specified by **-1**).
+If the mapping start and end locations of each read in a read pair are desired,
+**--TagAlign** should be used to overide **--BED** in the preset parameters as following
+```sh
+chromap --preset chip -x index -r ref.fa -1 read1.fq.gz -2 read2.fq.gz --TagAlign -o aln.tagAlign      # ChIP-seq reads
+```
+For each read pair, there will be two rows in the output file, one for each read in the pair
+respectively. The meaning of the columns remains the same.
 
 #### <a name="map-atac"></a>Map ATAC-seq/scATAC-seq short reads
 
@@ -105,6 +110,15 @@ chromap --preset atac -x index -r ref.fa -1 read1.fq.gz -2 read2.fq.gz -o aln.be
 chromap --preset atac -x index -r ref.fa -1 read1.fq.gz -2 read2.fq.gz -o aln.bed\
  -b barcode.fq.gz --barcode-whitelist whitelist.txt                                    # scATAC-seq reads
 ```
+This set of parameters is tuned for mapping ATAC-seq/scATAC-seq reads.
+Chromap will trim the adapters on 3' end (**--trim-adapters**), map the 
+paired-end reads with max insert size up to 2000 (**-l 2000**) and then
+remove duplicates at cell level (**--remove-pcr-duplicates-at-cell-level**).
+Tn5 shift will also be applied to the fragments (**--Tn5-shift**). The 
+forward mapping start positions are increased by 4bp and the reverse
+mapping end positions are decreased by 5bp. The processing is run in
+the low memory mode (**--low-mem**).
+
 When barcodes and a whitelist are given as input, by default Chromap will
 estimate barcode abundance and use this information to perform barcode
 correction with up to 1 Hamming distance from a whitelist barcode. By setting
@@ -117,12 +131,14 @@ use "," to concatenate multiple input files as the example [above](#general).
 
 Chromap also supports user-defined barcode format, including mixed barcode and genomic 
 data case. User can specify the sequence structure through option **--read-format**. The value
-is comma-separated string, each field is also semi-comma-splitted string: [r1|r2|bc]:start:end.
-The start and end(inclusive, -1 means to the read end). For the example that the barcode is in read1's 
-first 16bp, one can use the option 
+is a comma-separated string, each field in the string is also a semi-comma-splitted string
+
+    [r1|r2|bc]:start:end
+The start and end are inclusive and -1 means the end of the read. For example,
+when the barcode is in the first 16bp of read1, one can use the option 
 `-1 read1.fq.gz -2 read2.fq.gz --barcode read1.fq.gz --read-format bc:0:15,r1:16:-1`
 
-The BED format (fragment file) for bulk and single-cell is different except for the first
+The output file formats for bulk and single-cell data are different except for the first
 three columns. For bulk data, the columns are
 
     chrom chrom_start chrom_end N mapq strand
@@ -138,8 +154,8 @@ Note that chrom_end is open-end.
 ```sh
 chromap --preset hic -x index -r ref.fa -1 read1.fa -2 read2.fa -o aln.pairs           # Hi-C reads and pairs output
 ```
-Chromap will perform split alignment on Hi-C reads and output mappings
-in [pairs][pairs] format, which is used in [4DN Hi-C data processing pipeline][4DN]. 
+Chromap will perform split alignment (**--split-alignment**) on Hi-C reads and output mappings
+in [pairs][pairs] format (**--pairs**), which is used in [4DN Hi-C data processing pipeline][4DN]. 
 Some Hi-C data analysis pipelines may require the reads are sorted in specific chromosome order
 other than the one in the index. Therefore, Chromap provides the option **--chr-order** 
 to specify the alignment order, and **--pairs-natural-chr-order** for flipping the pair 
@@ -148,7 +164,7 @@ in the pairs format.
 ### <a name="help"></a>Getting help
 
 Detailed description of Chromap command line options and optional tags 
-can be displayed by running Chromap with **-h**. If you encounter bugs or have further questions or requests,
+can be displayed by running Chromap with **-h** or by `man ./chromap.1`. If you encounter bugs or have further questions or requests,
 you can raise an issue at the [issue page][issue].
 
 
