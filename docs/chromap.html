@@ -1,0 +1,545 @@
+<!-- Creator     : groff version 1.22.2 -->
+<!-- CreationDate: Mon Sep 20 10:43:13 2021 -->
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+"http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta name="generator" content="groff -Thtml, see www.gnu.org">
+<meta http-equiv="Content-Type" content="text/html; charset=US-ASCII">
+<meta name="Content-Style" content="text/css">
+<style type="text/css">
+       p       { margin-top: 0; margin-bottom: 0; vertical-align: top }
+       pre     { margin-top: 0; margin-bottom: 0; vertical-align: top }
+       table   { margin-top: 0; margin-bottom: 0; vertical-align: top }
+       h1      { text-align: center }
+</style>
+<title>chromap</title>
+
+</head>
+<body>
+
+<h1 align="center">chromap</h1>
+
+<a href="#NAME">NAME</a><br>
+<a href="#SYNOPSIS">SYNOPSIS</a><br>
+<a href="#DESCRIPTION">DESCRIPTION</a><br>
+<a href="#OPTIONS">OPTIONS</a><br>
+
+<hr>
+
+
+<h2>NAME
+<a name="NAME"></a>
+</h2>
+
+
+<p style="margin-left:11%; margin-top: 1em">chromap - fast
+alignment and preprocessing of chromatin profiles</p>
+
+<h2>SYNOPSIS
+<a name="SYNOPSIS"></a>
+</h2>
+
+
+<p style="margin-left:11%; margin-top: 1em">* Indexing the
+reference genome:</p>
+
+<p style="margin-left:17%;">chromap <b>-i</b> [<b>-k</b>
+<i>kmer</i>] [<b>-w</b> <i>miniWinSize</i>] <b>-r</b>
+<i>ref.fa</i> <b>-o</b> <i>ref.index</i></p>
+
+<p style="margin-left:11%; margin-top: 1em">* Mapping
+(sc)ATAC-seq reads:</p>
+
+<p style="margin-left:17%;">chromap <b>--preset</b>
+<i>atac</i> <b>-r</b> <i>ref.fa</i> <b>-x</b>
+<i>ref.index</i> <b>-1</b> <i>read1.fq</i> <b>-2</b>
+<i>read2.fq</i> <b>-o</b> <i>aln.bed</i> [<b>-b</b>
+<i>barcode.fq.gz</i>] [<b>--barcode-whitelist</b>
+<i>whitelist.txt</i>]</p>
+
+<p style="margin-left:11%; margin-top: 1em">* Mapping
+ChIP-seq reads:</p>
+
+<p style="margin-left:17%;">chromap <b>--preset</b>
+<i>chip</i> <b>-r</b> <i>ref.fa</i> <b>-x</b>
+<i>ref.index</i> <b>-1</b> <i>read1.fq</i> <b>-2</b>
+<i>read2.fq</i> <b>-o</b> <i>aln.bed</i></p>
+
+<p style="margin-left:11%; margin-top: 1em">* Mapping Hi-C
+reads:</p>
+
+<p style="margin-left:17%;">chromap <b>--preset</b>
+<i>hic</i> <b>-r</b> <i>ref.fa</i> <b>-x</b>
+<i>ref.index</i> <b>-1</b> <i>read1.fq</i> <b>-2</b>
+<i>read2.fq</i> <b>-o</b> <i>aln.pairs</i> <br>
+chromap <b>--preset</b> <i>hic</i> <b>-r</b> <i>ref.fa</i>
+<b>-x</b> <i>ref.index</i> <b>-1</b> <i>read1.fq</i>
+<b>-2</b> <i>read2.fq</i> <b>--SAM -o</b> <i>aln.sam</i></p>
+
+<h2>DESCRIPTION
+<a name="DESCRIPTION"></a>
+</h2>
+
+
+<p style="margin-left:11%; margin-top: 1em">Chromap is an
+ultrafast method for aligning and preprocessing high
+throughput chromatin profiles. Typical use cases include:
+(1) trimming sequencing adapters, mapping bulk ATAC-seq or
+ChIP-seq genomic reads to the human genome and removing
+duplicates; (2) trimming sequencing adapters, mapping single
+cell ATAC-seq genomic reads to the human genome, correcting
+barcodes, removing duplicates and performing Tn5 shift; (3)
+split alignment of Hi-C reads against a reference genome. In
+all these three cases, Chromap is 10-20 times faster while
+being accurate.</p>
+
+<h2>OPTIONS
+<a name="OPTIONS"></a>
+</h2>
+
+
+<p style="margin-left:11%; margin-top: 1em"><b>Indexing
+options</b></p>
+
+<table width="100%" border="0" rules="none" frame="void"
+       cellspacing="0" cellpadding="0">
+<tr valign="top" align="left">
+<td width="11%"></td>
+<td width="9%">
+
+
+<p><b>-k&nbsp;</b><i>INT</i></p></td>
+<td width="6%"></td>
+<td width="74%">
+
+
+<p>Minimizer k-mer length [17].</p></td></tr>
+<tr valign="top" align="left">
+<td width="11%"></td>
+<td width="9%">
+
+
+<p><b>-w&nbsp;</b><i>INT</i></p></td>
+<td width="6%"></td>
+<td width="74%">
+
+
+<p>Minimizer window size [7]. A minimizer is the smallest
+k-mer in a window of w consecutive k-mers.</p></td></tr>
+</table>
+
+<p style="margin-left:11%;"><b>--min-frag-length</b></p>
+
+<p style="margin-left:26%;">Min fragment length for
+choosing k and w automatically [30]. Users can increase this
+value when the min length of the fragments of interest is
+long, which can increase the mapping speed. Note that the
+default value 30 is the min fragment length that chromap can
+map.</p>
+
+<p style="margin-left:11%; margin-top: 1em"><b>Mapping
+options <br>
+--split-alignment</b></p>
+
+<p style="margin-left:26%;">Allow split alignments. This
+option should be set only when mapping Hi-C reads.</p>
+
+<table width="100%" border="0" rules="none" frame="void"
+       cellspacing="0" cellpadding="0">
+<tr valign="top" align="left">
+<td width="11%"></td>
+<td width="9%">
+
+
+<p><b>-e&nbsp;</b><i>INT</i></p></td>
+<td width="6%"></td>
+<td width="74%">
+
+
+<p>Max edit distance allowed to map a read [8].</p></td></tr>
+<tr valign="top" align="left">
+<td width="11%"></td>
+<td width="9%">
+
+
+<p><b>-s&nbsp;</b><i>INT</i></p></td>
+<td width="6%"></td>
+<td width="74%">
+
+
+<p>Min number of minimizers required to map a read [2].</p></td></tr>
+</table>
+
+
+<p style="margin-left:11%;"><b>-f&nbsp;</b><i>INT1</i><b>[,</b><i>INT2</i><b>]</b></p>
+
+<p style="margin-left:26%;">Ignore minimizers occuring more
+than <i>INT1</i> [500] times. <i>INT2</i> [1000] is the
+threshold for a second round of seeding.</p>
+
+<table width="100%" border="0" rules="none" frame="void"
+       cellspacing="0" cellpadding="0">
+<tr valign="top" align="left">
+<td width="11%"></td>
+<td width="9%">
+
+
+<p><b>-l&nbsp;</b><i>INT</i></p></td>
+<td width="6%"></td>
+<td width="74%">
+
+
+<p>Max insert size, only for paired-end read mapping
+[1000].</p> </td></tr>
+<tr valign="top" align="left">
+<td width="11%"></td>
+<td width="9%">
+
+
+<p><b>-q&nbsp;</b><i>INT</i></p></td>
+<td width="6%"></td>
+<td width="74%">
+
+
+<p>Min MAPQ in range [0, 60] for mappings to be output
+[30].</p> </td></tr>
+</table>
+
+
+<p style="margin-left:11%;"><b>--min-read-length&nbsp;</b><i>INT</i></p>
+
+<p style="margin-left:26%;">Skip mapping the reads of
+length less than <i>INT</i> [30]. Note that this is
+different from the index option <b>--min-frag-length</b> ,
+which set <b>-k</b> and <b>-w</b> for indexing the
+genome.</p>
+
+<p style="margin-left:11%;"><b>--trim-adapters</b></p>
+
+<p style="margin-left:26%;">Try to trim adapters on
+3&rsquo;. This only works for paired-end reads. When the
+fragment length indicated by the read pair is less than the
+length of the reads, the two mates are overlapped with each
+other. Then the regions outside the overlap are regarded as
+adapters and trimmed.</p>
+
+
+<p style="margin-left:11%;"><b>--remove-pcr-duplicates</b></p>
+
+<p style="margin-left:26%;">Remove PCR duplicates.</p>
+
+
+<p style="margin-left:11%;"><b>--remove-pcr-duplicates-at-bulk-level</b></p>
+
+<p style="margin-left:26%;">Remove PCR duplicates at bulk
+level for single cell data.</p>
+
+
+<p style="margin-left:11%;"><b>--remove-pcr-duplicates-at-cell-level</b></p>
+
+<p style="margin-left:26%;">Remove PCR duplicates at cell
+level for single cell data.</p>
+
+<p style="margin-left:11%;"><b>--Tn5-shift</b></p>
+
+<p style="margin-left:26%;">Perform Tn5 shift. When this
+option is turned on, the forward mapping start positions are
+increased by 4bp and the reverse mapping end positions are
+decreased by 5bp. Note that this works only when
+<b>--SAM</b> is NOT set.</p>
+
+<table width="100%" border="0" rules="none" frame="void"
+       cellspacing="0" cellpadding="0">
+<tr valign="top" align="left">
+<td width="11%"></td>
+<td width="14%">
+
+
+<p><b>--low-mem</b></p></td>
+<td width="1%"></td>
+<td width="74%">
+
+
+<p>Use low memory mode. When this option is set, multiple
+temporary intermediate mapping files might be generated on
+disk and they are merged at the end of processing to reduce
+memory usage. When this is NOT set, all the mapping results
+are kept in the memory before they are saved on disk, which
+works more efficiently for datasets that are not too
+large.</p> </td></tr>
+</table>
+
+
+<p style="margin-left:11%;"><b>--bc-error-threshold&nbsp;</b><i>INT</i></p>
+
+<p style="margin-left:26%;">Max Hamming distance allowed to
+correct a barcode [1]. Note that the max supported threshold
+is 2.</p>
+
+
+<p style="margin-left:11%;"><b>--bc-probability-threshold&nbsp;</b><i>FLT</i></p>
+
+<p style="margin-left:26%;">Min probability to correct a
+barcode [0.9]. When there are multiple whitelisted barcodes
+with the same Hamming distance to the barcode to correct,
+chromap will process the base quality of the mismatched
+bases, and compute a probability that the correction is
+right.</p>
+
+<table width="100%" border="0" rules="none" frame="void"
+       cellspacing="0" cellpadding="0">
+<tr valign="top" align="left">
+<td width="11%"></td>
+<td width="9%">
+
+
+<p><b>-t&nbsp;</b><i>INT</i></p></td>
+<td width="6%"></td>
+<td width="59%">
+
+
+<p>The number of threads for mapping [1].</p></td>
+<td width="15%">
+</td></tr>
+</table>
+
+<p style="margin-left:11%; margin-top: 1em"><b>Input
+options</b></p>
+
+<table width="100%" border="0" rules="none" frame="void"
+       cellspacing="0" cellpadding="0">
+<tr valign="top" align="left">
+<td width="11%"></td>
+<td width="11%">
+
+
+<p style="margin-top: 1em"><b>-r&nbsp;</b><i>FILE</i></p></td>
+<td width="4%"></td>
+<td width="74%">
+
+
+<p style="margin-top: 1em">Reference file.</p></td></tr>
+<tr valign="top" align="left">
+<td width="11%"></td>
+<td width="11%">
+
+
+<p><b>-x&nbsp;</b><i>FILE</i></p></td>
+<td width="4%"></td>
+<td width="74%">
+
+
+<p>Index file.</p></td></tr>
+<tr valign="top" align="left">
+<td width="11%"></td>
+<td width="11%">
+
+
+<p><b>-1&nbsp;</b><i>FILE</i></p></td>
+<td width="4%"></td>
+<td width="74%">
+
+
+<p>Single-end read files or paired-end read files 1.
+Chromap supports mulitple input files concatenate by
+&quot;,&quot;. For example, setting this option to
+&quot;read11.fq,read12.fq,read13.fq&quot; will make all
+three files as input and map them in this order. Similarly,
+<b>-2</b> and <b>-b</b> also support multiple input files.
+And the ordering of the input files for all the three
+options should match.</p></td></tr>
+<tr valign="top" align="left">
+<td width="11%"></td>
+<td width="11%">
+
+
+<p><b>-2&nbsp;</b><i>FILE</i></p></td>
+<td width="4%"></td>
+<td width="74%">
+
+
+<p>Paired-end read files 2.</p></td></tr>
+<tr valign="top" align="left">
+<td width="11%"></td>
+<td width="11%">
+
+
+<p><b>-b&nbsp;</b><i>FILE</i></p></td>
+<td width="4%"></td>
+<td width="74%">
+
+
+<p>Cell barcode files.</p></td></tr>
+</table>
+
+
+<p style="margin-left:11%;"><b>--barcode-whitelist&nbsp;</b><i>FILE</i></p>
+
+<p style="margin-left:26%;">Cell barcode whitelist file.
+This is supposed to be a txt file where each line is a
+whitelisted barcode.</p>
+
+
+<p style="margin-left:11%;"><b>--read-format&nbsp;</b><i>STR</i></p>
+
+<p style="margin-left:26%;">Format for read files and
+barcode files [&quot;r1:0:-1,bc:0:-1&quot;] as 10x Genomics
+single-end format.</p>
+
+<p style="margin-left:11%; margin-top: 1em"><b>Output
+options</b></p>
+
+<table width="100%" border="0" rules="none" frame="void"
+       cellspacing="0" cellpadding="0">
+<tr valign="top" align="left">
+<td width="11%"></td>
+<td width="11%">
+
+
+<p><b>-o&nbsp;</b>FILE</p></td>
+<td width="4%"></td>
+<td width="19%">
+
+
+<p>Output file.</p></td>
+<td width="55%">
+</td></tr>
+</table>
+
+
+<p style="margin-left:11%;"><b>--output-mappings-not-in-whitelist</b></p>
+
+<p style="margin-left:26%;">Output mappings with barcode
+not in the whitelist.</p>
+
+
+<p style="margin-left:11%;"><b>--chr-order&nbsp;</b>FILE</p>
+
+<p style="margin-left:26%;">Customized chromsome order.</p>
+
+<table width="100%" border="0" rules="none" frame="void"
+       cellspacing="0" cellpadding="0">
+<tr valign="top" align="left">
+<td width="11%"></td>
+<td width="7%">
+
+
+<p><b>--BED</b></p></td>
+<td width="8%"></td>
+<td width="74%">
+
+
+<p>Output mappings in BED/BEDPE format. Note that only one
+of the formats should be set.</p></td></tr>
+</table>
+
+<p style="margin-left:11%;"><b>--TagAlign</b></p>
+
+<p style="margin-left:26%;">Output mappings in
+TagAlign/PairedTagAlign format.</p>
+
+<table width="100%" border="0" rules="none" frame="void"
+       cellspacing="0" cellpadding="0">
+<tr valign="top" align="left">
+<td width="11%"></td>
+<td width="11%">
+
+
+<p><b>--SAM</b></p></td>
+<td width="4%"></td>
+<td width="74%">
+
+
+<p>Output mappings in SAM format.</p></td></tr>
+<tr valign="top" align="left">
+<td width="11%"></td>
+<td width="11%">
+
+
+<p><b>--pairs</b></p></td>
+<td width="4%"></td>
+<td width="74%">
+
+
+<p>Output mappings in pairs format (defined by 4DN for HiC
+data).</p> </td></tr>
+</table>
+
+
+<p style="margin-left:11%;"><b>--pairs-natural-chr-order&nbsp;</b>FILE</p>
+
+<p style="margin-left:26%;">Natural chromosome order for
+pairs flipping.</p>
+
+<table width="100%" border="0" rules="none" frame="void"
+       cellspacing="0" cellpadding="0">
+<tr valign="top" align="left">
+<td width="11%"></td>
+<td width="3%">
+
+
+<p><b>-v</b></p></td>
+<td width="12%"></td>
+<td width="48%">
+
+
+<p>Print version number to stdout.</p></td>
+<td width="26%">
+</td></tr>
+</table>
+
+<p style="margin-left:11%; margin-top: 1em"><b>Preset
+options <br>
+--preset&nbsp;</b><i>STR</i></p>
+
+<p style="margin-left:26%;">Preset []. This option applies
+multiple options at the same time. It should be applied
+before other options because options applied later will
+overwrite the values set by <b>--preset</b>. Available
+<i>STR</i> are:</p>
+
+<table width="100%" border="0" rules="none" frame="void"
+       cellspacing="0" cellpadding="0">
+<tr valign="top" align="left">
+<td width="26%"></td>
+<td width="6%">
+
+
+<p><b>chip</b></p></td>
+<td width="10%"></td>
+<td width="58%">
+
+
+<p>Mapping ChIP-seq reads (<b>-l</b> <i>2000</i>
+<b>--remove-pcr-duplicates --low-mem --BED</b>).</p></td></tr>
+<tr valign="top" align="left">
+<td width="26%"></td>
+<td width="6%">
+
+
+<p><b>atac</b></p></td>
+<td width="10%"></td>
+<td width="58%">
+
+
+<p>Mapping ATAC-seq/scATAC-seq reads (<b>-l</b> <i>2000</i>
+<b>--remove-pcr-duplicates --low-mem --trim-adapters
+--Tn5-shift --remove-pcr-duplicates-at-cell-level
+--BED</b>).</p> </td></tr>
+<tr valign="top" align="left">
+<td width="26%"></td>
+<td width="6%">
+
+
+<p><b>hic</b></p></td>
+<td width="10%"></td>
+<td width="58%">
+
+
+<p>Mapping Hi-C reads (<b>-e</b> <i>4</i> <b>-q</b>
+<i>1</i> <b>--low-mem --split-alignment --pairs</b>).</p></td></tr>
+ </table>
+<hr>
+</body>
+</html>
