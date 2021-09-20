@@ -75,7 +75,7 @@ probably need to keep multiple indexes generated with different parameters.
 This makes Chromap different from BWA which always uses the same index
 regardless of query data types. Chromap can build the human genome index file in about 10 minutes.
 
-Detailed explanations for the options can be found at the [manual](https://zhanghaowen.com/chromap/chromap.html) page.
+Detailed explanations for the options can be found at the [manpage](https://zhanghaowen.com/chromap/chromap.html).
 
 ### <a name="cases"></a>Use cases
 
