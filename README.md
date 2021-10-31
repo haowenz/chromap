@@ -1,3 +1,7 @@
+[![Anaconda-Server Badge](https://anaconda.org/bioconda/chromap/badges/license.svg)](https://anaconda.org/bioconda/chromap)
+[![Anaconda-Server Badge](https://anaconda.org/bioconda/chromap/badges/version.svg)](https://anaconda.org/bioconda/chromap)
+[![Anaconda-Server Badge](https://anaconda.org/bioconda/chromap/badges/platforms.svg)](https://anaconda.org/bioconda/chromap)
+
 ## <a name="started"></a>Getting Started
 ```sh
 git clone https://github.com/haowenz/chromap.git
@@ -37,11 +41,15 @@ these three cases, Chromap is 10-20 times faster while being accurate.
 
 ### <a name="install"></a>Installation
 
-To compile from the source, you need to have the GCC compiler, GNU make
-and zlib development files installed. Then type `make` in the source code
+To compile from the source, you need to have the GCC compiler with version>=7.3.0, 
+GNU make and zlib development files installed. Then type `make` in the source code
 directory to compile. 
 
-Chromap is also available form conda, including [bioconda](https://anaconda.org/bioconda/chromap). You can install Chromap with `conda install -c bioconda chromap` or `conda install -c liulab-dfci chromap`.
+Chromap is also available on [bioconda][bioconda]. 
+Thus you can easily install Chromap with Conda
+```sh
+conda install -c bioconda chromap
+```
 
 ### <a name="general"></a>General usage
 Before mapping, an index of the reference needs to be created and saved on the disk:
@@ -49,9 +57,12 @@ Before mapping, an index of the reference needs to be created and saved on the d
 ```sh
 chromap -i -r ref.fa -o index
 ```
-The users can input the min fragment length expected in their sequencing experiments, e.g. read length, by **--min-frag-length**. Then Chromap will choose proper k-mer length and window size to build the index. For human genome, it only takes a few minutes to build the index. 
-Without any preset parameters, Chromap takes a reference database and a query sequence
-file as input and produce approximate mapping, without base-level alignment in the [BED format][bed]:
+The users can input the min fragment length expected in their sequencing experiments,
+e.g. read length, by **--min-frag-length**. Then Chromap will choose proper k-mer 
+length and window size to build the index. For human genome, it only takes a few 
+minutes to build the index. Without any preset parameters, Chromap takes a reference 
+database and a query sequence file as input and produce approximate mapping, without
+base-level alignment in the [BED format][bed]:
 
 ```sh
 chromap -x index -r ref.fa -1 query.fq -o approx-mapping.bed
@@ -61,21 +72,24 @@ You may ask Chromap to output alignments in the [SAM format][sam]:
 ```sh
 chromap -x index -r ref.fa -1 query.fq --SAM -o alignment.sam
 ```
-But note that the the processing of SAM files is not fully optimized and can be slow. Thus generating the output in SAM format is not preferred and should be avoided when possible. Chromap can take multiple input read files:
+But note that the the processing of SAM files is not fully optimized and can be slow. 
+Thus generating the output in SAM format is not preferred and should be avoided when 
+possible. Chromap can take multiple input read files:
 
 ```sh
 chromap -x index -r ref.fa -1 query1.fq,query2.fq,query3.fq --SAM -o alignment.sam
 ```
-Chromap works with gzip'd FASTA and FASTQ formats as input. You don't need to convert between FASTA and FASTQ or decompress gzip'd files first. 
+Chromap works with gzip'd FASTA and FASTQ formats as input. You don't need to convert 
+between FASTA and FASTQ or decompress gzip'd files first. 
 
 ***Importantly***, it should be noted that once you build the index, indexing
 parameters such as **-k**, **-w** and **--min-frag-length** can't be changed during
 mapping. If you are running Chromap for different data types, you will
 probably need to keep multiple indexes generated with different parameters.
 This makes Chromap different from BWA which always uses the same index
-regardless of query data types. Chromap can build the human genome index file in about 10 minutes.
+regardless of query data types. Chromap can build the human genome index file in a few minutes.
 
-Detailed explanations for the options can be found at the [manpage](https://zhanghaowen.com/chromap/chromap.html).
+Detailed explanations for the options can be found at the [manpage][manpage].
 
 ### <a name="cases"></a>Use cases
 
@@ -121,6 +135,7 @@ forward mapping start positions are increased by 4bp and the reverse
 mapping end positions are decreased by 5bp. The processing is run in
 the low memory mode (**--low-mem**).
 
+If no barcode whitelist file is given, Chromap will skip barcode correction. 
 When barcodes and a whitelist are given as input, by default Chromap will
 estimate barcode abundance and use this information to perform barcode
 correction with up to 1 Hamming distance from a whitelist barcode. By setting
@@ -147,9 +162,10 @@ three columns. For bulk data, the columns are
 For single-cell data, the columns are 
     
     chrom chrom_start chrom_end barcode duplicate_count
-as the definition of the fragment file in 
-[CellRanger](https://support.10xgenomics.com/single-cell-atac/software/pipelines/latest/output/fragments). 
-Note that chrom_end is open-end.
+the same as the definition of the fragment file in [CellRanger][cellranger]. 
+Note that chrom_end is open-end. This output fragment file can be used as input of
+downstream analysis tools such as [MAESTRO][MAESTRO], [ArchR][ArchR], [signac][signac]
+and etc.
 
 #### <a name="map-hic"></a>Map Hi-C short reads
 
@@ -166,8 +182,9 @@ in the pairs format.
 ### <a name="help"></a>Getting help
 
 Detailed description of Chromap command line options and optional tags 
-can be displayed by running Chromap with **-h** or by `man ./chromap.1`. If you encounter bugs or have further questions or requests,
-you can raise an issue at the [issue page][issue].
+can be displayed by running Chromap with **-h** or be found at the
+[manpage][manpage]. If you encounter bugs or have further questions or 
+requests, you can raise an issue at the [issue page][issue].
 
 
 [bed]: https://genome.ucsc.edu/FAQ/FAQformat.html#format1
@@ -178,3 +195,9 @@ you can raise an issue at the [issue page][issue].
 [minimap]: https://github.com/lh3/minimap
 [release]: https://github.com/haowenz/chromap/releases
 [issue]: https://github.com/haowenz/chromap/issues
+[cellranger]: https://support.10xgenomics.com/single-cell-atac/software/pipelines/latest/output/fragments
+[manpage]: https://zhanghaowen.com/chromap/chromap.html
+[bioconda]: https://anaconda.org/bioconda/chromap
+[ArchR]: https://www.archrproject.com/index.html
+[MAESTRO]: https://github.com/liulab-dfci/MAESTRO
+[signac]: https://satijalab.org/signac/articles/pbmc_vignette.html
