@@ -5,9 +5,11 @@
 
 #include <cstring>
 #include <functional>
+#include <inttypes.h>
 #include <iostream>
 #include <string>
 #include <vector>
+
 
 #include "sequence_batch.h"
 
@@ -1188,7 +1190,7 @@ class OutputTools {
 
   void WriteMatrixOutputHead(uint64_t num_peaks, uint64_t num_barcodes,
                              uint64_t num_lines) {
-    fprintf(matrix_output_file_, "%lu\t%lu\t%lu\n", num_peaks, num_barcodes,
+    fprintf(matrix_output_file_, "%" PRIu64 "\t%" PRIu64 "\t%" PRIu64 "\n", num_peaks, num_barcodes,
             num_lines);
   }
 
