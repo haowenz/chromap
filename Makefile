@@ -4,7 +4,7 @@ objs_dir=objs
 objs+=$(patsubst %.cc,$(objs_dir)/%.o,$(cpp_source))
 
 cxx=g++
-cxxflags=-std=c++11 -Wall -O3 -fopenmp -march=native
+cxxflags=-std=c++11 -Wall -O3 -fopenmp -msse4.1
 ldflags=-lm -lz
 
 exec=chromap
@@ -18,8 +18,8 @@ $(exec): $(objs)
 	$(cxx) $(cxxflags) $(objs) -o $(exec) $(ldflags)
 	
 $(objs_dir)/%.o: $(src_dir)/%.cc
-	$(cxx) $(cxxflags) -c $< -o $@ $(ldflags)
+	$(cxx) $(cxxflags) -c $< -o $@
 
 .PHONY: clean
 clean:
-	-rm -r $(exec) $(objs_dir)
+	-rm -rf $(exec) $(objs_dir)
