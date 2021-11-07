@@ -1,4 +1,4 @@
-[![Build Status](https://app.travis-ci.com/haowenz/chromap.svg?branch=master)](https://app.travis-ci.com/haowenz/chromap)
+[![CI](https://github.com/haowenz/chromap/actions/workflows/ci.yml/badge.svg)](https://github.com/haowenz/chromap/actions/workflows/ci.yml)
 [![Anaconda-Server Badge](https://anaconda.org/bioconda/chromap/badges/license.svg)](https://anaconda.org/bioconda/chromap)
 [![Anaconda-Server Badge](https://anaconda.org/bioconda/chromap/badges/version.svg)](https://anaconda.org/bioconda/chromap)
 [![Anaconda-Server Badge](https://anaconda.org/bioconda/chromap/badges/platforms.svg)](https://anaconda.org/bioconda/chromap)
