@@ -2,14 +2,13 @@
 #define OUTPUTTOOLS_H_
 
 #include <assert.h>
+#include <inttypes.h>
 
 #include <cstring>
 #include <functional>
-#include <inttypes.h>
 #include <iostream>
 #include <string>
 #include <vector>
-
 
 #include "sequence_batch.h"
 
@@ -577,8 +576,8 @@ struct PairsMapping {
   uint16_t mapq : 8, is_unique : 1, num_dups : 7;
 
   bool operator<(const PairsMapping &m) const {
-    return std::tie(rid1, rid2, pos1, pos2, mapq) <
-           std::tie(m.rid1, m.rid2, m.pos1, m.pos2, m.mapq);
+    return std::tie(rid1, rid2, pos1, pos2, mapq, read_id) <
+           std::tie(m.rid1, m.rid2, m.pos1, m.pos2, m.mapq, m.read_id);
   }
   bool operator==(const PairsMapping &m) const {
     return std::tie(rid1, pos1, rid2, pos2) ==
@@ -1190,8 +1189,8 @@ class OutputTools {
 
   void WriteMatrixOutputHead(uint64_t num_peaks, uint64_t num_barcodes,
                              uint64_t num_lines) {
-    fprintf(matrix_output_file_, "%" PRIu64 "\t%" PRIu64 "\t%" PRIu64 "\n", num_peaks, num_barcodes,
-            num_lines);
+    fprintf(matrix_output_file_, "%" PRIu64 "\t%" PRIu64 "\t%" PRIu64 "\n",
+            num_peaks, num_barcodes, num_lines);
   }
 
   void AppendMatrixOutput(uint32_t peak_index, uint32_t barcode_index,
