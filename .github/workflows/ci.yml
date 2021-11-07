@@ -1,0 +1,23 @@
+name: CI
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        compiler: [g++, clang++]
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Compile Chromap and run it
+      run: |
+        sudo apt-get update; sudo apt-get install -y clang libomp5 libomp-dev
+        make cxx=${{ matrix.compiler }}
+        ./chromap -h
