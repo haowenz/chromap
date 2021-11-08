@@ -16,7 +16,7 @@
 #include "output_tools.h"
 #include "sequence_batch.h"
 
-#define CHROMAP_VERSION "0.1.2-r244"
+#define CHROMAP_VERSION "0.1.3-r256"
 
 namespace chromap {
 struct uint128_t {
