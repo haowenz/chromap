@@ -2,8 +2,8 @@
 #define OUTPUTTOOLS_H_
 
 #include <assert.h>
-#include <inttypes.h>
 
+#include <cinttypes>
 #include <cstring>
 #include <functional>
 #include <iostream>
