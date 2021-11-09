@@ -49,7 +49,7 @@ directory to compile.
 Chromap is also available on [bioconda][bioconda]. 
 Thus you can easily install Chromap with Conda
 ```sh
-conda install -c bioconda chromap
+conda install -c bioconda -c conda-forge chromap
 ```
 
 ### <a name="general"></a>General usage
