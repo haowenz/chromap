@@ -1821,6 +1821,7 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
           //  }
           //}
           // Update cache
+#pragma omp taskwait
           for (uint32_t pair_index = 0; pair_index < num_loaded_pairs;
                ++pair_index) {
             if (num_reads_ > 5000000 &&
@@ -1857,7 +1858,6 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
                   mm_history2[pair_index].negative_candidates);
             }
           }
-#pragma omp taskwait
           std::cerr << "Mapped " << num_loaded_pairs << " read pairs in "
                     << Chromap<>::GetRealTime() - real_batch_start_time
                     << "s.\n";
@@ -3005,6 +3005,7 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
               }
             }
           }
+#pragma omp taskwait
           for (uint32_t read_index = 0; read_index < num_loaded_reads;
                ++read_index) {
             if (num_reads_ > 2500000 &&
@@ -3030,7 +3031,6 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
           }
           // std::cerr<<"cache memusage: " <<
           // mm_to_candidates_cache.GetMemoryBytes() <<"\n" ;
-#pragma omp taskwait
           num_loaded_reads = num_loaded_reads_for_loading;
           read_batch_for_loading.SwapSequenceBatch(read_batch);
           barcode_batch_for_loading.SwapSequenceBatch(barcode_batch);
