@@ -16,7 +16,7 @@
 #include "output_tools.h"
 #include "sequence_batch.h"
 
-#define CHROMAP_VERSION "0.1.3-r256"
+#define CHROMAP_VERSION "0.1.3-r257"
 
 namespace chromap {
 struct uint128_t {
@@ -117,6 +117,7 @@ struct MappingParameters {
   std::string matrix_output_prefix;
   std::string custom_rid_order_path;
   std::string pairs_custom_rid_order_path;
+  bool skip_barcode_check = false;
 };
 
 #define SortMappingWithoutBarcode(m)                                    \
@@ -202,7 +203,8 @@ class Chromap {
         matrix_output_prefix_(mapping_parameters.matrix_output_prefix),
         custom_rid_order_path_(mapping_parameters.custom_rid_order_path),
         pairs_custom_rid_order_path_(
-            mapping_parameters.pairs_custom_rid_order_path) {
+            mapping_parameters.pairs_custom_rid_order_path),
+        skip_barcode_check_(mapping_parameters.skip_barcode_check){
     barcode_lookup_table_ = kh_init(k64_seq);
     barcode_whitelist_lookup_table_ = kh_init(k64_seq);
     barcode_histogram_ = kh_init(k64_seq);
@@ -681,6 +683,8 @@ class Chromap {
   uint32_t barcode_length_ = 0;
   khash_t(k64_seq) * barcode_histogram_;
   khash_t(k64_seq) * barcode_index_table_;
+	bool skip_barcode_check_ = false ;
+
   // For peak calling
   std::vector<std::vector<uint16_t> > pileup_on_diff_ref_seqs_;
   std::vector<std::vector<Peak> > peaks_on_diff_ref_seqs_;
