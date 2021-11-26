@@ -204,7 +204,7 @@ class Chromap {
         custom_rid_order_path_(mapping_parameters.custom_rid_order_path),
         pairs_custom_rid_order_path_(
             mapping_parameters.pairs_custom_rid_order_path),
-        skip_barcode_check_(mapping_parameters.skip_barcode_check){
+        skip_barcode_check_(mapping_parameters.skip_barcode_check) {
     barcode_lookup_table_ = kh_init(k64_seq);
     barcode_whitelist_lookup_table_ = kh_init(k64_seq);
     barcode_histogram_ = kh_init(k64_seq);
@@ -683,7 +683,7 @@ class Chromap {
   uint32_t barcode_length_ = 0;
   khash_t(k64_seq) * barcode_histogram_;
   khash_t(k64_seq) * barcode_index_table_;
-  bool skip_barcode_check_ = false ;
+  bool skip_barcode_check_ = false;
 
   // For peak calling
   std::vector<std::vector<uint16_t> > pileup_on_diff_ref_seqs_;

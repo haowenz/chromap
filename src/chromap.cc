@@ -750,10 +750,16 @@ void Chromap<MappingRecord>::ComputeBarcodeAbundance(
         }
       }
 
-      if (!skip_barcode_check_  
-        && num_sample_barcodes_ * 20 < num_loaded_barcodes) {
-        // Since num_loaded_pairs is a constant, this if is actuaclly only effective in the first iteration
-        Chromap<>::ExitWithMessage("Less than 5\% barcodes can be found or corrected based on the barcode whitelist.\nPlease check whether the barcode whitelist matches the data, e.g. length, reverse-complement. If this is a false positive warning, please run Chromap with the option --skip-barcode-check.");
+      if (!skip_barcode_check_ &&
+          num_sample_barcodes_ * 20 < num_loaded_barcodes) {
+        // Since num_loaded_pairs is a constant, this if is actuaclly only
+        // effective in the first iteration
+        Chromap<>::ExitWithMessage(
+            "Less than 5\% barcodes can be found or corrected based on the "
+            "barcode whitelist.\nPlease check whether the barcode whitelist "
+            "matches the data, e.g. length, reverse-complement. If this is a "
+            "false positive warning, please run Chromap with the option "
+            "--skip-barcode-check.");
       }
 
       if (num_sample_barcodes_ >= max_num_sample_barcodes) {
@@ -1821,15 +1827,15 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
               }
             }
           }  // for pair_index
-          // if (num_reads_ / 2 > initial_num_sample_barcodes_) {
-          //  if (!is_bulk_data_) {
-          //    if (!barcode_whitelist_file_path_.empty()) {
-          //      UpdateBarcodeAbundance(num_loaded_pairs, barcode_batch);
-          //    }
-          //  }
-          //}
-          // Update cache
+             // if (num_reads_ / 2 > initial_num_sample_barcodes_) {
+             //  if (!is_bulk_data_) {
+             //    if (!barcode_whitelist_file_path_.empty()) {
+             //      UpdateBarcodeAbundance(num_loaded_pairs, barcode_batch);
+             //    }
+             //  }
+             //}
 #pragma omp taskwait
+          // Update cache
           for (uint32_t pair_index = 0; pair_index < num_loaded_pairs;
                ++pair_index) {
             if (num_reads_ > 5000000 &&
@@ -5976,8 +5982,8 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
       //("p,matrix-output-prefix", "Prefix of matrix output files",
       // cxxopts::value<std::string>(), "FILE")
       ("output-mappings-not-in-whitelist",
-       "Output mappings with barcode not in the whitelist")
-      ("chr-order", "custom chromsome order", cxxopts::value<std::string>(),
+       "Output mappings with barcode not in the whitelist")(
+          "chr-order", "custom chromsome order", cxxopts::value<std::string>(),
           "FILE")("BED", "Output mappings in BED/BEDPE format")(
           "TagAlign", "Output mappings in TagAlign/PairedTagAlign format")(
           "SAM", "Output mappings in SAM format")(
@@ -6007,9 +6013,9 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
       "drop-repetitive-reads",
       "Drop reads with too many best mappings [500000]", cxxopts::value<int>(),
       "INT")("allocate-multi-mappings", "Allocate multi-mappings")(
-      "PAF", "Output mappings in PAF format (only for test)")
-      ("skip-barcode-check", "Do not check whether too few barcodes are in the whitelist")
-        ;
+      "PAF", "Output mappings in PAF format (only for test)")(
+      "skip-barcode-check",
+      "Do not check whether too few barcodes are in the whitelist");
 
   auto result = options.parse(argc, argv);
   if (result.count("h")) {
