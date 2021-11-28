@@ -386,7 +386,7 @@ uint32_t Chromap<PairedEndMappingWithBarcode>::CallPeaks(
     pileup_on_diff_ref_seqs_.emplace_back(std::vector<uint16_t>());
     pileup_on_diff_ref_seqs_[ri].assign(reference.GetSequenceLengthAt(ri), 0);
     for (size_t mi = 0; mi < mappings[ri].size(); ++mi) {
-      for (uint16_t pi = 0; pi < mappings[ri][mi].fragment_length; ++pi) {
+      for (uint16_t pi = 0; pi < mappings[ri][mi].fragment_length_; ++pi) {
         ++pileup_on_diff_ref_seqs_[ri]
                                   [mappings[ri][mi].GetStartPosition() + pi];
       }
@@ -463,7 +463,7 @@ void Chromap<PairedEndMappingWithBarcode>::OutputFeatureMatrix(
   uint32_t barcode_index = 0;
   for (uint32_t rid = 0; rid < num_sequences; ++rid) {
     for (uint32_t mi = 0; mi < mappings[rid].size(); ++mi) {
-      uint64_t barcode_key = mappings[rid][mi].cell_barcode;
+      uint64_t barcode_key = mappings[rid][mi].cell_barcode_;
       khiter_t barcode_index_table_iterator =
           kh_get(k64_seq, barcode_index_table_, barcode_key);
       if (barcode_index_table_iterator == kh_end(barcode_index_table_)) {
@@ -486,7 +486,7 @@ void Chromap<PairedEndMappingWithBarcode>::OutputFeatureMatrix(
   std::vector<uint32_t> overlapped_peak_indices;
   for (uint32_t rid = 0; rid < num_sequences; ++rid) {
     for (uint32_t mi = 0; mi < mappings[rid].size(); ++mi) {
-      uint64_t barcode_key = mappings[rid][mi].cell_barcode;
+      uint64_t barcode_key = mappings[rid][mi].cell_barcode_;
       khiter_t barcode_index_table_iterator =
           kh_get(k64_seq, barcode_index_table_, barcode_key);
       uint64_t barcode_index =
@@ -1029,17 +1029,17 @@ void Chromap<MappingRecord>::PostProcessingInLowMemory(
       if (remove_pcr_duplicates_ && last_rid == min_rid &&
           (current_min_mapping == last_mapping ||
            (remove_pcr_duplicates_at_bulk_level_ &&
-            current_min_mapping.HasSamePosition(last_mapping)))) {
+            current_min_mapping.IsSamePosition(last_mapping)))) {
         ++dup_count;
         if (!is_bulk_data_ && remove_pcr_duplicates_at_bulk_level_) {
           if (!temp_dups_for_bulk_level_dedup.empty() &&
               current_min_mapping == temp_dups_for_bulk_level_dedup.back()) {
-            current_min_mapping.num_dups =
-                temp_dups_for_bulk_level_dedup.back().num_dups + 1;
+            current_min_mapping.num_dups_ =
+                temp_dups_for_bulk_level_dedup.back().num_dups_ + 1;
             temp_dups_for_bulk_level_dedup.back() = current_min_mapping;
           } else {
             temp_dups_for_bulk_level_dedup.push_back(current_min_mapping);
-            temp_dups_for_bulk_level_dedup.back().num_dups = 1;
+            temp_dups_for_bulk_level_dedup.back().num_dups_ = 1;
           }
         }
       } else {
@@ -1066,10 +1066,10 @@ void Chromap<MappingRecord>::PostProcessingInLowMemory(
                   kh_value(barcode_whitelist_lookup_table_,
                            barcode_whitelist_lookup_table_iterator) /
                   (double)num_sample_barcodes_;
-              if (temp_dups_for_bulk_level_dedup[bulk_dup_i].num_dups >
-                      last_mapping.num_dups ||
-                  (temp_dups_for_bulk_level_dedup[bulk_dup_i].num_dups ==
-                       last_mapping.num_dups &&
+              if (temp_dups_for_bulk_level_dedup[bulk_dup_i].num_dups_ >
+                      last_mapping.num_dups_ ||
+                  (temp_dups_for_bulk_level_dedup[bulk_dup_i].num_dups_ ==
+                       last_mapping.num_dups_ &&
                    current_mapping_barcode_abundance >
                        last_mapping_barcode_abundance)) {
                 last_mapping = temp_dups_for_bulk_level_dedup[bulk_dup_i];
@@ -1079,10 +1079,10 @@ void Chromap<MappingRecord>::PostProcessingInLowMemory(
             }
             temp_dups_for_bulk_level_dedup.clear();
           }
-          if (last_mapping.mapq >= mapq_threshold_) {
+          if (last_mapping.mapq_ >= mapq_threshold_) {
             // if (allocate_multi_mappings_ || (only_output_unique_mappings_ &&
             // last_mapping.is_unique == 1)) {
-            last_mapping.num_dups = std::min(
+            last_mapping.num_dups_ = std::min(
                 (uint32_t)std::numeric_limits<uint8_t>::max(), dup_count);
             if (Tn5_shift_) {
               // last_mapping.fragment_start_position += 4;
@@ -1095,7 +1095,7 @@ void Chromap<MappingRecord>::PostProcessingInLowMemory(
             ++num_mappings_passing_filters;
             //}
           }
-          if (last_mapping.is_unique == 1) {
+          if (last_mapping.is_unique_ == 1) {
             ++num_uni_mappings;
           } else {
             ++num_multi_mappings;
@@ -1106,7 +1106,7 @@ void Chromap<MappingRecord>::PostProcessingInLowMemory(
         dup_count = 1;
         if (remove_pcr_duplicates_at_bulk_level_) {
           temp_dups_for_bulk_level_dedup.push_back(current_min_mapping);
-          temp_dups_for_bulk_level_dedup.back().num_dups = 1;
+          temp_dups_for_bulk_level_dedup.back().num_dups_ = 1;
         }
       }
       temp_mapping_file_handles_[min_handle_index].Next(
@@ -1120,7 +1120,7 @@ void Chromap<MappingRecord>::PostProcessingInLowMemory(
       }
     }
   }
-  if (last_mapping.mapq >= mapq_threshold_) {
+  if (last_mapping.mapq_ >= mapq_threshold_) {
     if (!is_bulk_data_ && remove_pcr_duplicates_at_bulk_level_ &&
         temp_dups_for_bulk_level_dedup.size() > 0) {
       // Find the best barcode, break ties first by the number of the barcodes
@@ -1141,10 +1141,10 @@ void Chromap<MappingRecord>::PostProcessingInLowMemory(
             kh_value(barcode_whitelist_lookup_table_,
                      barcode_whitelist_lookup_table_iterator) /
             (double)num_sample_barcodes_;
-        if (temp_dups_for_bulk_level_dedup[bulk_dup_i].num_dups >
-                last_mapping.num_dups ||
-            (temp_dups_for_bulk_level_dedup[bulk_dup_i].num_dups ==
-                 last_mapping.num_dups &&
+        if (temp_dups_for_bulk_level_dedup[bulk_dup_i].num_dups_ >
+                last_mapping.num_dups_ ||
+            (temp_dups_for_bulk_level_dedup[bulk_dup_i].num_dups_ ==
+                 last_mapping.num_dups_ &&
              current_mapping_barcode_abundance >
                  last_mapping_barcode_abundance)) {
           last_mapping = temp_dups_for_bulk_level_dedup[bulk_dup_i];
@@ -1155,7 +1155,7 @@ void Chromap<MappingRecord>::PostProcessingInLowMemory(
     }
     // if (allocate_multi_mappings_ || (only_output_unique_mappings_ &&
     // last_mapping.is_unique == 1)) {
-    last_mapping.num_dups =
+    last_mapping.num_dups_ =
         std::min((uint32_t)std::numeric_limits<uint8_t>::max(), dup_count);
     if (Tn5_shift_) {
       // last_mapping.fragment_start_position += 4;
@@ -1168,7 +1168,7 @@ void Chromap<MappingRecord>::PostProcessingInLowMemory(
     ++num_mappings_passing_filters;
     //}
   }
-  if (last_mapping.is_unique == 1) {
+  if (last_mapping.is_unique_ == 1) {
     ++num_uni_mappings;
   } else {
     ++num_multi_mappings;
@@ -1986,7 +1986,7 @@ void Chromap<MappingRecord>::OutputMappingsInVector(
   uint64_t num_mappings_passing_filters = 0;
   for (uint32_t ri = 0; ri < num_reference_sequences; ++ri) {
     for (auto it = mappings[ri].begin(); it != mappings[ri].end(); ++it) {
-      uint8_t mapq = (it->mapq);
+      uint8_t mapq = (it->mapq_);
       // uint8_t is_unique = (it->is_unique);
       if (mapq >= mapq_threshold) {
         // if (allocate_multi_mappings_ || (only_output_unique_mappings_ &&
@@ -2339,10 +2339,10 @@ void Chromap<PairedEndMappingWithoutBarcode>::EmplaceBackMappingRecord(
     uint8_t is_unique, uint8_t num_dups, uint16_t positive_alignment_length,
     uint16_t negative_alignment_length,
     std::vector<PairedEndMappingWithoutBarcode> *mappings_on_diff_ref_seqs) {
-  mappings_on_diff_ref_seqs->emplace_back(PairedEndMappingWithoutBarcode{
+  mappings_on_diff_ref_seqs->emplace_back(PairedEndMappingWithoutBarcode(
       read_id, fragment_start_position, fragment_length, mapq, direction,
       is_unique, num_dups, positive_alignment_length,
-      negative_alignment_length});
+      negative_alignment_length));
 }
 
 template <>
@@ -2352,10 +2352,10 @@ void Chromap<PairedEndMappingWithBarcode>::EmplaceBackMappingRecord(
     uint8_t is_unique, uint8_t num_dups, uint16_t positive_alignment_length,
     uint16_t negative_alignment_length,
     std::vector<PairedEndMappingWithBarcode> *mappings_on_diff_ref_seqs) {
-  mappings_on_diff_ref_seqs->emplace_back(PairedEndMappingWithBarcode{
+  mappings_on_diff_ref_seqs->emplace_back(PairedEndMappingWithBarcode(
       read_id, barcode, fragment_start_position, fragment_length, mapq,
       direction, is_unique, num_dups, positive_alignment_length,
-      negative_alignment_length});
+      negative_alignment_length));
 }
 
 template <typename MappingRecord>
@@ -2375,12 +2375,12 @@ void Chromap<PairedPAFMapping>::EmplaceBackMappingRecord(
     uint8_t mapq2, uint8_t direction, uint8_t is_unique, uint8_t num_dups,
     uint16_t positive_alignment_length, uint16_t negative_alignment_length,
     std::vector<PairedPAFMapping> *mappings_on_diff_ref_seqs) {
-  mappings_on_diff_ref_seqs->emplace_back(PairedPAFMapping{
+  mappings_on_diff_ref_seqs->emplace_back(PairedPAFMapping(
       read_id, std::string(read1_name), std::string(read2_name), read1_length,
       read2_length, fragment_start_position, fragment_length,
       positive_alignment_length, negative_alignment_length,
       mapq1 < mapq2 ? mapq1 : mapq2, mapq1, mapq2, direction, is_unique,
-      num_dups});
+      num_dups));
 }
 
 template <typename MappingRecord>
@@ -3178,10 +3178,10 @@ void Chromap<SAMMapping>::EmplaceBackMappingRecord(
     uint8_t is_unique, uint8_t mapq, uint32_t NM, int n_cigar, uint32_t *cigar,
     std::string &MD_tag, const char *read, const char *read_qual,
     std::vector<SAMMapping> *mappings_on_diff_ref_seqs) {
-  mappings_on_diff_ref_seqs->emplace_back(SAMMapping{
+  mappings_on_diff_ref_seqs->emplace_back(SAMMapping(
       read_id, std::string(read_name), cell_barcode, num_dups, position, rid,
       flag, direction, 0, is_unique, mapq, NM, n_cigar, cigar, MD_tag,
-      std::string(read), std::string(read_qual)});
+      std::string(read), std::string(read_qual)));
 }
 
 template <typename MappingRecord>
@@ -3824,7 +3824,7 @@ void Chromap<MappingRecord>::RemovePCRDuplicate(
            it != mappings_on_diff_ref_seqs_[ri].end(); ++it) {
         if (!((*it) == (*last_it))) {
           // last_it->num_dups = last_dup_count;
-          deduped_mappings_on_diff_ref_seqs_[ri].back().num_dups = std::min(
+          deduped_mappings_on_diff_ref_seqs_[ri].back().num_dups_ = std::min(
               (uint32_t)std::numeric_limits<uint8_t>::max(), last_dup_count);
           last_dup_count = 1;
           deduped_mappings_on_diff_ref_seqs_[ri].emplace_back((*it));
@@ -3833,7 +3833,7 @@ void Chromap<MappingRecord>::RemovePCRDuplicate(
           ++last_dup_count;
         }
       }
-      deduped_mappings_on_diff_ref_seqs_[ri].back().num_dups = std::min(
+      deduped_mappings_on_diff_ref_seqs_[ri].back().num_dups_ = std::min(
           (uint32_t)std::numeric_limits<uint8_t>::max(), last_dup_count);
       std::vector<MappingRecord>().swap(mappings_on_diff_ref_seqs_[ri]);
       num_mappings += deduped_mappings_on_diff_ref_seqs_[ri].size();
@@ -3974,7 +3974,7 @@ void Chromap<MappingRecord>::AllocateMultiMappings(
     uint32_t num_multi_mappings = 0;
     for (uint32_t mi = 0; mi < mappings[ri].size(); ++mi) {
       MappingRecord &mapping = mappings[ri][mi];
-      if ((mapping.mapq) <
+      if ((mapping.mapq_) <
           min_unique_mapping_mapq_) {  // we have to ensure that the mapq is
                                        // lower than this if and only if it is a
                                        // multi-read.
@@ -3987,7 +3987,7 @@ void Chromap<MappingRecord>::AllocateMultiMappings(
     tree_extras_on_diff_ref_seqs_[ri].reserve(num_uni_mappings);
     for (uint32_t mi = 0; mi < mappings[ri].size(); ++mi) {
       MappingRecord &mapping = mappings[ri][mi];
-      if ((mapping.mapq) < min_unique_mapping_mapq_) {
+      if ((mapping.mapq_) < min_unique_mapping_mapq_) {
         multi_mappings_.emplace_back(ri, mapping);
       } else {
         allocated_mappings_on_diff_ref_seqs_[ri].emplace_back(mapping);
@@ -4004,13 +4004,13 @@ void Chromap<MappingRecord>::AllocateMultiMappings(
   weights.reserve(max_num_best_mappings_);
   uint32_t sum_weight = 0;
   assert(multi_mappings_.size() > 0);
-  uint32_t previous_read_id = multi_mappings_[0].second.read_id;
+  uint32_t previous_read_id = multi_mappings_[0].second.read_id_;
   uint32_t start_mapping_index = 0;
   // add a fake mapping at the end and make sure its id is different from the
   // last one
   assert(multi_mappings_.size() != UINT32_MAX);
   std::pair<uint32_t, MappingRecord> foo_mapping = multi_mappings_.back();
-  foo_mapping.second.read_id = UINT32_MAX;
+  foo_mapping.second.read_id_ = UINT32_MAX;
   multi_mappings_.emplace_back(foo_mapping);
   std::mt19937 generator(multi_mapping_allocation_seed_);
   uint32_t current_read_id;  //, reference_id, mapping_index;
@@ -4021,7 +4021,7 @@ void Chromap<MappingRecord>::AllocateMultiMappings(
   for (uint32_t mi = 0; mi < multi_mappings_.size(); ++mi) {
     std::pair<uint32_t, MappingRecord> &current_multi_mapping =
         multi_mappings_[mi];  // mappings[reference_id][mapping_index];
-    current_read_id = current_multi_mapping.second.read_id;
+    current_read_id = current_multi_mapping.second.read_id_;
     uint32_t num_overlaps = GetNumOverlappedMappings(
         current_multi_mapping.first, current_multi_mapping.second);
     // std::cerr << mi << " " << current_read_id << " " << previous_read_id << "
@@ -5417,14 +5417,14 @@ void Chromap<MappingRecord>::OutputMappingStatistics(
   uint64_t num_multi_mappings = 0;
   for (auto &uni_mappings_on_one_ref_seq : uni_mappings) {
     for (auto &uni_mapping : uni_mappings_on_one_ref_seq) {
-      if ((uni_mapping.is_unique) == 1) {
+      if ((uni_mapping.is_unique_) == 1) {
         ++num_uni_mappings;
       }
     }
   }
   for (auto &multi_mappings_on_one_ref_seq : multi_mappings) {
     for (auto &multi_mapping : multi_mappings_on_one_ref_seq) {
-      if ((multi_mapping.is_unique) != 1) {
+      if ((multi_mapping.is_unique_) != 1) {
         ++num_multi_mappings;
       }
     }

@@ -12,22 +12,22 @@ void OutputTools<MappingWithBarcode>::AppendMapping(
     uint32_t rid, const SequenceBatch &reference,
     const MappingWithBarcode &mapping) {
   if (mapping_output_format_ == MAPPINGFORMAT_BED) {
-    std::string strand = mapping.IsPositive() ? "+" : "-";
+    std::string strand = mapping.IsPositiveStrand() ? "+" : "-";
     const char *reference_sequence_name = reference.GetSequenceNameAt(rid);
     uint32_t mapping_end_position = mapping.GetEndPosition();
     this->AppendMappingOutput(
         std::string(reference_sequence_name) + "\t" +
         std::to_string(mapping.GetStartPosition()) + "\t" +
         std::to_string(mapping_end_position) + "\t" +
-        Seed2Sequence(mapping.cell_barcode, cell_barcode_length_) + "\n");
+        Seed2Sequence(mapping.cell_barcode_, cell_barcode_length_) + "\n");
   } else {
-    std::string strand = mapping.IsPositive() ? "+" : "-";
+    std::string strand = mapping.IsPositiveStrand() ? "+" : "-";
     const char *reference_sequence_name = reference.GetSequenceNameAt(rid);
     uint32_t mapping_end_position = mapping.GetEndPosition();
     this->AppendMappingOutput(std::string(reference_sequence_name) + "\t" +
                               std::to_string(mapping.GetStartPosition()) +
                               "\t" + std::to_string(mapping_end_position) +
-                              "\tN\t" + std::to_string(mapping.mapq) + "\t" +
+                              "\tN\t" + std::to_string(mapping.mapq_) + "\t" +
                               strand + "\n");
   }
 }
@@ -41,22 +41,22 @@ void OutputTools<MappingWithoutBarcode>::AppendMapping(
     uint32_t rid, const SequenceBatch &reference,
     const MappingWithoutBarcode &mapping) {
   if (mapping_output_format_ == MAPPINGFORMAT_BED) {
-    std::string strand = mapping.IsPositive() ? "+" : "-";
+    std::string strand = mapping.IsPositiveStrand() ? "+" : "-";
     const char *reference_sequence_name = reference.GetSequenceNameAt(rid);
     uint32_t mapping_end_position = mapping.GetEndPosition();
     this->AppendMappingOutput(std::string(reference_sequence_name) + "\t" +
                               std::to_string(mapping.GetStartPosition()) +
                               "\t" + std::to_string(mapping_end_position) +
-                              "\tN\t" + std::to_string(mapping.mapq) + "\t" +
+                              "\tN\t" + std::to_string(mapping.mapq_) + "\t" +
                               strand + "\n");
   } else {
-    std::string strand = mapping.IsPositive() ? "+" : "-";
+    std::string strand = mapping.IsPositiveStrand() ? "+" : "-";
     const char *reference_sequence_name = reference.GetSequenceNameAt(rid);
     uint32_t mapping_end_position = mapping.GetEndPosition();
     this->AppendMappingOutput(std::string(reference_sequence_name) + "\t" +
                               std::to_string(mapping.GetStartPosition()) +
                               "\t" + std::to_string(mapping_end_position) +
-                              "\tN\t" + std::to_string(mapping.mapq) + "\t" +
+                              "\tN\t" + std::to_string(mapping.mapq_) + "\t" +
                               strand + "\n");
   }
 }
@@ -71,43 +71,43 @@ void OutputTools<PairedEndMappingWithoutBarcode>::AppendMapping(
     uint32_t rid, const SequenceBatch &reference,
     const PairedEndMappingWithoutBarcode &mapping) {
   if (mapping_output_format_ == MAPPINGFORMAT_BED) {
-    std::string strand = mapping.IsPositive() ? "+" : "-";
+    std::string strand = mapping.IsPositiveStrand() ? "+" : "-";
     const char *reference_sequence_name = reference.GetSequenceNameAt(rid);
     uint32_t mapping_end_position = mapping.GetEndPosition();
     this->AppendMappingOutput(std::string(reference_sequence_name) + "\t" +
                               std::to_string(mapping.GetStartPosition()) +
                               "\t" + std::to_string(mapping_end_position) +
-                              "\tN\t" + std::to_string(mapping.mapq) + "\t" +
+                              "\tN\t" + std::to_string(mapping.mapq_) + "\t" +
                               strand + "\n");
   } else {
-    bool positive_strand = mapping.IsPositive();
+    bool positive_strand = mapping.IsPositiveStrand();
     uint32_t positive_read_end =
-        mapping.fragment_start_position + mapping.positive_alignment_length;
+        mapping.fragment_start_position_ + mapping.positive_alignment_length_;
     uint32_t negative_read_end =
-        mapping.fragment_start_position + mapping.fragment_length;
+        mapping.fragment_start_position_ + mapping.fragment_length_;
     uint32_t negative_read_start =
-        negative_read_end - mapping.negative_alignment_length;
+        negative_read_end - mapping.negative_alignment_length_;
     const char *reference_sequence_name = reference.GetSequenceNameAt(rid);
     if (positive_strand) {
       this->AppendMappingOutput(
           std::string(reference_sequence_name) + "\t" +
-          std::to_string(mapping.fragment_start_position) + "\t" +
+          std::to_string(mapping.fragment_start_position_) + "\t" +
           std::to_string(positive_read_end) + "\tN\t" +
-          std::to_string(mapping.mapq) + "\t+\n" +
+          std::to_string(mapping.mapq_) + "\t+\n" +
           std::string(reference_sequence_name) + "\t" +
           std::to_string(negative_read_start) + "\t" +
           std::to_string(negative_read_end) + "\tN\t" +
-          std::to_string(mapping.mapq) + "\t-\n");
+          std::to_string(mapping.mapq_) + "\t-\n");
     } else {
       this->AppendMappingOutput(
           std::string(reference_sequence_name) + "\t" +
           std::to_string(negative_read_start) + "\t" +
           std::to_string(negative_read_end) + "\tN\t" +
-          std::to_string(mapping.mapq) + "\t-\n" +
+          std::to_string(mapping.mapq_) + "\t-\n" +
           std::string(reference_sequence_name) + "\t" +
-          std::to_string(mapping.fragment_start_position) + "\t" +
+          std::to_string(mapping.fragment_start_position_) + "\t" +
           std::to_string(positive_read_end) + "\tN\t" +
-          std::to_string(mapping.mapq) + "\t+\n");
+          std::to_string(mapping.mapq_) + "\t+\n");
     }
   }
 }
@@ -121,44 +121,44 @@ void OutputTools<PairedEndMappingWithBarcode>::AppendMapping(
     uint32_t rid, const SequenceBatch &reference,
     const PairedEndMappingWithBarcode &mapping) {
   if (mapping_output_format_ == MAPPINGFORMAT_BED) {
-    std::string strand = mapping.IsPositive() ? "+" : "-";
+    std::string strand = mapping.IsPositiveStrand() ? "+" : "-";
     const char *reference_sequence_name = reference.GetSequenceNameAt(rid);
     uint32_t mapping_end_position = mapping.GetEndPosition();
     this->AppendMappingOutput(
         std::string(reference_sequence_name) + "\t" +
         std::to_string(mapping.GetStartPosition()) + "\t" +
         std::to_string(mapping_end_position) + "\t" +
-        Seed2Sequence(mapping.cell_barcode, cell_barcode_length_) + "\t" +
-        std::to_string(mapping.num_dups) + "\n");
+        Seed2Sequence(mapping.cell_barcode_, cell_barcode_length_) + "\t" +
+        std::to_string(mapping.num_dups_) + "\n");
   } else {
-    bool positive_strand = mapping.IsPositive();
+    bool positive_strand = mapping.IsPositiveStrand();
     uint32_t positive_read_end =
-        mapping.fragment_start_position + mapping.positive_alignment_length;
+        mapping.fragment_start_position_ + mapping.positive_alignment_length_;
     uint32_t negative_read_end =
-        mapping.fragment_start_position + mapping.fragment_length;
+        mapping.fragment_start_position_ + mapping.fragment_length_;
     uint32_t negative_read_start =
-        negative_read_end - mapping.negative_alignment_length;
+        negative_read_end - mapping.negative_alignment_length_;
     const char *reference_sequence_name = reference.GetSequenceNameAt(rid);
     if (positive_strand) {
       this->AppendMappingOutput(
           std::string(reference_sequence_name) + "\t" +
-          std::to_string(mapping.fragment_start_position) + "\t" +
+          std::to_string(mapping.fragment_start_position_) + "\t" +
           std::to_string(positive_read_end) + "\tN\t" +
-          std::to_string(mapping.mapq) + "\t+\n" +
+          std::to_string(mapping.mapq_) + "\t+\n" +
           std::string(reference_sequence_name) + "\t" +
           std::to_string(negative_read_start) + "\t" +
           std::to_string(negative_read_end) + "\tN\t" +
-          std::to_string(mapping.mapq) + "\t-\n");
+          std::to_string(mapping.mapq_) + "\t-\n");
     } else {
       this->AppendMappingOutput(
           std::string(reference_sequence_name) + "\t" +
           std::to_string(negative_read_start) + "\t" +
           std::to_string(negative_read_end) + "\tN\t" +
-          std::to_string(mapping.mapq) + "\t-\n" +
+          std::to_string(mapping.mapq_) + "\t-\n" +
           std::string(reference_sequence_name) + "\t" +
-          std::to_string(mapping.fragment_start_position) + "\t" +
+          std::to_string(mapping.fragment_start_position_) + "\t" +
           std::to_string(positive_read_end) + "\tN\t" +
-          std::to_string(mapping.mapq) + "\t+\n");
+          std::to_string(mapping.mapq_) + "\t+\n");
     }
   }
 }
@@ -174,19 +174,19 @@ void OutputTools<PAFMapping>::AppendMapping(uint32_t rid,
                                             const PAFMapping &mapping) {
   const char *reference_sequence_name = reference.GetSequenceNameAt(rid);
   uint32_t reference_sequence_length = reference.GetSequenceLengthAt(rid);
-  std::string strand = mapping.IsPositive() ? "+" : "-";
+  std::string strand = mapping.IsPositiveStrand() ? "+" : "-";
   uint32_t mapping_end_position =
-      mapping.fragment_start_position + mapping.fragment_length;
+      mapping.fragment_start_position_ + mapping.fragment_length_;
   this->AppendMappingOutput(
-      mapping.read_name + "\t" + std::to_string(mapping.read_length) + "\t" +
-      std::to_string(0) + "\t" + std::to_string(mapping.read_length) + "\t" +
+      mapping.read_name_ + "\t" + std::to_string(mapping.read_length_) + "\t" +
+      std::to_string(0) + "\t" + std::to_string(mapping.read_length_) + "\t" +
       strand + "\t" + std::string(reference_sequence_name) + "\t" +
       std::to_string(reference_sequence_length) + "\t" +
-      std::to_string(mapping.fragment_start_position) + "\t" +
+      std::to_string(mapping.fragment_start_position_) + "\t" +
       std::to_string(mapping_end_position) + "\t" +
-      std::to_string(mapping.read_length) + "\t" +
-      std::to_string(mapping.fragment_length) + "\t" +
-      std::to_string(mapping.mapq) + "\n");
+      std::to_string(mapping.read_length_) + "\t" +
+      std::to_string(mapping.fragment_length_) + "\t" +
+      std::to_string(mapping.mapq_) + "\n");
 }
 
 template <>
@@ -244,57 +244,61 @@ template <>
 void OutputTools<PairedPAFMapping>::AppendMapping(
     uint32_t rid, const SequenceBatch &reference,
     const PairedPAFMapping &mapping) {
-  bool positive_strand = mapping.IsPositive();
+  bool positive_strand = mapping.IsPositiveStrand();
   uint32_t positive_read_end =
-      mapping.fragment_start_position + mapping.positive_alignment_length;
+      mapping.fragment_start_position_ + mapping.positive_alignment_length_;
   uint32_t negative_read_end =
-      mapping.fragment_start_position + mapping.fragment_length;
+      mapping.fragment_start_position_ + mapping.fragment_length_;
   uint32_t negative_read_start =
-      negative_read_end - mapping.negative_alignment_length;
+      negative_read_end - mapping.negative_alignment_length_;
   const char *reference_sequence_name = reference.GetSequenceNameAt(rid);
   uint32_t reference_sequence_length = reference.GetSequenceLengthAt(rid);
   if (positive_strand) {
     this->AppendMappingOutput(
-        mapping.read1_name + "\t" + std::to_string(mapping.read1_length) +
-        "\t" + std::to_string(0) + "\t" + std::to_string(mapping.read1_length) +
-        "\t" + "+" + "\t" + std::string(reference_sequence_name) + "\t" +
+        mapping.read1_name_ + "\t" + std::to_string(mapping.read1_length_) +
+        "\t" + std::to_string(0) + "\t" +
+        std::to_string(mapping.read1_length_) + "\t" + "+" + "\t" +
+        std::string(reference_sequence_name) + "\t" +
         std::to_string(reference_sequence_length) + "\t" +
-        std::to_string(mapping.fragment_start_position) + "\t" +
+        std::to_string(mapping.fragment_start_position_) + "\t" +
         std::to_string(positive_read_end) + "\t" +
-        std::to_string(mapping.read1_length) + "\t" +
-        std::to_string(mapping.positive_alignment_length) + "\t" +
-        std::to_string(mapping.mapq1) + "\n");
+        std::to_string(mapping.read1_length_) + "\t" +
+        std::to_string(mapping.positive_alignment_length_) + "\t" +
+        std::to_string(mapping.mapq1_) + "\n");
     this->AppendMappingOutput(
-        mapping.read2_name + "\t" + std::to_string(mapping.read2_length) +
-        "\t" + std::to_string(0) + "\t" + std::to_string(mapping.read2_length) +
-        "\t" + "-" + "\t" + std::string(reference_sequence_name) + "\t" +
+        mapping.read2_name_ + "\t" + std::to_string(mapping.read2_length_) +
+        "\t" + std::to_string(0) + "\t" +
+        std::to_string(mapping.read2_length_) + "\t" + "-" + "\t" +
+        std::string(reference_sequence_name) + "\t" +
         std::to_string(reference_sequence_length) + "\t" +
         std::to_string(negative_read_start) + "\t" +
         std::to_string(negative_read_end) + "\t" +
-        std::to_string(mapping.read2_length) + "\t" +
-        std::to_string(mapping.negative_alignment_length) + "\t" +
-        std::to_string(mapping.mapq2) + "\n");
+        std::to_string(mapping.read2_length_) + "\t" +
+        std::to_string(mapping.negative_alignment_length_) + "\t" +
+        std::to_string(mapping.mapq2_) + "\n");
   } else {
     this->AppendMappingOutput(
-        mapping.read1_name + "\t" + std::to_string(mapping.read1_length) +
-        "\t" + std::to_string(0) + "\t" + std::to_string(mapping.read1_length) +
-        "\t" + "-" + "\t" + std::string(reference_sequence_name) + "\t" +
+        mapping.read1_name_ + "\t" + std::to_string(mapping.read1_length_) +
+        "\t" + std::to_string(0) + "\t" +
+        std::to_string(mapping.read1_length_) + "\t" + "-" + "\t" +
+        std::string(reference_sequence_name) + "\t" +
         std::to_string(reference_sequence_length) + "\t" +
         std::to_string(negative_read_start) + "\t" +
         std::to_string(negative_read_end) + "\t" +
-        std::to_string(mapping.read1_length) + "\t" +
-        std::to_string(mapping.negative_alignment_length) + "\t" +
-        std::to_string(mapping.mapq1) + "\n");
+        std::to_string(mapping.read1_length_) + "\t" +
+        std::to_string(mapping.negative_alignment_length_) + "\t" +
+        std::to_string(mapping.mapq1_) + "\n");
     this->AppendMappingOutput(
-        mapping.read2_name + "\t" + std::to_string(mapping.read2_length) +
-        "\t" + std::to_string(0) + "\t" + std::to_string(mapping.read2_length) +
-        "\t" + "+" + "\t" + std::string(reference_sequence_name) + "\t" +
+        mapping.read2_name_ + "\t" + std::to_string(mapping.read2_length_) +
+        "\t" + std::to_string(0) + "\t" +
+        std::to_string(mapping.read2_length_) + "\t" + "+" + "\t" +
+        std::string(reference_sequence_name) + "\t" +
         std::to_string(reference_sequence_length) + "\t" +
-        std::to_string(mapping.fragment_start_position) + "\t" +
+        std::to_string(mapping.fragment_start_position_) + "\t" +
         std::to_string(positive_read_end) + "\t" +
-        std::to_string(mapping.read2_length) + "\t" +
-        std::to_string(mapping.positive_alignment_length) + "\t" +
-        std::to_string(mapping.mapq2) + "\n");
+        std::to_string(mapping.read2_length_) + "\t" +
+        std::to_string(mapping.positive_alignment_length_) + "\t" +
+        std::to_string(mapping.mapq2_) + "\n");
   }
 }
 
@@ -321,19 +325,20 @@ void OutputTools<SAMMapping>::AppendMapping(uint32_t rid,
   // uint32_t mapping_end_position = mapping.fragment_start_position +
   // mapping.fragment_length;
   const char *reference_sequence_name =
-      (mapping.flag & BAM_FUNMAP) > 0 ? "*" : reference.GetSequenceNameAt(rid);
+      (mapping.flag_ & BAM_FUNMAP) > 0 ? "*" : reference.GetSequenceNameAt(rid);
   const uint32_t mapping_start_position = mapping.GetStartPosition();
   this->AppendMappingOutput(
-      mapping.read_name + "\t" + std::to_string(mapping.flag) + "\t" +
+      mapping.read_name_ + "\t" + std::to_string(mapping.flag_) + "\t" +
       std::string(reference_sequence_name) + "\t" +
       std::to_string(mapping_start_position) + "\t" +
-      std::to_string(mapping.mapq) + "\t" + mapping.GenerateCigarString() +
+      std::to_string(mapping.mapq_) + "\t" + mapping.GenerateCigarString() +
       "\t*\t" + std::to_string(0) + "\t" + std::to_string(0) + "\t" +
-      mapping.sequence + "\t" + mapping.sequence_qual + "\t" +
-      mapping.GenerateIntTagString("NM", mapping.NM) + "\tMD:Z:" + mapping.MD);
+      mapping.sequence_ + "\t" + mapping.sequence_qual_ + "\t" +
+      mapping.GenerateIntTagString("NM", mapping.NM_) +
+      "\tMD:Z:" + mapping.MD_);
   if (cell_barcode_length_ > 0) {
     this->AppendMappingOutput(
-        "\tCB:Z:" + Seed2Sequence(mapping.cell_barcode, cell_barcode_length_));
+        "\tCB:Z:" + Seed2Sequence(mapping.cell_barcode_, cell_barcode_length_));
   }
   this->AppendMappingOutput("\n");
 }
@@ -389,10 +394,10 @@ void OutputTools<PairsMapping>::AppendMapping(uint32_t rid,
                                               const SequenceBatch &reference,
                                               const PairsMapping &mapping) {
   const char *reference_sequence_name1 =
-      reference.GetSequenceNameAt(mapping.rid1);
+      reference.GetSequenceNameAt(mapping.rid1_);
   const char *reference_sequence_name2 =
-      reference.GetSequenceNameAt(mapping.rid2);
-  this->AppendMappingOutput(mapping.read_name + "\t" +
+      reference.GetSequenceNameAt(mapping.rid2_);
+  this->AppendMappingOutput(mapping.read_name_ + "\t" +
                             std::string(reference_sequence_name1) + "\t" +
                             std::to_string(mapping.GetPosition(1)) + "\t" +
                             std::string(reference_sequence_name2) + "\t" +
