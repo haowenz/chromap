@@ -120,9 +120,9 @@ struct MappingParameters {
   bool skip_barcode_check = false;
 };
 
-#define SortMappingWithoutBarcode(m)                                    \
-  (((((m).fragment_start_position << 16) | (m).fragment_length) << 8) | \
-   (m).mapq)
+#define SortMappingWithoutBarcode(m)                                      \
+  (((((m).fragment_start_position_ << 16) | (m).fragment_length_) << 8) | \
+   (m).mapq_)
 //#define SortMappingWithoutBarcode(m) (m)
 
 class ChromapDriver {
