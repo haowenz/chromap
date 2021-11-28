@@ -15,6 +15,7 @@
 #include "ksort.h"
 #include "output_tools.h"
 #include "sequence_batch.h"
+#include "temp_mapping.h"
 
 #define CHROMAP_VERSION "0.1.3-r257"
 
