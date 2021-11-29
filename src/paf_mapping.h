@@ -142,6 +142,8 @@ class PairedPAFMapping : public Mapping {
       : read_id_(read_id),
         read1_name_(read1_name),
         read2_name_(read2_name),
+        read1_length_(read1_length),
+        read2_length_(read2_length),
         fragment_start_position_(fragment_start_position),
         fragment_length_(fragment_length),
         positive_alignment_length_(positive_alignment_length),

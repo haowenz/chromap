@@ -79,32 +79,32 @@ class Index {
   void CheckIndex(uint32_t num_sequences, const SequenceBatch &reference);
   void GenerateMinimizerSketch(
       const SequenceBatch &sequence_batch, uint32_t sequence_index,
-      std::vector<std::pair<uint64_t, uint64_t> > *minimizers);
+      std::vector<std::pair<uint64_t, uint64_t> > &minimizers);
   void Construct(uint32_t num_sequences, const SequenceBatch &reference);
   void Save();
   void Load();
   void GenerateCandidatesOnOneDirection(
       int error_threshold, int num_seeds_required, uint32_t num_minimizers,
-      std::vector<uint64_t> *hits, std::vector<Candidate> *candidates) const;
+      std::vector<uint64_t> &hits, std::vector<Candidate> &candidates) const;
   void GenerateCandidates(
       int error_threshold,
       const std::vector<std::pair<uint64_t, uint64_t> > &minimizers,
-      uint32_t *repetitive_seed_length, std::vector<uint64_t> *positive_hits,
-      std::vector<uint64_t> *negative_hits,
-      std::vector<Candidate> *positive_candidates,
-      std::vector<Candidate> *negative_candidates) const;
+      uint32_t &repetitive_seed_length, std::vector<uint64_t> &positive_hits,
+      std::vector<uint64_t> &negative_hits,
+      std::vector<Candidate> &positive_candidates,
+      std::vector<Candidate> &negative_candidates) const;
   int GenerateCandidatesFromRepetitiveReadWithMateInfo(
       int error_threshold,
       const std::vector<std::pair<uint64_t, uint64_t> > &minimizers,
-      uint32_t *repetitive_seed_length, std::vector<uint64_t> *hits,
-      std::vector<Candidate> *candidates,
-      std::vector<Candidate> *mate_candidates, Direction direction,
+      uint32_t &repetitive_seed_length, std::vector<uint64_t> &hits,
+      std::vector<Candidate> &candidates,
+      std::vector<Candidate> &mate_candidates, Direction direction,
       uint32_t range) const;
   int CollectCandidates(
       int max_seed_frequency, int repetitive_seed_frequency,
       const std::vector<std::pair<uint64_t, uint64_t> > &minimizers,
-      uint32_t *repetitive_seed_length, std::vector<uint64_t> *positive_hits,
-      std::vector<uint64_t> *negative_hits, bool use_heap) const;
+      uint32_t &repetitive_seed_length, std::vector<uint64_t> &positive_hits,
+      std::vector<uint64_t> &negative_hits, bool use_heap) const;
   inline static uint64_t Hash64(uint64_t key, const uint64_t mask) {
     key = (~key + (key << 21)) & mask;  // key = (key << 21) - key - 1;
     key = key ^ key >> 24;
