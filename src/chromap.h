@@ -353,7 +353,7 @@ class Chromap {
       std::vector<MappingRecord> *mappings_on_diff_ref_seqs);
   void ApplyTn5ShiftOnPairedEndMapping(
       uint32_t num_reference_sequences,
-      std::vector<std::vector<MappingRecord> > *mappings);
+      std::vector<std::vector<MappingRecord> > &mappings);
 
   // For single-end read mapping
   void MapSingleEndReads();
@@ -502,7 +502,7 @@ class Chromap {
       int num_second_best_mappings2, int read1_length, int read2_length,
       int force_mapq, uint8_t &mapq1, uint8_t &mapq2);
   void SortOutputMappings(uint32_t num_reference_sequences,
-                          std::vector<std::vector<MappingRecord> > *mappings);
+                          std::vector<std::vector<MappingRecord> > &mappings);
   void BuildAugmentedTree(uint32_t ref_id);
   uint32_t GetNumOverlappedMappings(uint32_t ref_id,
                                     const MappingRecord &mapping);
@@ -510,9 +510,9 @@ class Chromap {
   void ComputeBarcodeAbundance(uint64_t max_num_sample_barcodes);
   void UpdateBarcodeAbundance(uint32_t num_loaded_barcodes,
                               const SequenceBatch &barcode_batch);
-  bool CorrectBarcodeAt(uint32_t barcode_index, SequenceBatch *barcode_batch,
-                        uint64_t *num_barcode_in_whitelist,
-                        uint64_t *num_corrected_barcode);
+  bool CorrectBarcodeAt(uint32_t barcode_index, SequenceBatch &barcode_batch,
+                        uint64_t &num_barcode_in_whitelist,
+                        uint64_t &num_corrected_barcode);
   uint32_t CallPeaks(uint16_t coverage_threshold,
                      uint32_t num_reference_sequences,
                      const SequenceBatch &reference);
@@ -543,8 +543,9 @@ class Chromap {
       const SequenceBatch &reference, uint32_t *ref_start_position,
       uint32_t *ref_end_position, int *n_cigar, uint32_t **cigar, int *NM,
       std::string &MD_TAG);
-  void GetRidRank(const std::string rid_order_path,
-                  const SequenceBatch &reference, std::vector<int> &rid_rank);
+  void GenerateCustomizedRidRank(const std::string rid_order_path,
+                                 const SequenceBatch &reference,
+                                 std::vector<int> &rid_rank);
   void RerankCandidatesRid(std::vector<Candidate> &candidates);
   void ParseReadFormat(const std::string &read_format);
 
