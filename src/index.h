@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "khash.h"
+#include "mapping_metadata.h"
 #include "sequence_batch.h"
 
 //#define LI_DEBUG
@@ -18,17 +19,6 @@ KHASH_INIT(k64, uint64_t, uint64_t, 1, KHashFunctionForIndex, KHashEqForIndex);
 enum Direction {
   kPositive,
   kNegative,
-};
-
-struct Candidate {
-  uint64_t position;
-  uint8_t count;
-  bool operator<(const Candidate &c) const {
-    if (count != c.count)
-      return count > c.count;
-    else
-      return position < c.position;
-  }
 };
 
 struct mmHit {
@@ -86,13 +76,8 @@ class Index {
   void GenerateCandidatesOnOneDirection(
       int error_threshold, int num_seeds_required, uint32_t num_minimizers,
       std::vector<uint64_t> &hits, std::vector<Candidate> &candidates) const;
-  void GenerateCandidates(
-      int error_threshold,
-      const std::vector<std::pair<uint64_t, uint64_t> > &minimizers,
-      uint32_t &repetitive_seed_length, std::vector<uint64_t> &positive_hits,
-      std::vector<uint64_t> &negative_hits,
-      std::vector<Candidate> &positive_candidates,
-      std::vector<Candidate> &negative_candidates) const;
+  void GenerateCandidates(int error_threshold,
+                          MappingMetadata &mapping_metadata) const;
   int GenerateCandidatesFromRepetitiveReadWithMateInfo(
       int error_threshold,
       const std::vector<std::pair<uint64_t, uint64_t> > &minimizers,

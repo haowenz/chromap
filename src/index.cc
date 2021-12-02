@@ -749,13 +749,18 @@ int Index::GenerateCandidatesFromRepetitiveReadWithMateInfo(
   return max_count;
 }
 
-void Index::GenerateCandidates(
-    int error_threshold,
-    const std::vector<std::pair<uint64_t, uint64_t> > &minimizers,
-    uint32_t &repetitive_seed_length, std::vector<uint64_t> &positive_hits,
-    std::vector<uint64_t> &negative_hits,
-    std::vector<Candidate> &positive_candidates,
-    std::vector<Candidate> &negative_candidates) const {
+void Index::GenerateCandidates(int error_threshold,
+                               MappingMetadata &mapping_metadata) const {
+  const std::vector<std::pair<uint64_t, uint64_t> > &minimizers =
+      mapping_metadata.minimizers_;
+  std::vector<uint64_t> &positive_hits = mapping_metadata.positive_hits_;
+  std::vector<uint64_t> &negative_hits = mapping_metadata.negative_hits_;
+  std::vector<Candidate> &positive_candidates =
+      mapping_metadata.positive_candidates_;
+  std::vector<Candidate> &negative_candidates =
+      mapping_metadata.negative_candidates_;
+  uint32_t &repetitive_seed_length = mapping_metadata.repetitive_seed_length_;
+
   repetitive_seed_length = 0;
   // bool recollect = true;
   int repetitive_seed_count = CollectCandidates(

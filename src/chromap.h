@@ -13,7 +13,7 @@
 #include "index.h"
 #include "khash.h"
 #include "ksort.h"
-#include "mapping_buffer.h"
+#include "mapping_metadata.h"
 #include "output_tools.h"
 #include "sequence_batch.h"
 #include "temp_mapping.h"
@@ -265,14 +265,7 @@ class Chromap {
       std::vector<Candidate> &filtered_candidates1,
       std::vector<Candidate> &filtered_candidates2);
   void ReduceCandidatesForPairedEndRead(
-      const std::vector<Candidate> &positive_candidates1,
-      const std::vector<Candidate> &negative_candidates1,
-      const std::vector<Candidate> &positive_candidates2,
-      const std::vector<Candidate> &negative_candidates2,
-      std::vector<Candidate> &filtered_positive_candidates1,
-      std::vector<Candidate> &filtered_negative_candidates1,
-      std::vector<Candidate> &filtered_positive_candidates2,
-      std::vector<Candidate> &filtered_negative_candidates2);
+      PairedEndMappingMetadata &paired_end_mapping_metadata);
   void GenerateBestMappingsForPairedEndReadOnOneDirection(
       Direction first_read_direction, uint32_t pair_index, int num_candidates1,
       int min_num_errors1, int num_best_mappings1, int second_min_num_errors1,
@@ -283,8 +276,8 @@ class Chromap {
       const SequenceBatch &read_batch2, const SequenceBatch &reference,
       const std::vector<std::pair<int, uint64_t> > &mappings2,
       std::vector<std::pair<uint32_t, uint32_t> > &best_mappings,
-      int *min_sum_errors, int *num_best_mappings, int *second_min_sum_errors,
-      int *num_second_best_mappings);
+      int &min_sum_errors, int &num_best_mappings, int &second_min_sum_errors,
+      int &num_second_best_mappings);
   void RecalibrateBestMappingsForPairedEndReadOnOneDirection(
       Direction first_read_direction, uint32_t pair_index, int min_sum_errors,
       int second_min_sum_errors, int min_num_errors1, int num_best_mappings1,
@@ -316,23 +309,16 @@ class Chromap {
       const std::vector<int> &split_sites2,
       const std::vector<std::pair<uint32_t, uint32_t> > &best_mappings,
       int min_sum_errors, int num_best_mappings, int second_min_sum_errors,
-      int num_second_best_mappings, int *best_mapping_index,
-      int *num_best_mappings_reported, int force_mapq,
-      std::vector<std::vector<MappingRecord> > *mappings_on_diff_ref_seqs);
+      int num_second_best_mappings, int &best_mapping_index,
+      int &num_best_mappings_reported, int force_mapq,
+      std::vector<std::vector<MappingRecord> > &mappings_on_diff_ref_seqs);
   void GenerateBestMappingsForPairedEndRead(
-      uint32_t pair_index, int num_positive_candidates1,
-      int num_negative_candidates1, uint32_t repetitive_seed_length1,
-      int min_num_errors1, int num_best_mappings1, int second_min_num_errors1,
-      int num_second_best_mappings1, const SequenceBatch &read_batch1,
-      int num_positive_candidates2, int num_negative_candidates2,
-      uint32_t repetitive_seed_length2, int min_num_errors2,
-      int num_best_mappings2, int second_min_num_errors2,
-      int num_second_best_mappings2, const SequenceBatch &read_batch2,
-      const SequenceBatch &reference, const SequenceBatch &barcode_batch,
-      std::vector<int> *best_mapping_indices, MappingBuffer &mapping_buffer,
-      std::mt19937 *generator, int *min_sum_errors, int *num_best_mappings,
-      int *second_min_sum_errors, int *num_second_best_mappings, int force_mapq,
-      std::vector<std::vector<MappingRecord> > *mappings_on_diff_ref_seqs);
+      uint32_t pair_index, const SequenceBatch &read_batch1,
+      const SequenceBatch &read_batch2, const SequenceBatch &barcode_batch,
+      const SequenceBatch &reference, std::vector<int> &best_mapping_indices,
+      std::mt19937 &generator, int force_mapq,
+      PairedEndMappingMetadata &paired_end_mapping_metadata,
+      std::vector<std::vector<MappingRecord> > &mappings_on_diff_ref_seqs);
   void EmplaceBackMappingRecord(
       uint32_t read_id, uint64_t barcode, uint32_t fragment_start_position,
       uint16_t fragment_length, uint8_t mapq, uint8_t direction,
@@ -358,17 +344,10 @@ class Chromap {
   // For single-end read mapping
   void MapSingleEndReads();
   void GenerateBestMappingsForSingleEndRead(
-      int num_positive_candidates, int num_negative_candidates,
-      uint32_t repetitive_seed_length, int min_num_errors,
-      int num_best_mappings, int second_min_num_errors,
-      int num_second_best_mappings, const SequenceBatch &read_batch,
-      uint32_t read_index, const SequenceBatch &reference,
-      const SequenceBatch &barcode_batch,
-      const std::vector<std::pair<int, uint64_t> > &positive_mappings,
-      const std::vector<int> &positive_split_sites,
-      const std::vector<std::pair<int, uint64_t> > &negative_mappings,
-      const std::vector<int> &negative_split_sites,
-      std::vector<std::vector<MappingRecord> > *mappings_on_diff_ref_seqs);
+      const SequenceBatch &read_batch, uint32_t read_index,
+      const SequenceBatch &reference, const SequenceBatch &barcode_batch,
+      MappingMetadata &mapping_metadata,
+      std::vector<std::vector<MappingRecord> > &mappings_on_diff_ref_seqs);
   void ProcessBestMappingsForSingleEndRead(
       Direction mapping_direction, uint8_t mapq, int num_candidates,
       uint32_t repetitive_seed_length, int min_num_errors,
@@ -378,9 +357,9 @@ class Chromap {
       const SequenceBatch &barcode_batch,
       const std::vector<int> &best_mapping_indices,
       const std::vector<std::pair<int, uint64_t> > &mappings,
-      const std::vector<int> &split_sites, int *best_mapping_index,
-      int *num_best_mappings_reported,
-      std::vector<std::vector<MappingRecord> > *mappings_on_diff_ref_seqs);
+      const std::vector<int> &split_sites, int &best_mapping_index,
+      int &num_best_mappings_reported,
+      std::vector<std::vector<MappingRecord> > &mappings_on_diff_ref_seqs);
   void EmplaceBackMappingRecord(
       uint32_t read_id, uint32_t barcode, uint32_t fragment_start_position,
       uint16_t fragment_length, uint8_t mapq, uint8_t direction,
@@ -437,9 +416,9 @@ class Chromap {
                             const int read_length);
   void MergeCandidates(std::vector<Candidate> &c1, std::vector<Candidate> &c2,
                        std::vector<Candidate> &buffer);
-  int SupplementCandidates(const Index &index, uint32_t repetitive_seed_length1,
-                           uint32_t repetitive_seed_length2,
-                           MappingBuffer &mapping_buffer);
+  int SupplementCandidates(
+      const Index &index,
+      PairedEndMappingMetadata &paired_end_mapping_metadata);
   void PostProcessingInLowMemory(uint32_t num_mappings_in_mem,
                                  uint32_t num_reference_sequences,
                                  const SequenceBatch &reference);
@@ -447,29 +426,20 @@ class Chromap {
       Direction candidate_direction, const SequenceBatch &read_batch,
       uint32_t read_index, const SequenceBatch &reference,
       const std::vector<Candidate> &candidates,
-      std::vector<std::pair<int, uint64_t> > *mappings, int *min_num_errors,
-      int *num_best_mappings, int *second_min_num_errors,
-      int *num_second_best_mappings);
+      std::vector<std::pair<int, uint64_t> > &mappings, int &min_num_errors,
+      int &num_best_mappings, int &second_min_num_errors,
+      int &num_second_best_mappings);
   void VerifyCandidatesOnOneDirection(
       Direction candidate_direction, const SequenceBatch &read_batch,
       uint32_t read_index, const SequenceBatch &reference,
       const std::vector<Candidate> &candidates,
-      std::vector<std::pair<int, uint64_t> > *mappings,
-      std::vector<int> *split_sites, int *min_num_errors,
-      int *num_best_mappings, int *second_min_num_errors,
-      int *num_second_best_mappings);
-  void VerifyCandidates(
-      const SequenceBatch &read_batch, uint32_t read_index,
-      const SequenceBatch &reference,
-      const std::vector<std::pair<uint64_t, uint64_t> > &minimizers,
-      const std::vector<Candidate> &positive_candidates,
-      const std::vector<Candidate> &negative_candidates,
-      std::vector<std::pair<int, uint64_t> > *positive_mappings,
-      std::vector<int> *positive_split_sites,
-      std::vector<std::pair<int, uint64_t> > *negative_mappings,
-      std::vector<int> *negative_split_sites, int *min_num_errors,
-      int *num_best_mappings, int *second_min_num_errors,
-      int *num_second_best_mappings);
+      std::vector<std::pair<int, uint64_t> > &mappings,
+      std::vector<int> &split_sites, int &min_num_errors,
+      int &num_best_mappings, int &second_min_num_errors,
+      int &num_second_best_mappings);
+  void VerifyCandidates(const SequenceBatch &read_batch, uint32_t read_index,
+                        const SequenceBatch &reference,
+                        MappingMetadata &mapping_metadata);
   void GenerateMDTag(const char *pattern, const char *text,
                      int mapping_start_position, int n_cigar,
                      const uint32_t *cigar, int &NM, std::string &MD_tag);

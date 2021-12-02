@@ -100,10 +100,15 @@ class mm_cache {
   void SetKmerLength(int kl) { kmer_length = kl; }
 
   // Return the hash entry index. -1 if failed.
-  int Query(const std::vector<std::pair<uint64_t, uint64_t> > &minimizers,
-            std::vector<Candidate> &pos_candidates,
-            std::vector<Candidate> &neg_candidates,
-            uint32_t &repetitive_seed_length, uint32_t read_len) {
+  int Query(MappingMetadata &mapping_metadata, uint32_t read_len) {
+    const std::vector<std::pair<uint64_t, uint64_t> > &minimizers =
+        mapping_metadata.minimizers_;
+    std::vector<Candidate> &pos_candidates =
+        mapping_metadata.positive_candidates_;
+    std::vector<Candidate> &neg_candidates =
+        mapping_metadata.negative_candidates_;
+    uint32_t &repetitive_seed_length = mapping_metadata.repetitive_seed_length_;
+
     int i;
     int msize = minimizers.size();
     if (msize == 0) return -1;
