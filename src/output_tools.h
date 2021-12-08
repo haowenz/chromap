@@ -70,6 +70,10 @@ class OutputTools {
     mapping_output_format_ = format;
   }
 
+  inline void SetBarcodeLength(uint32_t cell_barcode_length) {
+    cell_barcode_length_ = cell_barcode_length;
+  }
+
   inline void FinalizeMappingOutput() { fclose(mapping_output_file_); }
 
   inline void AppendMappingOutput(const std::string &line) {
