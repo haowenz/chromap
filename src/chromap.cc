@@ -1393,7 +1393,13 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
         barcode_batch_for_loading);
     read_batch1_for_loading.SwapSequenceBatch(read_batch1);
     read_batch2_for_loading.SwapSequenceBatch(read_batch2);
-    barcode_batch_for_loading.SwapSequenceBatch(barcode_batch);
+    if (!is_bulk_data_) {
+      barcode_batch_for_loading.SwapSequenceBatch(barcode_batch);
+      // TODO(Haowen): simplify this condition check.
+      if (num_loaded_pairs > 0) {
+        output_tools_.SetBarcodeLength(barcode_batch.GetSequenceLengthAt(0));
+      }
+    }
 
     // Setup thread private vectors to save mapping results.
     std::vector<std::vector<std::vector<MappingRecord>>>
@@ -2790,7 +2796,15 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
     uint32_t num_loaded_reads = LoadSingleEndReadsWithBarcodes(
         &read_batch_for_loading, &barcode_batch_for_loading);
     read_batch_for_loading.SwapSequenceBatch(read_batch);
-    barcode_batch_for_loading.SwapSequenceBatch(barcode_batch);
+
+    if (!is_bulk_data_) {
+      barcode_batch_for_loading.SwapSequenceBatch(barcode_batch);
+      // TODO(Haowen): simplify this condition check.
+      if (num_loaded_reads > 0) {
+        output_tools_.SetBarcodeLength(barcode_batch.GetSequenceLengthAt(0));
+      }
+    }
+
     std::vector<std::vector<std::vector<MappingRecord>>>
         mappings_on_diff_ref_seqs_for_diff_threads;
     std::vector<std::vector<std::vector<MappingRecord>>>
@@ -6159,16 +6173,17 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
       mapping_parameters.read_file2_paths =
           result["read2"].as<std::vector<std::string>>();
     }
+
     if (result.count("b")) {
       mapping_parameters.is_bulk_data = false;
       mapping_parameters.barcode_file_paths =
           result["barcode"].as<std::vector<std::string>>();
       if (result.count("barcode-whitelist") == 0) {
-        chromap::Chromap<>::ExitWithMessage(
-            "There are input barcode files but a barcode whitelist file is "
-            "missing!");
+        std::cerr << "WARNING: there are input barcode files but a barcode "
+                     "whitelist file is missing!\n";
       }
     }
+
     if (result.count("barcode-whitelist")) {
       if (mapping_parameters.is_bulk_data) {
         chromap::Chromap<>::ExitWithMessage(
@@ -6178,6 +6193,7 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
       mapping_parameters.barcode_whitelist_file_path =
           result["barcode-whitelist"].as<std::string>();
     }
+
     if (result.count("p")) {
       mapping_parameters.matrix_output_prefix =
           result["matrix-output-prefix"].as<std::string>();
