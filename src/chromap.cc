@@ -5912,7 +5912,10 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
           "Output mappings in pairs format (defined by 4DN for HiC data)")(
           "pairs-natural-chr-order",
           "natural chromosome order for pairs flipping",
-          cxxopts::value<std::string>(), "FILE");
+          cxxopts::value<std::string>(), "FILE")
+          ("barcode-translate", 
+           "Convert barcode to the specified sequences during output",
+           cxxopts::value<std::string>(), "FILE");
   //("PAF", "Output mappings in PAF format (only for test)");
   options.add_options()("v,version", "Print version")("h,help", "Print help");
   options.add_options("Development options")("A,match-score", "Match score [1]",
@@ -6214,6 +6217,10 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
     if (result.count("pairs-natural-chr-order")) {
       mapping_parameters.pairs_custom_rid_order_path =
           result["pairs-natural-chr-order"].as<std::string>();
+    }
+
+    if (result.count("barcode-translate")) {
+      mapping_parameters.barcode_translate_table_path = result["barcode-translate"].as<std::string>();
     }
 
     if (result.count("skip-barcode-check")) {

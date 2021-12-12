@@ -119,6 +119,7 @@ struct MappingParameters {
   std::string matrix_output_prefix;
   std::string custom_rid_order_path;
   std::string pairs_custom_rid_order_path;
+  std::string barcode_translate_table_path;
   bool skip_barcode_check = false;
 };
 
@@ -220,6 +221,10 @@ class Chromap {
     }
 
     ParseReadFormat(mapping_parameters.read_format);
+    if (mapping_parameters.barcode_translate_table_path.length() > 0) {
+      std::string tmp = mapping_parameters.barcode_translate_table_path;
+      output_tools_.SetBarcodeTranslateTable(tmp);
+    }
   }
 
   ~Chromap() {
