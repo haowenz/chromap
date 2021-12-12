@@ -6,6 +6,7 @@
 #include <cinttypes>
 #include <cstring>
 #include <functional>
+#include <fstream>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -16,8 +17,11 @@
 #include "pairs_mapping.h"
 #include "sam_mapping.h"
 #include "sequence_batch.h"
+#include "khash.h"
 
 namespace chromap {
+
+KHASH_INIT(k64_str, uint64_t, std::string, 1, kh_int64_hash_func, kh_int64_hash_equal);
 
 enum MappingOutputFormat {
   MAPPINGFORMAT_UNKNOWN,
@@ -33,6 +37,90 @@ bool ReadIdLess(const std::pair<uint32_t, MappingRecord> &a,
                 const std::pair<uint32_t, MappingRecord> &b) {
   return a.second.read_id_ < b.second.read_id_;
 }
+
+// The class for handling barcode convertion.
+class BarcodeTranslator
+{
+private:
+  khash_t(k64_str) *barcode_translate_table;
+  int from_bc_length;
+  
+  std::string Seed2Sequence(uint64_t seed, uint32_t seed_length) const {
+    std::string sequence;
+    sequence.reserve(seed_length);
+    uint64_t mask = 3;
+    for (uint32_t i = 0; i < seed_length; ++i) {
+      sequence.push_back(SequenceBatch::Uint8ToChar(
+          (seed >> ((seed_length - 1 - i) * 2)) & mask));
+    }
+    return sequence;
+  }
+  
+  void ProcessTranslateFileLine(std::string &line) {
+    int i;
+    int len = line.length();
+    std::string to;
+    for (i = 0; i < len; ++i) {
+      if (line[i] == ',' || line[i] == '\t')
+        break;
+    }
+
+    to = line.substr(0, i);
+    //from = line.substr(i + 1, len - i - 1);
+    from_bc_length = len - i - 1;
+    uint64_t from_seed = SequenceBatch::GenerateSeedFromSequence(line.c_str(), len, i + 1, from_bc_length);
+    
+    int khash_return_code;
+    khiter_t barcode_translate_table_iter = kh_put(k64_str, barcode_translate_table, from_seed, &khash_return_code);
+    kh_value(barcode_translate_table, barcode_translate_table_iter) = to;
+  }
+
+public:
+  BarcodeTranslator() {
+    barcode_translate_table = NULL;
+    from_bc_length = -1;
+  }
+  
+  ~BarcodeTranslator() {
+    if (barcode_translate_table != NULL) {
+      kh_destroy(k64_str, barcode_translate_table);
+    }
+  }
+
+  void SetTranslateTable(const std::string &file) {
+    barcode_translate_table = kh_init(k64_str);
+    std::ifstream file_stream(file);
+    std::string file_line;
+
+    while (getline(file_stream, file_line)) {
+      ProcessTranslateFileLine(file_line); 
+    }
+  }
+  
+  std::string Translate(uint64_t bc, uint32_t bc_length) {
+    if (barcode_translate_table == NULL) {
+      return Seed2Sequence(bc, bc_length);
+    } 
+
+    std::string ret;  
+    uint64_t i;
+    for (i = 0; i < bc_length / from_bc_length; ++i) {
+      uint64_t seed = (bc << (i * from_bc_length)) >> (bc_length - from_bc_length);
+      khiter_t barcode_translate_table_iter = kh_get(k64_str, barcode_translate_table, seed);
+      if (barcode_translate_table_iter == kh_end(barcode_translate_table)) {
+        std::cerr << "Barcode does not exist in the translation table.\n" << std::endl;
+        exit(-1);
+      }
+      const std::string &bc_to = kh_value(barcode_translate_table, barcode_translate_table_iter);
+      if (i == 0) {
+        ret = bc_to;
+      } else {
+        ret += "-" + bc_to;
+      }
+    }
+    return ret;
+  }
+};
 
 template <typename MappingRecord>
 class OutputTools {
@@ -135,7 +223,8 @@ class OutputTools {
 
   void AppendBarcodeOutput(uint64_t barcode_key) {
     fprintf(barcode_output_file_, "%s-1\n",
-            Seed2Sequence(barcode_key, cell_barcode_length_).data());
+            barcode_translator.Translate(barcode_key, cell_barcode_length_).data());
+            //Seed2Sequence(barcode_key, cell_barcode_length_).data());
   }
 
   void WriteMatrixOutputHead(uint64_t num_peaks, uint64_t num_barcodes,
@@ -160,6 +249,10 @@ class OutputTools {
     custom_rid_rank_ = custom_rid_rank;
   }
 
+  inline void SetBarcodeTranslateTable(std::string &file) {
+    barcode_translator.SetTranslateTable(file);
+  }
+
   std::vector<int> custom_rid_rank_;  // for pairs
  protected:
   std::string mapping_output_file_path_;
@@ -173,6 +266,7 @@ class OutputTools {
   FILE *peak_output_file_;
   FILE *barcode_output_file_;
   FILE *matrix_output_file_;
+  BarcodeTranslator barcode_translator;
 };
 
 // Specialization for BED format.
