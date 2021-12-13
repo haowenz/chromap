@@ -44,7 +44,8 @@ class BarcodeTranslator
 private:
   khash_t(k64_str) *barcode_translate_table;
   int from_bc_length;
-  
+  uint64_t mask;
+
   std::string Seed2Sequence(uint64_t seed, uint32_t seed_length) const {
     std::string sequence;
     sequence.reserve(seed_length);
@@ -91,9 +92,14 @@ public:
     barcode_translate_table = kh_init(k64_str);
     std::ifstream file_stream(file);
     std::string file_line;
-
     while (getline(file_stream, file_line)) {
       ProcessTranslateFileLine(file_line); 
+    }
+    
+    mask = 0;
+    for (int i = 0; i < from_bc_length; ++i)
+    {
+      mask |= (3ull << (2*i));
     }
   }
   
@@ -105,7 +111,8 @@ public:
     std::string ret;  
     uint64_t i;
     for (i = 0; i < bc_length / from_bc_length; ++i) {
-      uint64_t seed = (bc << (i * from_bc_length)) >> (bc_length - from_bc_length);
+      uint64_t seed = (bc << (2 * i * from_bc_length)) >> (2 * (bc_length / from_bc_length - 1) * from_bc_length);
+      seed &= mask;
       khiter_t barcode_translate_table_iter = kh_get(k64_str, barcode_translate_table, seed);
       if (barcode_translate_table_iter == kh_end(barcode_translate_table)) {
         std::cerr << "Barcode does not exist in the translation table.\n" << std::endl;
