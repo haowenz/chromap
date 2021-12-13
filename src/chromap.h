@@ -366,18 +366,18 @@ class Chromap {
       int &num_best_mappings_reported,
       std::vector<std::vector<MappingRecord> > &mappings_on_diff_ref_seqs);
   void EmplaceBackMappingRecord(
-      uint32_t read_id, uint32_t barcode, uint32_t fragment_start_position,
+      uint32_t read_id, uint64_t barcode, uint32_t fragment_start_position,
       uint16_t fragment_length, uint8_t mapq, uint8_t direction,
       uint8_t is_unique, uint8_t num_dups,
       std::vector<MappingRecord> *mappings_on_diff_ref_seqs);
   void EmplaceBackMappingRecord(
       uint32_t read_id, const char *read_name, uint16_t read_length,
-      uint32_t barcode, uint32_t fragment_start_position,
+      uint64_t barcode, uint32_t fragment_start_position,
       uint16_t fragment_length, uint8_t mapq, uint8_t direction,
       uint8_t is_unique, uint8_t num_dups,
       std::vector<MappingRecord> *mappings_on_diff_ref_seqs);
   void EmplaceBackMappingRecord(
-      uint32_t read_id, const char *read_name, uint32_t cell_barcode,
+      uint32_t read_id, const char *read_name, uint64_t cell_barcode,
       uint8_t num_dups, int64_t position, int rid, int flag, uint8_t direction,
       uint8_t is_unique, uint8_t mapq, uint32_t NM, int n_cigar,
       uint32_t *cigar, std::string &MD_tag, const char *read,

@@ -19,7 +19,8 @@ void OutputTools<MappingWithBarcode>::AppendMapping(
         std::string(reference_sequence_name) + "\t" +
         std::to_string(mapping.GetStartPosition()) + "\t" +
         std::to_string(mapping_end_position) + "\t" +
-        barcode_translator.Translate(mapping.cell_barcode_, cell_barcode_length_) + "\n");
+        barcode_translator.Translate(mapping.cell_barcode_, cell_barcode_length_) + 
+        "\t" + std::to_string(mapping.num_dups_) + "\n");
   } else {
     std::string strand = mapping.IsPositiveStrand() ? "+" : "-";
     const char *reference_sequence_name = reference.GetSequenceNameAt(rid);
