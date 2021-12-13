@@ -96,11 +96,11 @@ public:
       ProcessTranslateFileLine(file_line); 
     }
     
-    mask = 0;
-    for (int i = 0; i < from_bc_length; ++i)
+    mask = (1ull<<(2*from_bc_length)) - 1;
+    /*for (int i = 0; i < from_bc_length; ++i)
     {
       mask |= (3ull << (2*i));
-    }
+    }*/
   }
   
   std::string Translate(uint64_t bc, uint32_t bc_length) {

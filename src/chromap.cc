@@ -2778,9 +2778,12 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
   static uint64_t thread_num_mappings = 0;
   static uint64_t thread_num_mapped_reads = 0;
   static uint64_t thread_num_uniquely_mapped_reads = 0;
+  static uint64_t thread_num_barcode_in_whitelist = 0;
+  static uint64_t thread_num_corrected_barcode = 0;
 #pragma omp threadprivate(thread_num_candidates, thread_num_mappings, \
                           thread_num_mapped_reads,                    \
-                          thread_num_uniquely_mapped_reads)
+                          thread_num_uniquely_mapped_reads, thread_num_barcode_in_whitelist, \
+                          thread_num_corrected_barcode)
   double real_start_mapping_time = Chromap<>::GetRealTime();
   for (size_t read_file_index = 0; read_file_index < read_file1_paths_.size();
        ++read_file_index) {
@@ -2827,12 +2830,14 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
             num_threads_ / num_reference_sequences);
       }
     }
-#pragma omp parallel default(none) shared(window_size_, custom_rid_order_path_, error_threshold_, max_num_best_mappings_, num_threads_, num_reads_, mm_history, reference, index, read_batch, barcode_batch, read_batch_for_loading, barcode_batch_for_loading, std::cerr, num_loaded_reads_for_loading, num_loaded_reads, num_reference_sequences, mappings_on_diff_ref_seqs_for_diff_threads, mappings_on_diff_ref_seqs_for_diff_threads_for_saving, mm_to_candidates_cache) num_threads(num_threads_) reduction(+:num_candidates_, num_mappings_, num_mapped_reads_, num_uniquely_mapped_reads_)
+#pragma omp parallel default(none) shared(window_size_, custom_rid_order_path_, error_threshold_, max_num_best_mappings_, num_threads_, num_reads_, mm_history, reference, index, read_batch, barcode_batch, read_batch_for_loading, barcode_batch_for_loading, std::cerr, num_loaded_reads_for_loading, num_loaded_reads, num_reference_sequences, mappings_on_diff_ref_seqs_for_diff_threads, mappings_on_diff_ref_seqs_for_diff_threads_for_saving, mm_to_candidates_cache) num_threads(num_threads_) reduction(+:num_candidates_, num_mappings_, num_mapped_reads_, num_uniquely_mapped_reads_, num_barcode_in_whitelist_, num_corrected_barcode_)
     {
       thread_num_candidates = 0;
       thread_num_mappings = 0;
       thread_num_mapped_reads = 0;
       thread_num_uniquely_mapped_reads = 0;
+      thread_num_barcode_in_whitelist = 0;
+      thread_num_corrected_barcode = 0;
       MappingMetadata mapping_metadata;
 #pragma omp single
       {
@@ -2849,6 +2854,18 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
 #pragma omp taskloop num_tasks(num_threads_ *num_threads_)
           for (uint32_t read_index = 0; read_index < num_loaded_reads;
                ++read_index) {
+            
+            bool current_barcode_is_whitelisted = true;
+            if (!barcode_whitelist_file_path_.empty()) {
+              current_barcode_is_whitelisted = CorrectBarcodeAt(
+                  read_index, barcode_batch, thread_num_barcode_in_whitelist,
+                  thread_num_corrected_barcode);
+            }
+            
+            if (!(current_barcode_is_whitelisted ||
+                output_mappings_not_in_whitelist_)) 
+              continue;
+
             read_batch.PrepareNegativeSequenceAt(read_index);
 
             mapping_metadata.PrepareForMappingNextRead(
@@ -2956,6 +2973,8 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
         }
       }  // end of openmp single
       {
+        num_barcode_in_whitelist_ += thread_num_barcode_in_whitelist;
+        num_corrected_barcode_ += thread_num_corrected_barcode;
         num_candidates_ += thread_num_candidates;
         num_mappings_ += thread_num_mappings;
         num_mapped_reads_ += thread_num_mapped_reads;
@@ -2968,12 +2987,19 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
     }
   }
 
-  delete[] mm_history;
-  OutputMappingStatistics();
   std::cerr << "Mapped all reads in "
             << Chromap<>::GetRealTime() - real_start_mapping_time << "s.\n";
-  OutputMappingStatistics(num_reference_sequences, mappings_on_diff_ref_seqs_,
-                          mappings_on_diff_ref_seqs_);
+  
+  delete[] mm_history;
+  
+  OutputMappingStatistics();
+  if (!is_bulk_data_) {
+    OutputBarcodeStatistics();
+  }
+
+  index.Destroy();
+  //OutputMappingStatistics(num_reference_sequences, mappings_on_diff_ref_seqs_,
+  //                        mappings_on_diff_ref_seqs_);
 
   if (Tn5_shift_) {
     ApplyTn5ShiftOnSingleEndMapping(num_reference_sequences,
@@ -3015,14 +3041,14 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
 
 template <typename MappingRecord>
 void Chromap<MappingRecord>::EmplaceBackMappingRecord(
-    uint32_t read_id, uint32_t barcode, uint32_t fragment_start_position,
+    uint32_t read_id, uint64_t barcode, uint32_t fragment_start_position,
     uint16_t fragment_length, uint8_t mapq, uint8_t direction,
     uint8_t is_unique, uint8_t num_dups,
     std::vector<MappingRecord> *mappings_on_diff_ref_seqs) {}
 
 template <>
 void Chromap<MappingWithoutBarcode>::EmplaceBackMappingRecord(
-    uint32_t read_id, uint32_t barcode, uint32_t fragment_start_position,
+    uint32_t read_id, uint64_t barcode, uint32_t fragment_start_position,
     uint16_t fragment_length, uint8_t mapq, uint8_t direction,
     uint8_t is_unique, uint8_t num_dups,
     std::vector<MappingWithoutBarcode> *mappings_on_diff_ref_seqs) {
@@ -3033,7 +3059,7 @@ void Chromap<MappingWithoutBarcode>::EmplaceBackMappingRecord(
 
 template <>
 void Chromap<MappingWithBarcode>::EmplaceBackMappingRecord(
-    uint32_t read_id, uint32_t barcode, uint32_t fragment_start_position,
+    uint32_t read_id, uint64_t barcode, uint32_t fragment_start_position,
     uint16_t fragment_length, uint8_t mapq, uint8_t direction,
     uint8_t is_unique, uint8_t num_dups,
     std::vector<MappingWithBarcode> *mappings_on_diff_ref_seqs) {
@@ -3045,7 +3071,7 @@ void Chromap<MappingWithBarcode>::EmplaceBackMappingRecord(
 template <typename MappingRecord>
 void Chromap<MappingRecord>::EmplaceBackMappingRecord(
     uint32_t read_id, const char *read_name, uint16_t read_length,
-    uint32_t barcode, uint32_t fragment_start_position,
+    uint64_t barcode, uint32_t fragment_start_position,
     uint16_t fragment_length, uint8_t mapq, uint8_t direction,
     uint8_t is_unique, uint8_t num_dups,
     std::vector<MappingRecord> *mappings_on_diff_ref_seqs) {}
@@ -3053,7 +3079,7 @@ void Chromap<MappingRecord>::EmplaceBackMappingRecord(
 template <>
 void Chromap<PAFMapping>::EmplaceBackMappingRecord(
     uint32_t read_id, const char *read_name, uint16_t read_length,
-    uint32_t barcode, uint32_t fragment_start_position,
+    uint64_t barcode, uint32_t fragment_start_position,
     uint16_t fragment_length, uint8_t mapq, uint8_t direction,
     uint8_t is_unique, uint8_t num_dups,
     std::vector<PAFMapping> *mappings_on_diff_ref_seqs) {
@@ -3064,7 +3090,7 @@ void Chromap<PAFMapping>::EmplaceBackMappingRecord(
 
 template <typename MappingRecord>
 void Chromap<MappingRecord>::EmplaceBackMappingRecord(
-    uint32_t read_id, const char *read_name, uint32_t cell_barcode,
+    uint32_t read_id, const char *read_name, uint64_t cell_barcode,
     uint8_t num_dups, int64_t position, int rid, int flag, uint8_t direction,
     uint8_t is_unique, uint8_t mapq, uint32_t NM, int n_cigar, uint32_t *cigar,
     std::string &MD_tag, const char *read, const char *read_qual,
@@ -3072,7 +3098,7 @@ void Chromap<MappingRecord>::EmplaceBackMappingRecord(
 
 template <>
 void Chromap<SAMMapping>::EmplaceBackMappingRecord(
-    uint32_t read_id, const char *read_name, uint32_t cell_barcode,
+    uint32_t read_id, const char *read_name, uint64_t cell_barcode,
     uint8_t num_dups, int64_t position, int rid, int flag, uint8_t direction,
     uint8_t is_unique, uint8_t mapq, uint32_t NM, int n_cigar, uint32_t *cigar,
     std::string &MD_tag, const char *read, const char *read_qual,
@@ -3490,7 +3516,6 @@ void Chromap<MappingRecord>::ProcessBestMappingsForSingleEndRead(
             ref_end_position - ref_start_position + 1, min_num_errors,
             num_best_mappings, second_min_num_errors, num_second_best_mappings,
             error_threshold_, read_length);
-
         if (mapping_output_format_ == MAPPINGFORMAT_SAM) {
           uint16_t flag = mapping_direction == kPositive ? 0 : BAM_FREVERSE;
           if (num_best_mappings_reported >= 1) {
