@@ -21,7 +21,7 @@
 
 namespace chromap {
 
-KHASH_INIT(k64_str, uint64_t, std::string, 1, kh_int64_hash_func, kh_int64_hash_equal);
+KHASH_INIT(k64_str, uint64_t, char *, 1, kh_int64_hash_func, kh_int64_hash_equal);
 
 enum MappingOutputFormat {
   MAPPINGFORMAT_UNKNOWN,
@@ -73,7 +73,7 @@ private:
     
     int khash_return_code;
     khiter_t barcode_translate_table_iter = kh_put(k64_str, barcode_translate_table, from_seed, &khash_return_code);
-    kh_value(barcode_translate_table, barcode_translate_table_iter) = to;
+    kh_value(barcode_translate_table, barcode_translate_table_iter) = strdup(to.c_str());
   }
 
 public:
@@ -84,6 +84,12 @@ public:
   
   ~BarcodeTranslator() {
     if (barcode_translate_table != NULL) {
+      khiter_t k ;
+      for (k = kh_begin(barcode_translate_table) ; k != kh_end(barcode_translate_table); ++k)
+      {
+        if (kh_exist(barcode_translate_table, k))
+          free(kh_value(barcode_translate_table, k)) ;
+      }
       kh_destroy(k64_str, barcode_translate_table);
     }
   }
@@ -118,7 +124,7 @@ public:
         std::cerr << "Barcode does not exist in the translation table.\n" << std::endl;
         exit(-1);
       }
-      const std::string &bc_to = kh_value(barcode_translate_table, barcode_translate_table_iter);
+      std::string bc_to(kh_value(barcode_translate_table, barcode_translate_table_iter));
       if (i == 0) {
         ret = bc_to;
       } else {
