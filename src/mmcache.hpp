@@ -88,6 +88,7 @@ class mm_cache {
       cache[i].finger_print_cnt_sum = 0;
       cache[i].activated = 0;
     }
+    memset(head_mm, 0, sizeof(uint64_t) * HEAD_MM_ARRAY_SIZE);
     update_limit = 10;
     saturate_count = 100;
   }
