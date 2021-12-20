@@ -1,3 +1,6 @@
+#ifndef BARCODETRANSLATOR_H_
+#define BARCODETRANSLATOR_H_
+
 #include <cinttypes>
 #include <cstring>
 #include <functional>
@@ -109,3 +112,4 @@ public:
   }
 };
 }
+#endif
