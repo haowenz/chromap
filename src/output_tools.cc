@@ -19,7 +19,7 @@ void OutputTools<MappingWithBarcode>::AppendMapping(
         std::string(reference_sequence_name) + "\t" +
         std::to_string(mapping.GetStartPosition()) + "\t" +
         std::to_string(mapping_end_position) + "\t" +
-        barcode_translator.Translate(mapping.cell_barcode_, cell_barcode_length_) + 
+        barcode_translator_.Translate(mapping.cell_barcode_, cell_barcode_length_) + 
         "\t" + std::to_string(mapping.num_dups_) + "\n");
   } else {
     std::string strand = mapping.IsPositiveStrand() ? "+" : "-";
@@ -129,7 +129,7 @@ void OutputTools<PairedEndMappingWithBarcode>::AppendMapping(
         std::string(reference_sequence_name) + "\t" +
         std::to_string(mapping.GetStartPosition()) + "\t" +
         std::to_string(mapping_end_position) + "\t" +
-        barcode_translator.Translate(mapping.cell_barcode_, cell_barcode_length_) + "\t" +
+        barcode_translator_.Translate(mapping.cell_barcode_, cell_barcode_length_) + "\t" +
         std::to_string(mapping.num_dups_) + "\n");
   } else {
     bool positive_strand = mapping.IsPositiveStrand();
@@ -339,7 +339,7 @@ void OutputTools<SAMMapping>::AppendMapping(uint32_t rid,
       "\tMD:Z:" + mapping.MD_);
   if (cell_barcode_length_ > 0) {
     this->AppendMappingOutput(
-        "\tCB:Z:" + barcode_translator.Translate(mapping.cell_barcode_, cell_barcode_length_));
+        "\tCB:Z:" + barcode_translator_.Translate(mapping.cell_barcode_, cell_barcode_length_));
   }
   this->AppendMappingOutput("\n");
 }
