@@ -9,7 +9,6 @@ objs+=$(patsubst %.cc,$(objs_dir)/%.o,$(cpp_source))
 
 exec=chromap
 
-#asan=1
 ifneq ($(asan),)
 	CXXFLAGS+=-fsanitize=address -g
 	LDFLAGS+=-fsanitize=address -ldl -g
