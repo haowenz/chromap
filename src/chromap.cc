@@ -2998,8 +2998,6 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
   }
 
   index.Destroy();
-  //OutputMappingStatistics(num_reference_sequences, mappings_on_diff_ref_seqs_,
-  //                        mappings_on_diff_ref_seqs_);
 
   if (Tn5_shift_) {
     ApplyTn5ShiftOnSingleEndMapping(num_reference_sequences,
