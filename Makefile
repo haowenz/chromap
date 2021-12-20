@@ -22,7 +22,7 @@ dir:
 $(exec): $(objs)
 	$(CXX) $(CXXFLAGS) $(objs) -o $(exec) $(LDFLAGS)
 	
-$(objs_dir)/%.o: $(src_dir)/%.cc $(src_dir)/%.h
+$(objs_dir)/%.o: $(src_dir)/%.cc
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 .PHONY: clean
