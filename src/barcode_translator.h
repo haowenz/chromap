@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "khash.h"
+#include "sequence_batch.h"
 
 namespace chromap {
 
