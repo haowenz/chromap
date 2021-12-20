@@ -168,6 +168,11 @@ Note that chrom_end is open-end. This output fragment file can be used as input 
 downstream analysis tools such as [MAESTRO][MAESTRO], [ArchR][ArchR], [signac][signac]
 and etc.
 
+For the output, Chromap provide the function to translate input cell barcode to another barcode space. 
+User can specify the translation file through the option **--barcode-translate**. 
+The translation file is a two-column tsv/csv file with the original barcode on the second column and the translated barcode on the first column. This is useful for the case of 10x multiome data, where scATAC-seq and scRNA-seq data uses different sets of barcodes. 
+This option also supports combinatorial barcoding, such as SHARE-seq. Chromap translates each barcode segment provided in the second column to the ID of the first column and added "-" to concatenate the IDs in the output.
+
 #### <a name="map-hic"></a>Map Hi-C short reads
 
 ```sh

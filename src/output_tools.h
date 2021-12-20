@@ -6,7 +6,6 @@
 #include <cinttypes>
 #include <cstring>
 #include <functional>
-#include <fstream>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -17,7 +16,6 @@
 #include "pairs_mapping.h"
 #include "sam_mapping.h"
 #include "sequence_batch.h"
-#include "khash.h"
 #include "barcode_translator.h"
 
 namespace chromap {
