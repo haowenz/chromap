@@ -965,6 +965,7 @@ template <typename MappingRecord>
 void Chromap<MappingRecord>::PostProcessingInLowMemory(
     uint32_t num_mappings_in_mem, uint32_t num_reference_sequences,
     const SequenceBatch &reference) {
+  // First, process the mappings in the memory and save them on disk.
   if (num_mappings_in_mem > 0) {
     TempMappingFileHandle<MappingRecord> temp_mapping_file_handle;
     temp_mapping_file_handle.file_path =
@@ -983,10 +984,13 @@ void Chromap<MappingRecord>::PostProcessingInLowMemory(
       mappings_on_diff_ref_seqs_[i].clear();
     }
   }
+
   if (temp_mapping_file_handles_.size() == 0) {
     return;
   }
+
   double sort_and_dedupe_start_time = Chromap<>::GetRealTime();
+
   // Calculate block size and initialize
   uint64_t max_mem_size = 10 * ((uint64_t)1 << 30);
   if (mapping_output_format_ == MAPPINGFORMAT_SAM ||
@@ -1003,7 +1007,8 @@ void Chromap<MappingRecord>::PostProcessingInLowMemory(
     temp_mapping_file_handles_[hi].LoadTempMappingBlock(
         num_reference_sequences);
   }
-  // Merge and dedupe
+
+  // Merge and dedupe.
   bool all_merged = false;
   uint32_t last_rid = std::numeric_limits<uint32_t>::max();
   MappingRecord last_mapping;
@@ -1013,11 +1018,13 @@ void Chromap<MappingRecord>::PostProcessingInLowMemory(
   uint64_t num_mappings_passing_filters = 0;
   std::vector<MappingRecord> temp_dups_for_bulk_level_dedup;
   temp_dups_for_bulk_level_dedup.reserve(255);
+
   while (!all_merged) {
-    // Merge, dedupe and output
-    // Find min first (sorted by rid and then barcode and then positions)
+    // Merge, dedupe and output.
+    // Find min first (sorted by rid and then barcode and then positions).
     size_t min_handle_index = temp_mapping_file_handles_.size();
     uint32_t min_rid = std::numeric_limits<uint32_t>::max();
+
     for (size_t hi = 0; hi < temp_mapping_file_handles_.size(); ++hi) {
       TempMappingFileHandle<MappingRecord> &current_handle =
           temp_mapping_file_handles_[hi];
@@ -1034,7 +1041,8 @@ void Chromap<MappingRecord>::PostProcessingInLowMemory(
         }
       }
     }
-    // Append current min to mappings if not a duplicate
+
+    // Append current min to mappings if not a duplicate.
     if (!remove_pcr_duplicates_ ||
         min_handle_index != temp_mapping_file_handles_.size()) {
       MappingRecord &current_min_mapping =
@@ -1062,7 +1070,7 @@ void Chromap<MappingRecord>::PostProcessingInLowMemory(
           if (!is_bulk_data_ && remove_pcr_duplicates_at_bulk_level_ &&
               temp_dups_for_bulk_level_dedup.size() > 0) {
             // Find the best barcode, break ties first by the number of the
-            // barcodes in the dups, then by the barcode abundance
+            // barcodes in the dups, then by the barcode abundance.
             last_mapping = temp_dups_for_bulk_level_dedup[0];
             khiter_t barcode_whitelist_lookup_table_iterator =
                 kh_get(k64_seq, barcode_whitelist_lookup_table_,
@@ -1094,16 +1102,13 @@ void Chromap<MappingRecord>::PostProcessingInLowMemory(
             }
             temp_dups_for_bulk_level_dedup.clear();
           }
+
           if (last_mapping.mapq_ >= mapq_threshold_) {
             // if (allocate_multi_mappings_ || (only_output_unique_mappings_ &&
             // last_mapping.is_unique == 1)) {
             last_mapping.num_dups_ = std::min(
                 (uint32_t)std::numeric_limits<uint8_t>::max(), dup_count);
             if (Tn5_shift_) {
-              // last_mapping.fragment_start_position += 4;
-              // last_mapping.positive_alignment_length -= 4;
-              // last_mapping.fragment_length -= 9;
-              // last_mapping.negative_alignment_length -= 5;
               last_mapping.Tn5Shift();
             }
             output_tools_.AppendMapping(last_rid, reference, last_mapping);
@@ -1127,6 +1132,7 @@ void Chromap<MappingRecord>::PostProcessingInLowMemory(
       temp_mapping_file_handles_[min_handle_index].Next(
           num_reference_sequences);
     }
+
     // Check if all are merged.
     all_merged = true;
     for (size_t hi = 0; hi < temp_mapping_file_handles_.size(); ++hi) {
@@ -1135,11 +1141,12 @@ void Chromap<MappingRecord>::PostProcessingInLowMemory(
       }
     }
   }
+
   if (last_mapping.mapq_ >= mapq_threshold_) {
     if (!is_bulk_data_ && remove_pcr_duplicates_at_bulk_level_ &&
         temp_dups_for_bulk_level_dedup.size() > 0) {
       // Find the best barcode, break ties first by the number of the barcodes
-      // in the dups, then by the barcode abundance
+      // in the dups, then by the barcode abundance.
       last_mapping = temp_dups_for_bulk_level_dedup[0];
       khiter_t barcode_whitelist_lookup_table_iterator = kh_get(
           k64_seq, barcode_whitelist_lookup_table_, last_mapping.GetBarcode());
@@ -1173,26 +1180,25 @@ void Chromap<MappingRecord>::PostProcessingInLowMemory(
     last_mapping.num_dups_ =
         std::min((uint32_t)std::numeric_limits<uint8_t>::max(), dup_count);
     if (Tn5_shift_) {
-      // last_mapping.fragment_start_position += 4;
-      // last_mapping.positive_alignment_length -= 4;
-      // last_mapping.fragment_length -= 9;
-      // last_mapping.negative_alignment_length -= 5;
       last_mapping.Tn5Shift();
     }
     output_tools_.AppendMapping(last_rid, reference, last_mapping);
     ++num_mappings_passing_filters;
     //}
   }
+
   if (last_mapping.is_unique_ == 1) {
     ++num_uni_mappings;
   } else {
     ++num_multi_mappings;
   }
-  // Delete temp files
+
+  // Delete temp files.
   for (size_t hi = 0; hi < temp_mapping_file_handles_.size(); ++hi) {
     temp_mapping_file_handles_[hi].FinalizeTempMappingLoading();
     remove(temp_mapping_file_handles_[hi].file_path.c_str());
   }
+
   if (remove_pcr_duplicates_) {
     std::cerr << "Sorted, deduped and outputed mappings in "
               << Chromap<>::GetRealTime() - sort_and_dedupe_start_time
@@ -2782,10 +2788,10 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
   static uint64_t thread_num_uniquely_mapped_reads = 0;
   static uint64_t thread_num_barcode_in_whitelist = 0;
   static uint64_t thread_num_corrected_barcode = 0;
-#pragma omp threadprivate(thread_num_candidates, thread_num_mappings, \
-                          thread_num_mapped_reads,                    \
-                          thread_num_uniquely_mapped_reads, thread_num_barcode_in_whitelist, \
-                          thread_num_corrected_barcode)
+#pragma omp threadprivate(                                               \
+    thread_num_candidates, thread_num_mappings, thread_num_mapped_reads, \
+    thread_num_uniquely_mapped_reads, thread_num_barcode_in_whitelist,   \
+    thread_num_corrected_barcode)
   double real_start_mapping_time = Chromap<>::GetRealTime();
   for (size_t read_file_index = 0; read_file_index < read_file1_paths_.size();
        ++read_file_index) {
@@ -2856,16 +2862,15 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
 #pragma omp taskloop num_tasks(num_threads_ *num_threads_)
           for (uint32_t read_index = 0; read_index < num_loaded_reads;
                ++read_index) {
-            
             bool current_barcode_is_whitelisted = true;
             if (!barcode_whitelist_file_path_.empty()) {
               current_barcode_is_whitelisted = CorrectBarcodeAt(
                   read_index, barcode_batch, thread_num_barcode_in_whitelist,
                   thread_num_corrected_barcode);
             }
-            
+
             if (!(current_barcode_is_whitelisted ||
-                output_mappings_not_in_whitelist_)) 
+                  output_mappings_not_in_whitelist_))
               continue;
 
             read_batch.PrepareNegativeSequenceAt(read_index);
@@ -2991,9 +2996,9 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
 
   std::cerr << "Mapped all reads in "
             << Chromap<>::GetRealTime() - real_start_mapping_time << "s.\n";
-  
+
   delete[] mm_history;
-  
+
   OutputMappingStatistics();
   if (!is_bulk_data_) {
     OutputBarcodeStatistics();
@@ -5951,10 +5956,10 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
           "Output mappings in pairs format (defined by 4DN for HiC data)")(
           "pairs-natural-chr-order",
           "natural chromosome order for pairs flipping",
-          cxxopts::value<std::string>(), "FILE")
-          ("barcode-translate", 
-           "Convert barcode to the specified sequences during output",
-           cxxopts::value<std::string>(), "FILE");
+          cxxopts::value<std::string>(),
+          "FILE")("barcode-translate",
+                  "Convert barcode to the specified sequences during output",
+                  cxxopts::value<std::string>(), "FILE");
   //("PAF", "Output mappings in PAF format (only for test)");
   options.add_options()("v,version", "Print version")("h,help", "Print help");
   options.add_options("Development options")("A,match-score", "Match score [1]",
@@ -6259,7 +6264,8 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
     }
 
     if (result.count("barcode-translate")) {
-      mapping_parameters.barcode_translate_table_path = result["barcode-translate"].as<std::string>();
+      mapping_parameters.barcode_translate_table_path =
+          result["barcode-translate"].as<std::string>();
     }
 
     if (result.count("skip-barcode-check")) {

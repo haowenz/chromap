@@ -29,8 +29,9 @@ struct TempMappingFileHandle {
   uint32_t current_mapping_index;
   uint32_t num_mappings_on_current_rid;
   uint32_t num_loaded_mappings_on_current_rid;
-  std::vector<MappingRecord>
-      mappings;  // this vector only keep mappings on the same ref seq
+  // This vector only keep mappings on the same ref seq.
+  std::vector<MappingRecord> mappings;
+
   inline void InitializeTempMappingLoading(uint32_t num_reference_sequences) {
     file = fopen(file_path.c_str(), "rb");
     assert(file != NULL);
@@ -42,7 +43,9 @@ struct TempMappingFileHandle {
     // std::cerr << "Block size: " << block_size << ", initialize temp file " <<
     // file_path << "\n";
   }
+
   inline void FinalizeTempMappingLoading() { fclose(file); }
+
   inline void LoadTempMappingBlock(uint32_t num_reference_sequences) {
     num_mappings = 0;
     while (num_mappings == 0) {
@@ -82,6 +85,7 @@ struct TempMappingFileHandle {
     }
     current_mapping_index = 0;
   }
+
   inline void Next(uint32_t num_reference_sequences) {
     ++current_mapping_index;
     if (current_mapping_index >= num_mappings) {
