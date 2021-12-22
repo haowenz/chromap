@@ -420,8 +420,8 @@ uint32_t Chromap<PairedEndMappingWithBarcode>::CallPeaks(
         peaks_on_diff_ref_seqs_[ri].emplace_back(
             Peak{peak_start_position, peak_length, peak_count});
         tree_extras_on_diff_ref_seqs_[ri].emplace_back(0);
-        output_tools_.OutputPeaks(peak_start_position, peak_length, ri,
-                                  reference);
+        feature_barcode_matrix_writer_.OutputPeaks(peak_start_position,
+                                                   peak_length, ri, reference);
         ++peak_count;
         peak_length = 0;
       }
@@ -443,7 +443,8 @@ void Chromap<PairedEndMappingWithBarcode>::OutputFeatureMatrix(
     uint32_t num_sequences, const SequenceBatch &reference) {
   uint32_t num_peaks = 0;
   if (cell_by_bin_) {
-    output_tools_.OutputPeaks(bin_size_, num_sequences, reference);
+    feature_barcode_matrix_writer_.OutputPeaks(bin_size_, num_sequences,
+                                               reference);
     for (uint32_t i = 0; i < num_sequences; ++i) {
       uint32_t ref_seq_length = reference.GetSequenceLengthAt(i);
       num_peaks += ref_seq_length / bin_size_;
@@ -475,7 +476,7 @@ void Chromap<PairedEndMappingWithBarcode>::OutputFeatureMatrix(
         kh_value(barcode_index_table_, barcode_index_table_iterator) =
             barcode_index;
         ++barcode_index;
-        output_tools_.AppendBarcodeOutput(barcode_key);
+        feature_barcode_matrix_writer_.AppendBarcodeOutput(barcode_key);
       }
     }
   }
@@ -522,8 +523,8 @@ void Chromap<PairedEndMappingWithBarcode>::OutputFeatureMatrix(
             << Chromap<>::GetRealTime() - real_start_time << "s.\n";
   // Output matrix
   real_start_time = GetRealTime();
-  output_tools_.WriteMatrixOutputHead(num_peaks, kh_size(barcode_index_table_),
-                                      kh_size(matrix));
+  feature_barcode_matrix_writer_.WriteMatrixOutputHead(
+      num_peaks, kh_size(barcode_index_table_), kh_size(matrix));
   uint64_t key;
   uint32_t value;
   std::vector<std::pair<uint64_t, uint32_t>> feature_matrix;
@@ -535,9 +536,9 @@ void Chromap<PairedEndMappingWithBarcode>::OutputFeatureMatrix(
   kh_destroy(kmatrix, matrix);
   std::sort(feature_matrix.begin(), feature_matrix.end());
   for (size_t i = 0; i < feature_matrix.size(); ++i) {
-    output_tools_.AppendMatrixOutput((uint32_t)feature_matrix[i].first,
-                                     (uint32_t)(feature_matrix[i].first >> 32),
-                                     feature_matrix[i].second);
+    feature_barcode_matrix_writer_.AppendMatrixOutput(
+        (uint32_t)feature_matrix[i].first,
+        (uint32_t)(feature_matrix[i].first >> 32), feature_matrix[i].second);
   }
   std::cerr << "Output feature matrix in "
             << Chromap<>::GetRealTime() - real_start_time << "s.\n";
@@ -1812,9 +1813,10 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
     }
 
     if (!is_bulk_data_ && !matrix_output_prefix_.empty()) {
-      output_tools_.InitializeMatrixOutput(matrix_output_prefix_);
+      feature_barcode_matrix_writer_.InitializeMatrixOutput(
+          matrix_output_prefix_);
       OutputFeatureMatrix(num_reference_sequences, reference);
-      output_tools_.FinalizeMatrixOutput();
+      feature_barcode_matrix_writer_.FinalizeMatrixOutput();
     }
   }
 

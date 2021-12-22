@@ -10,6 +10,7 @@
 #include <tuple>
 #include <vector>
 
+#include "feature_barcode_matrix_writer.h"
 #include "index.h"
 #include "khash.h"
 #include "ksort.h"
@@ -620,6 +621,7 @@ class Chromap {
   // (max_level, # nodes)
   std::vector<std::pair<int, uint32_t> > tree_info_on_diff_ref_seqs_;
   OutputTools<MappingRecord> output_tools_;
+  FeatureBarcodeMatrixWriter feature_barcode_matrix_writer_;
   // For mapping stats.
   uint64_t num_candidates_ = 0;
   uint64_t num_mappings_ = 0;
