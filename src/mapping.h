@@ -6,7 +6,7 @@ namespace chromap {
 // An interface for various mapping formats.
 class Mapping {
  public:
-  Mapping() {}
+  virtual ~Mapping() = default;
   //// Defines the orders of mappings. Sort by mapping positions first, then
   //// sorted by barcode and other fields if available. Make sure to consider
   //// enough field so that the order is always deterministic.
