@@ -10,13 +10,13 @@
 #include <string>
 #include <vector>
 
+#include "barcode_translator.h"
 #include "bed_mapping.h"
 #include "mapping.h"
 #include "paf_mapping.h"
 #include "pairs_mapping.h"
 #include "sam_mapping.h"
 #include "sequence_batch.h"
-#include "barcode_translator.h"
 
 namespace chromap {
 
@@ -100,64 +100,6 @@ class OutputTools {
     return sequence;
   }
 
-  // Below are functions to output feature matrix.
-  inline void InitializeMatrixOutput(const std::string &matrix_output_prefix) {
-    matrix_output_prefix_ = matrix_output_prefix;
-    matrix_output_file_ =
-        fopen((matrix_output_prefix_ + "_matrix.mtx").c_str(), "w");
-    assert(matrix_output_file_ != NULL);
-    peak_output_file_ =
-        fopen((matrix_output_prefix_ + "_peaks.bed").c_str(), "w");
-    assert(peak_output_file_ != NULL);
-    barcode_output_file_ =
-        fopen((matrix_output_prefix_ + "_barcode.tsv").c_str(), "w");
-    assert(barcode_output_file_ != NULL);
-  }
-
-  void OutputPeaks(uint32_t bin_size, uint32_t num_sequences,
-                   const SequenceBatch &reference) {
-    for (uint32_t rid = 0; rid < num_sequences; ++rid) {
-      uint32_t sequence_length = reference.GetSequenceLengthAt(rid);
-      const char *sequence_name = reference.GetSequenceNameAt(rid);
-      for (uint32_t position = 0; position < sequence_length;
-           position += bin_size) {
-        fprintf(peak_output_file_, "%s\t%u\t%u\n", sequence_name, position + 1,
-                position + bin_size);
-      }
-    }
-  }
-
-  void OutputPeaks(uint32_t peak_start_position, uint16_t peak_length,
-                   uint32_t rid, const SequenceBatch &reference) {
-    const char *sequence_name = reference.GetSequenceNameAt(rid);
-    fprintf(peak_output_file_, "%s\t%u\t%u\n", sequence_name,
-            peak_start_position + 1, peak_start_position + peak_length);
-  }
-
-  void AppendBarcodeOutput(uint64_t barcode_key) {
-    fprintf(barcode_output_file_, "%s-1\n",
-            barcode_translator_.Translate(barcode_key, cell_barcode_length_).data());
-            //Seed2Sequence(barcode_key, cell_barcode_length_).data());
-  }
-
-  void WriteMatrixOutputHead(uint64_t num_peaks, uint64_t num_barcodes,
-                             uint64_t num_lines) {
-    fprintf(matrix_output_file_, "%" PRIu64 "\t%" PRIu64 "\t%" PRIu64 "\n",
-            num_peaks, num_barcodes, num_lines);
-  }
-
-  void AppendMatrixOutput(uint32_t peak_index, uint32_t barcode_index,
-                          uint32_t num_mappings) {
-    fprintf(matrix_output_file_, "%u\t%u\t%u\n", peak_index, barcode_index,
-            num_mappings);
-  }
-
-  inline void FinalizeMatrixOutput() {
-    fclose(matrix_output_file_);
-    fclose(peak_output_file_);
-    fclose(barcode_output_file_);
-  }
-
   inline void SetPairsCustomRidRank(const std::vector<int> &custom_rid_rank) {
     custom_rid_rank_ = custom_rid_rank;
   }
@@ -175,10 +117,6 @@ class OutputTools {
   MappingOutputFormat mapping_output_format_ = MAPPINGFORMAT_BED;
   uint32_t num_mappings_;
   uint32_t cell_barcode_length_ = 16;
-  std::string matrix_output_prefix_;
-  FILE *peak_output_file_;
-  FILE *barcode_output_file_;
-  FILE *matrix_output_file_;
   BarcodeTranslator barcode_translator_;
 };
 
