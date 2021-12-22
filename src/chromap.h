@@ -16,6 +16,7 @@
 #include "ksort.h"
 #include "mapping_metadata.h"
 #include "output_tools.h"
+#include "paired_end_mapping_metadata.h"
 #include "sequence_batch.h"
 #include "temp_mapping.h"
 
