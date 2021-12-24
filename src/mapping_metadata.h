@@ -5,18 +5,9 @@
 #include <utility>
 #include <vector>
 
-namespace chromap {
+#include "candidate.h"
 
-struct Candidate {
-  uint64_t position;
-  uint8_t count;
-  bool operator<(const Candidate &c) const {
-    if (count != c.count)
-      return count > c.count;
-    else
-      return position < c.position;
-  }
-};
+namespace chromap {
 
 class mm_cache;
 class Index;

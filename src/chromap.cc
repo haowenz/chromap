@@ -1321,14 +1321,14 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
 
   read_batch1.SetSeqEffectiveRange(read1_format_[0], read1_format_[1], 1);
   read_batch2.SetSeqEffectiveRange(read2_format_[0], read2_format_[1], 1);
-  barcode_batch.SetSeqEffectiveRange(barcode_format_[0], barcode_format_[1], barcode_format_[2]);
+  barcode_batch.SetSeqEffectiveRange(barcode_format_[0], barcode_format_[1],
+                                     barcode_format_[2]);
   read_batch1_for_loading.SetSeqEffectiveRange(read1_format_[0],
                                                read1_format_[1], 1);
   read_batch2_for_loading.SetSeqEffectiveRange(read2_format_[0],
                                                read2_format_[1], 1);
-  barcode_batch_for_loading.SetSeqEffectiveRange(barcode_format_[0],
-                                                 barcode_format_[1],
-                                                 barcode_format_[2]);
+  barcode_batch_for_loading.SetSeqEffectiveRange(
+      barcode_format_[0], barcode_format_[1], barcode_format_[2]);
 
   // Initialize cache
   mm_cache mm_to_candidates_cache(2000003);
@@ -2756,10 +2756,10 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
   read_batch.SetSeqEffectiveRange(read1_format_[0], read1_format_[1], 1);
   read_batch_for_loading.SetSeqEffectiveRange(read1_format_[0],
                                               read1_format_[1], 1);
-  barcode_batch.SetSeqEffectiveRange(barcode_format_[0], barcode_format_[1], barcode_format_[2]);
-  barcode_batch_for_loading.SetSeqEffectiveRange(barcode_format_[0],
-                                                 barcode_format_[1],
-                                                 barcode_format_[2]);
+  barcode_batch.SetSeqEffectiveRange(barcode_format_[0], barcode_format_[1],
+                                     barcode_format_[2]);
+  barcode_batch_for_loading.SetSeqEffectiveRange(
+      barcode_format_[0], barcode_format_[1], barcode_format_[2]);
 
   mappings_on_diff_ref_seqs_.reserve(num_reference_sequences);
   deduped_mappings_on_diff_ref_seqs_.reserve(num_reference_sequences);
@@ -5782,7 +5782,7 @@ void Chromap<MappingRecord>::ParseReadFormat(const std::string &read_format) {
   read1_format_[1] = -1;
   read1_format_[2] = 1;
   read2_format_[0] = 0;
-  read2_format_[1] = -1; 
+  read2_format_[1] = -1;
   read2_format_[2] = 1;
   barcode_format_[0] = 0;
   barcode_format_[1] = -1;
@@ -5797,7 +5797,7 @@ void Chromap<MappingRecord>::ParseReadFormat(const std::string &read_format) {
         if (j <= 1) {
           fields[j] = atoi(buffer);
         } else {
-          fields[j] = buffer[0]=='+'?1:-1;
+          fields[j] = buffer[0] == '+' ? 1 : -1;
         }
         if (k == 0)
           memcpy(read1_format_, fields, sizeof(fields));
@@ -5833,7 +5833,7 @@ void Chromap<MappingRecord>::ParseReadFormat(const std::string &read_format) {
         if (j <= 1) {
           fields[j] = atoi(buffer);
         } else {
-          fields[j] = buffer[0]=='+'?1:-1;
+          fields[j] = buffer[0] == '+' ? 1 : -1;
         }
         ++j;
         blen = 0;
@@ -5844,7 +5844,7 @@ void Chromap<MappingRecord>::ParseReadFormat(const std::string &read_format) {
   if (j <= 1) {
     fields[j] = atoi(buffer);
   } else {
-    fields[j] = buffer[0]=='+'?1:-1;
+    fields[j] = buffer[0] == '+' ? 1 : -1;
   }
   // By initialization, it is fine even if there is no read_format specified
   if (k == 0)
