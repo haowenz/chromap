@@ -1312,15 +1312,16 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
   SequenceBatch read_batch2_for_loading(read_batch_size_);
   SequenceBatch barcode_batch_for_loading(read_batch_size_);
 
-  read_batch1.SetSeqEffectiveRange(read1_format_[0], read1_format_[1]);
-  read_batch2.SetSeqEffectiveRange(read2_format_[0], read2_format_[1]);
-  barcode_batch.SetSeqEffectiveRange(barcode_format_[0], barcode_format_[1]);
+  read_batch1.SetSeqEffectiveRange(read1_format_[0], read1_format_[1], 1);
+  read_batch2.SetSeqEffectiveRange(read2_format_[0], read2_format_[1], 1);
+  barcode_batch.SetSeqEffectiveRange(barcode_format_[0], barcode_format_[1], barcode_format_[2]);
   read_batch1_for_loading.SetSeqEffectiveRange(read1_format_[0],
-                                               read1_format_[1]);
+                                               read1_format_[1], 1);
   read_batch2_for_loading.SetSeqEffectiveRange(read2_format_[0],
-                                               read2_format_[1]);
+                                               read2_format_[1], 1);
   barcode_batch_for_loading.SetSeqEffectiveRange(barcode_format_[0],
-                                                 barcode_format_[1]);
+                                                 barcode_format_[1],
+                                                 barcode_format_[2]);
 
   // Initialize cache
   mm_cache mm_to_candidates_cache(2000003);
@@ -2744,12 +2745,13 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
   SequenceBatch read_batch_for_loading(read_batch_size_);
   SequenceBatch barcode_batch(read_batch_size_);
   SequenceBatch barcode_batch_for_loading(read_batch_size_);
-  read_batch.SetSeqEffectiveRange(read1_format_[0], read1_format_[1]);
+  read_batch.SetSeqEffectiveRange(read1_format_[0], read1_format_[1], 1);
   read_batch_for_loading.SetSeqEffectiveRange(read1_format_[0],
-                                              read1_format_[1]);
-  barcode_batch.SetSeqEffectiveRange(barcode_format_[0], barcode_format_[1]);
+                                              read1_format_[1], 1);
+  barcode_batch.SetSeqEffectiveRange(barcode_format_[0], barcode_format_[1], barcode_format_[2]);
   barcode_batch_for_loading.SetSeqEffectiveRange(barcode_format_[0],
-                                                 barcode_format_[1]);
+                                                 barcode_format_[1],
+                                                 barcode_format_[2]);
 
   mappings_on_diff_ref_seqs_.reserve(num_reference_sequences);
   deduped_mappings_on_diff_ref_seqs_.reserve(num_reference_sequences);
@@ -5771,19 +5773,25 @@ void Chromap<MappingRecord>::ParseReadFormat(const std::string &read_format) {
   int k = 0;  // for read1, read2, or barcode
   read1_format_[0] = 0;
   read1_format_[1] = -1;
+  read1_format_[2] = 1;
   read2_format_[0] = 0;
-  read2_format_[1] = -1;
+  read2_format_[1] = -1; 
+  read2_format_[2] = 1;
   barcode_format_[0] = 0;
   barcode_format_[1] = -1;
-  int fields[2] = {0, -1};
+  barcode_format_[2] = 1;
+  int fields[3] = {0, -1, 1};
   char buffer[20];
   int blen = 0;
   for (i = 0; i < read_format.size(); ++i) {
     if (read_format[i] == ',' || i == 0) {
       if (i > 0) {
         buffer[blen] = '\0';
-        fields[j] = atoi(buffer);
-
+        if (j <= 1) {
+          fields[j] = atoi(buffer);
+        } else {
+          fields[j] = buffer[0]=='+'?1:-1;
+        }
         if (k == 0)
           memcpy(read1_format_, fields, sizeof(fields));
         else if (k == 1)
@@ -5807,7 +5815,7 @@ void Chromap<MappingRecord>::ParseReadFormat(const std::string &read_format) {
       blen = 0;
     } else {
       if (read_format[i] != ':') {
-        if (j < 2) {
+        if (j < 3) {
           buffer[blen] = read_format[i];
           ++blen;
         } else {
@@ -5815,14 +5823,22 @@ void Chromap<MappingRecord>::ParseReadFormat(const std::string &read_format) {
         }
       } else {
         buffer[blen] = '\0';
-        fields[j] = atoi(buffer);
+        if (j <= 1) {
+          fields[j] = atoi(buffer);
+        } else {
+          fields[j] = buffer[0]=='+'?1:-1;
+        }
         ++j;
         blen = 0;
       }
     }
   }
   buffer[blen] = '\0';
-  fields[j] = atoi(buffer);
+  if (j <= 1) {
+    fields[j] = atoi(buffer);
+  } else {
+    fields[j] = buffer[0]=='+'?1:-1;
+  }
   // By initialization, it is fine even if there is no read_format specified
   if (k == 0)
     memcpy(read1_format_, fields, sizeof(fields));

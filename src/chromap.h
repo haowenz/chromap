@@ -18,7 +18,7 @@
 #include "sequence_batch.h"
 #include "temp_mapping.h"
 
-#define CHROMAP_VERSION "0.1.4-r284"
+#define CHROMAP_VERSION "0.1.3-r257"
 
 namespace chromap {
 struct uint128_t {
@@ -591,9 +591,9 @@ class Chromap {
   std::vector<std::string> read_file2_paths_;
   std::vector<std::string> barcode_file_paths_;
   std::string barcode_whitelist_file_path_;
-  int barcode_format_[2];  // 0-start, 1-end (includsive)
-  int read1_format_[2];
-  int read2_format_[2];
+  int barcode_format_[3];  // 0-start, 1-end (includsive), 2-strand(-1:minus, 1:plus)
+  int read1_format_[3];
+  int read2_format_[3];
   std::string mapping_output_file_path_;
   FILE *mapping_output_file_;
   std::string matrix_output_prefix_;
