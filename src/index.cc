@@ -8,7 +8,9 @@
 #include "chromap.h"
 
 namespace chromap {
-void Index::Statistics(uint32_t num_sequences, const SequenceBatch &reference) {
+
+void Index::Statistics(uint32_t num_sequences,
+                       const SequenceBatch &reference) const {
   double real_start_time = Chromap<>::GetRealTime();
   int n = 0, n1 = 0;
   uint32_t i;
@@ -39,7 +41,7 @@ void Index::Statistics(uint32_t num_sequences, const SequenceBatch &reference) {
 // always reserve space for minimizers in other functions
 void Index::GenerateMinimizerSketch(
     const SequenceBatch &sequence_batch, uint32_t sequence_index,
-    std::vector<std::pair<uint64_t, uint64_t> > &minimizers) {
+    std::vector<std::pair<uint64_t, uint64_t> > &minimizers) const {
   uint64_t num_shifted_bits = 2 * (kmer_size_ - 1);
   uint64_t mask = (((uint64_t)1) << (2 * kmer_size_)) - 1;
   uint64_t seeds_in_two_strands[2] = {0, 0};
@@ -232,7 +234,8 @@ void Index::Construct(uint32_t num_sequences, const SequenceBatch &reference) {
             << Chromap<>::GetRealTime() - real_start_time << "s.\n";
 }
 
-void Index::CheckIndex(uint32_t num_sequences, const SequenceBatch &reference) {
+void Index::CheckIndex(uint32_t num_sequences,
+                       const SequenceBatch &reference) const {
   std::vector<std::pair<uint64_t, uint64_t> > tmp_table;
   tmp_table.reserve(reference.GetNumBases() / window_size_ * 2);
   for (uint32_t sequence_index = 0; sequence_index < num_sequences;
@@ -265,7 +268,7 @@ void Index::CheckIndex(uint32_t num_sequences, const SequenceBatch &reference) {
   }
 }
 
-void Index::Save() {
+void Index::Save() const {
   double real_start_time = Chromap<>::GetRealTime();
   FILE *index_file = fopen(index_file_path_.c_str(), "wb");
   assert(index_file != NULL);
@@ -336,15 +339,14 @@ void Index::GenerateCandidatesOnOneDirection(
     std::vector<uint64_t> &hits, std::vector<Candidate> &candidates) const {
   hits.emplace_back(UINT64_MAX);
   if (hits.size() > 0) {
-    int count = 1;
-    int equal_count =
-        1;  // the number of seeds with the exact same reference position.
+    int minimizer_count = 1;
+    // The number of seeds with the exact same reference position.
+    int equal_count = 1;
     int best_equal_count = 1;
     uint64_t previous_hit = hits[0];
     uint32_t previous_reference_id = previous_hit >> 32;
     uint32_t previous_reference_position = previous_hit;
     uint64_t best_local_hit = hits[0];
-    // uint32_t previous_start_reference_position = previous_reference_position;
     for (uint32_t pi = 1; pi < hits.size(); ++pi) {
       uint32_t current_reference_id = hits[pi] >> 32;
       uint32_t current_reference_position = hits[pi];
@@ -352,37 +354,24 @@ void Index::GenerateCandidatesOnOneDirection(
       printf("%s: %d %d\n", __func__, current_reference_id,
              current_reference_position);
 #endif
-      // printf("cur: %s: %d %d\n", __func__, current_reference_id,
-      // current_reference_position); printf("pre: %s: %d %d\n", __func__,
-      // previous_reference_id, previous_reference_position); if
-      // (current_reference_id != previous_reference_id ||
-      // current_reference_position > previous_reference_position +
-      // error_threshold || ((uint32_t)count >= num_minimizers &&
-      // current_reference_position > previous_start_reference_position +
-      // error_threshold)) {
       if (current_reference_id != previous_reference_id ||
           current_reference_position >
               previous_reference_position + error_threshold ||
-          ((uint32_t)count >= num_minimizers &&
+          ((uint32_t)minimizer_count >= num_minimizers &&
            current_reference_position >
                (uint32_t)best_local_hit + error_threshold)) {
-        if (count >= num_seeds_required) {
+        if (minimizer_count >= num_seeds_required) {
           Candidate candidate;
           candidate.position = best_local_hit;
-          // candidate.count = count;
           candidate.count = best_equal_count;
           candidates.push_back(candidate);
-          // std::cerr << "candi: " << (int)candidate.position << " " <<
-          // (int)candidate.count << "\n";
         }
-        count = 1;
+
+        minimizer_count = 1;
         equal_count = 1;
         best_equal_count = 1;
         best_local_hit = hits[pi];
-        // previous_start_reference_position = current_reference_position;
       } else {
-        // printf("%d %d %d: %d %d\n", (int)best_local_hit, (int)previous_hit,
-        // (int)(*hits)[pi], equal_count, best_equal_count);
         if (hits[pi] == best_local_hit) {
           ++equal_count;
           ++best_equal_count;
@@ -395,8 +384,10 @@ void Index::GenerateCandidatesOnOneDirection(
         } else {
           equal_count = 1;
         }
-        ++count;
+
+        ++minimizer_count;
       }
+
       previous_hit = hits[pi];
       previous_reference_id = current_reference_id;
       previous_reference_position = current_reference_position;
@@ -405,7 +396,7 @@ void Index::GenerateCandidatesOnOneDirection(
 }
 
 // Return the number of repetitive seeds
-int Index::CollectCandidates(
+int Index::CollectSeedHits(
     int max_seed_frequency, int repetitive_seed_frequency,
     const std::vector<std::pair<uint64_t, uint64_t> > &minimizers,
     uint32_t &repetitive_seed_length, std::vector<uint64_t> &positive_hits,
@@ -579,58 +570,61 @@ int Index::CollectCandidates(
   return repetitive_seed_count;
 }
 
-// |Return|:the best_candidate's minimizer count.
-// positive: finish normally
-// negative: stop early due to too many best candidates
+// Input a search range, for each best mate candidate, serach for minimizer
+// hits. Return the minimizer count of the best candidate, if it finishes
+// normally or return a negative value if it stops early due to too many
+// candidates with low minimizer count.
 int Index::GenerateCandidatesFromRepetitiveReadWithMateInfo(
     int error_threshold,
     const std::vector<std::pair<uint64_t, uint64_t> > &minimizers,
     uint32_t &repetitive_seed_length, std::vector<uint64_t> &hits,
     std::vector<Candidate> &candidates, std::vector<Candidate> &mate_candidates,
-    Direction direction, uint32_t range) const {
-  uint32_t num_minimizers = minimizers.size();
-  hits.reserve(max_seed_frequencies_[0]);
-  uint32_t previous_repetitive_seed_position =
-      std::numeric_limits<uint32_t>::max();
-
-  // int best_candidate = -1;
-  int max_count = 0;
+    Direction direction, uint32_t search_range) const {
+  const uint32_t mate_candidates_size = mate_candidates.size();
+  int max_minimizer_count = 0;
   int best_candidate_num = 0;
-  uint32_t mate_candidates_size = mate_candidates.size();
   for (uint32_t i = 0; i < mate_candidates_size; ++i) {
-    int count = mate_candidates.at(i).count;
-    if (count > max_count) {
-      // best_candidate = i;
-      max_count = count;
+    int count = mate_candidates[i].count;
+    if (count > max_minimizer_count) {
+      max_minimizer_count = count;
       best_candidate_num = 1;
-    } else if (count == max_count) {
+    } else if (count == max_minimizer_count) {
       ++best_candidate_num;
     }
   }
-  if (best_candidate_num >= 300 ||
-      (max_count <= min_num_seeds_required_for_mapping_ &&
-       best_candidate_num >= 200) ||
-      mate_candidates_size > (uint32_t)max_seed_frequencies_[0]) {
-    return -max_count;
+
+  const bool mate_has_too_many_candidates =
+      best_candidate_num >= 300 ||
+      mate_candidates_size > (uint32_t)max_seed_frequencies_[0];
+  const bool mate_has_too_many_low_support_candidates =
+      max_minimizer_count <= min_num_seeds_required_for_mapping_ &&
+      best_candidate_num >= 200;
+  if (mate_has_too_many_candidates ||
+      mate_has_too_many_low_support_candidates) {
+    return -max_minimizer_count;
   }
+
   std::vector<std::pair<uint64_t, uint64_t> > boundaries;
   boundaries.reserve(300);
   for (uint32_t ci = 0; ci < mate_candidates_size; ++ci) {
-    if (mate_candidates.at(ci).count == max_count) {
-      std::pair<uint64_t, uint64_t> r;
-      r.first = (mate_candidates.at(ci).position < range)
-                    ? 0
-                    : (mate_candidates.at(ci).position - range);
-      r.second = mate_candidates.at(ci).position + range;
-      boundaries.push_back(r);
+    if (mate_candidates[ci].count == max_minimizer_count) {
+      const uint64_t boundary_start =
+          (mate_candidates[ci].position < search_range)
+              ? 0
+              : (mate_candidates[ci].position - search_range);
+      const uint64_t boundary_end = mate_candidates[ci].position + search_range;
+      boundaries.emplace_back(boundary_start, boundary_end);
     }
   }
 
-  // Merge adjacent boundary point. assume the candidates are sorted by
-  // coordinate so boundaries are also sorted.
-  uint32_t boundary_size = 1;
+  // Merge adjacent boundary point. Assume the candidates are sorted by
+  // coordinate, and thus boundaries are also sorted.
   uint32_t raw_boundary_size = boundaries.size();
-  if (raw_boundary_size == 0) return max_count;
+  if (raw_boundary_size == 0) {
+    return max_minimizer_count;
+  }
+
+  uint32_t boundary_size = 1;
   for (uint32_t bi = 1; bi < raw_boundary_size; ++bi) {
     if (boundaries[boundary_size - 1].second < boundaries[bi].first) {
       boundaries[boundary_size] = boundaries[bi];
@@ -641,14 +635,18 @@ int Index::GenerateCandidatesFromRepetitiveReadWithMateInfo(
   }
   boundaries.resize(boundary_size);
 
+  uint32_t previous_repetitive_seed_position =
+      std::numeric_limits<uint32_t>::max();
   repetitive_seed_length = 0;
-  for (uint32_t mi = 0; mi < num_minimizers; ++mi) {
+  hits.reserve(max_seed_frequencies_[0]);
+  for (uint32_t mi = 0; mi < minimizers.size(); ++mi) {
     khiter_t khash_iterator =
         kh_get(k64, lookup_table_, minimizers[mi].first << 1);
     if (khash_iterator == kh_end(lookup_table_)) {
       // std::cerr << "The minimizer is not in reference!\n";
       continue;
     }
+
     uint64_t value = kh_value(lookup_table_, khash_iterator);
     uint32_t read_position = minimizers[mi].second >> 1;
     if (kh_key(lookup_table_, khash_iterator) & 1) {  // singleton
@@ -698,6 +696,7 @@ int Index::GenerateCandidatesFromRepetitiveReadWithMateInfo(
             break;
           }
         }
+
         prev_l = m;
         // printf("%s: %d %d: %d %d\n", __func__, m, num_occurrences,
         // (int)(boundary>>32), (int)boundary) ;
@@ -720,6 +719,7 @@ int Index::GenerateCandidatesFromRepetitiveReadWithMateInfo(
           }
         }
       }  // for bi
+
       if (num_occurrences >= (uint32_t)max_seed_frequencies_[0]) {
         if (previous_repetitive_seed_position >
             read_position) {  // first minimizer
@@ -743,10 +743,10 @@ int Index::GenerateCandidatesFromRepetitiveReadWithMateInfo(
   //	  printf("%s: %d %d\n", __func__,
   //(int)(hits->at(i)>>32),(int)hits->at(i)); std::cerr << "Rescue gen on one
   // dir\n";
-  GenerateCandidatesOnOneDirection(error_threshold, 1, minimizers.size(), hits,
-                                   candidates);
+  GenerateCandidatesOnOneDirection(error_threshold, /*num_seeds_required=*/1,
+                                   minimizers.size(), hits, candidates);
   // printf("%s: %d %d\n", __func__, hits->size(), candidates->size()) ;
-  return max_count;
+  return max_minimizer_count;
 }
 
 void Index::GenerateCandidates(int error_threshold,
@@ -762,62 +762,23 @@ void Index::GenerateCandidates(int error_threshold,
   uint32_t &repetitive_seed_length = mapping_metadata.repetitive_seed_length_;
 
   repetitive_seed_length = 0;
-  // bool recollect = true;
-  int repetitive_seed_count = CollectCandidates(
+  int repetitive_seed_count = CollectSeedHits(
       max_seed_frequencies_[0], max_seed_frequencies_[0], minimizers,
       repetitive_seed_length, positive_hits, negative_hits, false);
-  // std::cerr << "rep seed: " << repetitive_seed_count << "\n";
-  // if ((repetitive_seed_count > (int)minimizers.size() / 2 &&
-  // minimizers.size() >= 10)) {
+
   bool use_high_frequency_minimizers = false;
   if (positive_hits.size() + negative_hits.size() == 0) {
     positive_hits.clear();
     negative_hits.clear();
     repetitive_seed_length = 0;
-    repetitive_seed_count = CollectCandidates(
+    repetitive_seed_count = CollectSeedHits(
         max_seed_frequencies_[1], max_seed_frequencies_[0], minimizers,
         repetitive_seed_length, positive_hits, negative_hits, true);
-    // recollect = false;
     use_high_frequency_minimizers = true;
     if (positive_hits.size() == 0 || negative_hits.size() == 0) {
       use_high_frequency_minimizers = false;
     }
   }
-  // if ((positive_candidates->size() == 0 || negative_candidates->size() == 0)
-  // && recollect) {
-  ////if (positive_candidates->size() + negative_candidates->size() == 0 &&
-  /// recollect) {
-  //  positive_hits->clear();
-  //  negative_hits->clear();
-  //  *repetitive_seed_length = 0;
-  //  CollectCandidates(max_seed_frequencies_[1], max_seed_frequencies_[0],
-  //  minimizers, repetitive_seed_length, positive_hits, negative_hits, true);
-  //  //if (positive_candidates->size() == 0) {
-  //  //  GenerateCandidatesOnOneDirection(error_threshold,
-  //  min_num_seeds_required_for_mapping_, positive_hits, positive_candidates);
-  //  //}
-  //  //if (negative_candidates->size() == 0) {
-  //  //  GenerateCandidatesOnOneDirection(error_threshold,
-  //  min_num_seeds_required_for_mapping_, negative_hits, negative_candidates);
-  //  //}
-  //  //printf("p+n2: %d\n", positive_hits->size() + negative_hits->size()) ;
-  //  //GenerateCandidatesOnOneDirection(error_threshold,
-  //  min_num_seeds_required_for_mapping_, positive_hits, positive_candidates);
-  //  //GenerateCandidatesOnOneDirection(error_threshold,
-  //  min_num_seeds_required_for_mapping_, negative_hits, negative_candidates);
-  //  // TODO: if necessary, we can further improve the rescue. But the code
-  //  below is not thread safe. We can think about this later
-  ////    if (positive_candidates->size() + negative_candidates->size() == 0) {
-  ////      --min_num_seeds_required_for_mapping_;
-  ////      min_num_seeds_required_for_mapping_ =
-  /// std::max(min_num_seeds_required_for_mapping_, 1); /
-  /// GenerateCandidatesOnOneDirection(positive_hits, positive_candidates); /
-  /// GenerateCandidatesOnOneDirection(negative_hits, negative_candidates); / }
-  //}
-  // Now I can generate primer chain in candidates
-  // Let me use sort for now, but I can use merge later.
-  // printf("p+n: %d. %d %d\n", positive_hits->size() + negative_hits->size(),
-  // repetitive_seed_count, minimizers.size()) ;
 
   int num_required_seeds = minimizers.size() - repetitive_seed_count;
   num_required_seeds = num_required_seeds > 1 ? num_required_seeds : 1;
@@ -827,6 +788,7 @@ void Index::GenerateCandidates(int error_threshold,
   if (use_high_frequency_minimizers) {
     num_required_seeds = min_num_seeds_required_for_mapping_;
   }
+
   // std::cerr << "Normal positive gen on one dir\n";
   GenerateCandidatesOnOneDirection(error_threshold, num_required_seeds,
                                    minimizers.size(), positive_hits,
