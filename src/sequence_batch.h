@@ -17,6 +17,7 @@ class SequenceBatch {
   SequenceBatch() {
     effective_range_[0] = 0;
     effective_range_[1] = -1;
+    effective_range_[2] = 1;
   }
   SequenceBatch(uint32_t max_num_sequences)
       : max_num_sequences_(max_num_sequences) {
@@ -29,6 +30,7 @@ class SequenceBatch {
     negative_sequence_batch_.assign(max_num_sequences_, "");
     effective_range_[0] = 0;
     effective_range_[1] = -1;
+    effective_range_[2] = 1;
   }
   ~SequenceBatch() {
     if (sequence_batch_.size() > 0) {
@@ -66,9 +68,10 @@ class SequenceBatch {
     return negative_sequence_batch_[sequence_index];
   }
   inline int GetSequenceBatchSize() const { return sequence_batch_.size(); }
-  inline void SetSeqEffectiveRange(int start, int end) {
+  inline void SetSeqEffectiveRange(int start, int end, int strand) {
     effective_range_[0] = start;
     effective_range_[1] = end;
+    effective_range_[2] = strand;
   }
   //  inline char GetReverseComplementBaseOfSequenceAt(uint32_t sequence_index,
   //  uint32_t position) {
@@ -193,7 +196,7 @@ class SequenceBatch {
   kseq_t *sequence_kseq_;
   std::vector<kseq_t *> sequence_batch_;
   std::vector<std::string> negative_sequence_batch_;
-  int effective_range_[2];  // actual range within each sequence.
+  int effective_range_[3];  // actual range within each sequence.
   static constexpr uint8_t char_to_uint8_table_[256] = {
       4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
       4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
@@ -209,8 +212,10 @@ class SequenceBatch {
   static constexpr char uint8_to_char_table_[8] = {'A', 'C', 'G', 'T',
                                                    'N', 'N', 'N', 'N'};
   void ReplaceByEffectiveRange(kstring_t &seq) {
-    if (effective_range_[0] == 0 && effective_range_[1] == -1) return;
-    int i;
+    if (effective_range_[0] == 0 && effective_range_[1] == -1 && effective_range_[2] == 1) {
+      return;
+    }
+    int i, j;
     int start = effective_range_[0];
     int end = effective_range_[1];
     if (effective_range_[1] == -1) end = seq.l - 1;
@@ -219,6 +224,16 @@ class SequenceBatch {
     }
     seq.s[i] = '\0';
     seq.l = end - start + 1;
+    if (effective_range_[2] == -1) {
+      for (i = 0 ; i < (int)seq.l ; ++i) {
+        seq.s[i] = Uint8ToChar(((uint8_t)3)^(CharToUint8(seq.s[i])));
+      }
+      for (i = 0, j = seq.l - 1; i < j ; ++i, --j) {
+        char tmp = seq.s[i];
+        seq.s[i] = seq.s[j];
+        seq.s[j] = tmp;
+      }
+    }
   }
 };
 }  // namespace chromap
