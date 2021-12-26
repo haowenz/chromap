@@ -1143,8 +1143,7 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
   }
 
   // Load index
-  Index index(min_num_seeds_required_for_mapping_, max_seed_frequencies_,
-              index_file_path_);
+  Index index(index_file_path_);
   index.Load();
   kmer_size_ = index.GetKmerSize();
   window_size_ = index.GetWindowSize();
@@ -2587,8 +2586,7 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
     reference.ReorderSequences(custom_rid_rank_);
   }
 
-  Index index(min_num_seeds_required_for_mapping_, max_seed_frequencies_,
-              index_file_path_);
+  Index index(index_file_path_);
   index.Load();
   kmer_size_ = index.GetKmerSize();
   window_size_ = index.GetWindowSize();
