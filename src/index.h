@@ -34,9 +34,7 @@ class Index {
   Index(int min_num_seeds_required_for_mapping,
         const std::vector<int> &max_seed_frequencies,
         const std::string &index_file_path)
-      : min_num_seeds_required_for_mapping_(min_num_seeds_required_for_mapping),
-        max_seed_frequencies_(max_seed_frequencies),
-        index_file_path_(index_file_path) {  // for read mapping
+      : index_file_path_(index_file_path) {  // for read mapping
     lookup_table_ = kh_init(k64);
   }
 
@@ -76,13 +74,13 @@ class Index {
       uint32_t &repetitive_seed_length, std::vector<uint64_t> &positive_hits,
       std::vector<uint64_t> &negative_hits, bool use_heap) const;
 
-  int GenerateCandidatesFromRepetitiveReadWithMateInfo(
+  int CollectSeedHitsFromRepetitiveReadWithMateInfo(
       int error_threshold,
       const std::vector<std::pair<uint64_t, uint64_t> > &minimizers,
       uint32_t &repetitive_seed_length, std::vector<uint64_t> &hits,
-      std::vector<Candidate> &candidates,
-      std::vector<Candidate> &mate_candidates, Direction direction,
-      uint32_t range) const;
+      const std::vector<Candidate> &mate_candidates, const Direction direction,
+      uint32_t search_range, int min_num_seeds_required_for_mapping,
+      int max_seed_frequency0) const;
 
   int GetKmerSize() const { return kmer_size_; }
 
@@ -90,16 +88,17 @@ class Index {
 
   uint32_t GetLookupTableSize() const { return kh_size(lookup_table_); }
 
+  // TODO(Haowen): move this out to form a minimizer class or struct.
   void GenerateMinimizerSketch(
       const SequenceBatch &sequence_batch, uint32_t sequence_index,
       std::vector<std::pair<uint64_t, uint64_t> > &minimizers) const;
 
-  void GenerateCandidatesOnOneDirection(
-      int error_threshold, int num_seeds_required, uint32_t num_minimizers,
-      std::vector<uint64_t> &hits, std::vector<Candidate> &candidates) const;
+  // void GenerateCandidatesOnOneDirection(
+  //    int error_threshold, int num_seeds_required, uint32_t num_minimizers,
+  //    std::vector<uint64_t> &hits, std::vector<Candidate> &candidates) const;
 
-  void GenerateCandidates(int error_threshold,
-                          MappingMetadata &mapping_metadata) const;
+  // void GenerateCandidates(int error_threshold,
+  //                        MappingMetadata &mapping_metadata) const;
 
   inline static uint64_t Hash64(uint64_t key, const uint64_t mask) {
     key = (~key + (key << 21)) & mask;  // key = (key << 21) - key - 1;
@@ -115,12 +114,12 @@ class Index {
  protected:
   int kmer_size_;
   int window_size_;
-  int min_num_seeds_required_for_mapping_;
+  // int min_num_seeds_required_for_mapping_;
   // Vector of size 2. The first element is the frequency threshold, and the
   // second element is the frequency threshold to run rescue. The second element
   // should always larger than the first one.
   // TODO(Haowen): add an error check.
-  std::vector<int> max_seed_frequencies_;
+  // std::vector<int> max_seed_frequencies_;
   // Number of threads to build the index, which is not used right now.
   int num_threads_;
   const std::string index_file_path_;

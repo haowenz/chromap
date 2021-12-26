@@ -85,6 +85,7 @@ class PairedEndMappingMetadata {
   std::vector<std::pair<uint32_t, uint32_t>> F1F2_best_mappings_;
   std::vector<std::pair<uint32_t, uint32_t>> R1R2_best_mappings_;
 
+  friend class CandidateProcessor;
   template <typename MappingRecord>
   friend class Chromap;
 };

@@ -11,6 +11,7 @@ namespace chromap {
 
 class mm_cache;
 class Index;
+class CandidateProcessor;
 class PairedEndMappingMetadata;
 template <typename MappingRecord>
 class Chromap;
@@ -128,6 +129,7 @@ class MappingMetadata {
 
   friend class mm_cache;
   friend class Index;
+  friend class CandidateProcessor;
   friend class PairedEndMappingMetadata;
   template <typename MappingRecord>
   friend class Chromap;

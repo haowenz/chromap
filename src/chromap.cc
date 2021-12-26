@@ -12,6 +12,7 @@
 #include <random>
 #include <sstream>
 
+#include "candidate_processor.h"
 #include "cxxopts.hpp"
 #include "ksw.h"
 #include "mmcache.hpp"
@@ -800,168 +801,6 @@ void Chromap<MappingRecord>::UpdateBarcodeAbundance(
             << " in " << Chromap<>::GetRealTime() - real_start_time << "s.\n";
 }
 
-// 0-supplement normally
-// 1-the supplement could be too aggressive, need to set MAPQ to 0.
-template <typename MappingRecord>
-int Chromap<MappingRecord>::SupplementCandidates(
-    const Index &index, PairedEndMappingMetadata &paired_end_mapping_metadata) {
-  std::vector<Candidate> augment_positive_candidates1;
-  std::vector<Candidate> augment_positive_candidates2;
-  std::vector<Candidate> augment_negative_candidates1;
-  std::vector<Candidate> augment_negative_candidates2;
-
-  int ret = 0;
-
-  for (int mate = 0; mate <= 1; ++mate) {
-    std::vector<std::pair<uint64_t, uint64_t>> *minimizers;
-    std::vector<uint64_t> *positive_hits;
-    std::vector<uint64_t> *negative_hits;
-    std::vector<Candidate> *positive_candidates;
-    std::vector<Candidate> *negative_candidates;
-    std::vector<Candidate> *mate_positive_candidates;
-    std::vector<Candidate> *mate_negative_candidates;
-    std::vector<Candidate> *augment_positive_candidates;
-    std::vector<Candidate> *augment_negative_candidates;
-    uint32_t *repetitive_seed_length;
-
-    if (mate == 0) {
-      minimizers = &paired_end_mapping_metadata.mapping_metadata1_.minimizers_;
-      positive_hits =
-          &paired_end_mapping_metadata.mapping_metadata1_.positive_hits_;
-      negative_hits =
-          &paired_end_mapping_metadata.mapping_metadata1_.negative_hits_;
-      positive_candidates =
-          &paired_end_mapping_metadata.mapping_metadata1_.positive_candidates_;
-      negative_candidates =
-          &paired_end_mapping_metadata.mapping_metadata1_.negative_candidates_;
-      mate_positive_candidates =
-          &paired_end_mapping_metadata.mapping_metadata2_.positive_candidates_;
-      mate_negative_candidates =
-          &paired_end_mapping_metadata.mapping_metadata2_.negative_candidates_;
-      augment_positive_candidates = &augment_positive_candidates1;
-      augment_negative_candidates = &augment_negative_candidates1;
-      repetitive_seed_length = &paired_end_mapping_metadata.mapping_metadata1_
-                                    .repetitive_seed_length_;
-    } else {
-      minimizers = &paired_end_mapping_metadata.mapping_metadata2_.minimizers_;
-      positive_hits =
-          &paired_end_mapping_metadata.mapping_metadata2_.positive_hits_;
-      negative_hits =
-          &paired_end_mapping_metadata.mapping_metadata2_.negative_hits_;
-      positive_candidates =
-          &paired_end_mapping_metadata.mapping_metadata2_.positive_candidates_;
-      negative_candidates =
-          &paired_end_mapping_metadata.mapping_metadata2_.negative_candidates_;
-      mate_positive_candidates =
-          &paired_end_mapping_metadata.mapping_metadata1_.positive_candidates_;
-      mate_negative_candidates =
-          &paired_end_mapping_metadata.mapping_metadata1_.negative_candidates_;
-      augment_positive_candidates = &augment_positive_candidates2;
-      augment_negative_candidates = &augment_negative_candidates2;
-      repetitive_seed_length = &paired_end_mapping_metadata.mapping_metadata2_
-                                    .repetitive_seed_length_;
-    }
-
-    uint32_t mm_count = minimizers->size();
-    bool augment_flag = true;
-    uint32_t candidate_num = positive_candidates->size();
-    // if (positive_candidates->size() >= (uint32_t)max_seed_frequencies_[0]) {
-    //  augment_flag = false;
-    //} else {
-    for (uint32_t i = 0; i < candidate_num; ++i) {
-      if (positive_candidates->at(i).count >= mm_count / 2) {
-        augment_flag = false;
-        break;
-      }
-    }
-    //}
-    candidate_num = negative_candidates->size();
-    if (augment_flag) {
-      // if (negative_candidates->size() >= (uint32_t)max_seed_frequencies_[0])
-      // {
-      //  augment_flag = false;
-      //} else {
-      for (uint32_t i = 0; i < candidate_num; ++i) {
-        if (negative_candidates->at(i).count >= mm_count / 2) {
-          augment_flag = false;
-          break;
-        }
-      }
-      //}
-    }
-
-    if (augment_flag) {
-      positive_hits->clear();
-      negative_hits->clear();
-      int positive_rescue_result = 0;
-      int negative_rescue_result = 0;
-      if (mate_positive_candidates->size() >
-          0) {  // && mate_positive_candidates->size() <=
-                // (uint32_t)max_seed_frequencies_[0]) {
-        // std::cerr << "Supplement positive" << "\n";
-        positive_rescue_result =
-            index.GenerateCandidatesFromRepetitiveReadWithMateInfo(
-                error_threshold_, *minimizers, *repetitive_seed_length,
-                *negative_hits, *augment_negative_candidates,
-                *mate_positive_candidates, kNegative, 2 * max_insert_size_);
-      }
-      if (mate_negative_candidates->size() >
-          0) {  // && mate_negative_candidates->size() <=
-                // (uint32_t)max_seed_frequencies_[0]) {
-        // std::cerr << "Supplement negative" << "\n";
-        negative_rescue_result =
-            index.GenerateCandidatesFromRepetitiveReadWithMateInfo(
-                error_threshold_, *minimizers, *repetitive_seed_length,
-                *positive_hits, *augment_positive_candidates,
-                *mate_negative_candidates, kPositive, 2 * max_insert_size_);
-      }
-      // If one of the strand did not supplement due to too many best candidate,
-      // and the filtered strand have better best candidates,
-      // and there is no candidate directly from minimizers,
-      // then we remove the supplement
-      if (((positive_rescue_result < 0 && negative_rescue_result > 0 &&
-            -positive_rescue_result >= negative_rescue_result) ||
-           (positive_rescue_result > 0 && negative_rescue_result < 0 &&
-            positive_rescue_result <= -negative_rescue_result)) &&
-          positive_candidates->size() + negative_candidates->size() == 0) {
-        // augment_positive_candidates->clear();
-        // augment_negative_candidates->clear();
-        ret = 1;
-      }
-    }
-  }
-
-  if (augment_positive_candidates1.size() > 0) {
-    MergeCandidates(
-        paired_end_mapping_metadata.mapping_metadata1_.positive_candidates_,
-        augment_positive_candidates1,
-        paired_end_mapping_metadata.mapping_metadata1_
-            .positive_candidates_buffer_);
-  }
-  if (augment_negative_candidates1.size() > 0) {
-    MergeCandidates(
-        paired_end_mapping_metadata.mapping_metadata1_.negative_candidates_,
-        augment_negative_candidates1,
-        paired_end_mapping_metadata.mapping_metadata1_
-            .negative_candidates_buffer_);
-  }
-  if (augment_positive_candidates2.size() > 0) {
-    MergeCandidates(
-        paired_end_mapping_metadata.mapping_metadata2_.positive_candidates_,
-        augment_positive_candidates2,
-        paired_end_mapping_metadata.mapping_metadata2_
-            .positive_candidates_buffer_);
-  }
-  if (augment_negative_candidates2.size() > 0) {
-    MergeCandidates(
-        paired_end_mapping_metadata.mapping_metadata2_.negative_candidates_,
-        augment_negative_candidates2,
-        paired_end_mapping_metadata.mapping_metadata2_
-            .negative_candidates_buffer_);
-  }
-  return ret;
-}
-
 template <typename MappingRecord>
 void Chromap<MappingRecord>::PostProcessingInLowMemory(
     uint32_t num_mappings_in_mem, uint32_t num_reference_sequences,
@@ -1362,6 +1201,9 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
       barcode_length_, mapping_output_file_path_, mapping_output_format_);
   output_tools_.OutputHeader(num_reference_sequences, reference);
 
+  CandidateProcessor candidate_processor(min_num_seeds_required_for_mapping_,
+                                         max_seed_frequencies_);
+
   uint32_t num_mappings_in_mem = 0;
   uint64_t max_num_mappings_in_mem =
       1 * ((uint64_t)1 << 30) / sizeof(MappingRecord);
@@ -1433,7 +1275,7 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
       }
     }
 
-#pragma omp parallel default(none) shared(output_mappings_not_in_whitelist_, barcode_whitelist_file_path_, trim_adapters_, window_size_, custom_rid_order_path_, split_alignment_, error_threshold_, max_num_best_mappings_, num_threads_, num_reads_, low_memory_mode_, num_reference_sequences, reference, index, read_batch1, read_batch2, barcode_batch, read_batch1_for_loading, read_batch2_for_loading, barcode_batch_for_loading, output_tools_, std::cerr, num_loaded_pairs_for_loading, num_loaded_pairs, mappings_on_diff_ref_seqs_for_diff_threads, mappings_on_diff_ref_seqs_for_diff_threads_for_saving, mappings_on_diff_ref_seqs_, mapping_output_file_path_, num_mappings_in_mem, max_num_mappings_in_mem, temp_mapping_file_handles_, mm_to_candidates_cache, mm_history1, mm_history2) num_threads(num_threads_) reduction(+:num_candidates_, num_mappings_, num_mapped_reads_, num_uniquely_mapped_reads_, num_barcode_in_whitelist_, num_corrected_barcode_)
+#pragma omp parallel default(none) shared(output_mappings_not_in_whitelist_, barcode_whitelist_file_path_, trim_adapters_, window_size_, custom_rid_order_path_, split_alignment_, error_threshold_, max_num_best_mappings_, num_threads_, num_reads_, low_memory_mode_, num_reference_sequences, reference, index, read_batch1, read_batch2, barcode_batch, read_batch1_for_loading, read_batch2_for_loading, barcode_batch_for_loading, candidate_processor, output_tools_, std::cerr, num_loaded_pairs_for_loading, num_loaded_pairs, mappings_on_diff_ref_seqs_for_diff_threads, mappings_on_diff_ref_seqs_for_diff_threads_for_saving, mappings_on_diff_ref_seqs_, mapping_output_file_path_, num_mappings_in_mem, max_num_mappings_in_mem, temp_mapping_file_handles_, mm_to_candidates_cache, mm_history1, mm_history2) num_threads(num_threads_) reduction(+:num_candidates_, num_mappings_, num_mapped_reads_, num_uniquely_mapped_reads_, num_barcode_in_whitelist_, num_corrected_barcode_)
     {
       thread_num_candidates = 0;
       thread_num_mappings = 0;
@@ -1496,8 +1338,8 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
                 if (mm_to_candidates_cache.Query(
                         paired_end_mapping_metadata.mapping_metadata1_,
                         read_batch1.GetSequenceLengthAt(pair_index)) == -1) {
-                  index.GenerateCandidates(
-                      error_threshold_,
+                  candidate_processor.GenerateCandidates(
+                      error_threshold_, index,
                       paired_end_mapping_metadata.mapping_metadata1_);
                 }
 
@@ -1508,8 +1350,8 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
                 if (mm_to_candidates_cache.Query(
                         paired_end_mapping_metadata.mapping_metadata2_,
                         read_batch2.GetSequenceLengthAt(pair_index)) == -1) {
-                  index.GenerateCandidates(
-                      error_threshold_,
+                  candidate_processor.GenerateCandidates(
+                      error_threshold_, index,
                       paired_end_mapping_metadata.mapping_metadata2_);
                 }
 
@@ -1553,7 +1395,10 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
                 int supplementCandidateResult = 0;
                 if (!split_alignment_) {
                   supplementCandidateResult =
-                      SupplementCandidates(index, paired_end_mapping_metadata);
+                      candidate_processor.SupplementCandidates(
+                          error_threshold_,
+                          /*search_range=*/2 * max_insert_size_, index,
+                          paired_end_mapping_metadata);
                   current_num_candidates1 =
                       paired_end_mapping_metadata.mapping_metadata1_
                           .GetNumCandidates();
@@ -2818,6 +2663,9 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
       }
     }
 
+    CandidateProcessor candidate_processor(min_num_seeds_required_for_mapping_,
+                                           max_seed_frequencies_);
+
     std::vector<std::vector<std::vector<MappingRecord>>>
         mappings_on_diff_ref_seqs_for_diff_threads;
     std::vector<std::vector<std::vector<MappingRecord>>>
@@ -2840,7 +2688,7 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
             num_threads_ / num_reference_sequences);
       }
     }
-#pragma omp parallel default(none) shared(window_size_, custom_rid_order_path_, error_threshold_, max_num_best_mappings_, num_threads_, num_reads_, mm_history, reference, index, read_batch, barcode_batch, read_batch_for_loading, barcode_batch_for_loading, std::cerr, num_loaded_reads_for_loading, num_loaded_reads, num_reference_sequences, mappings_on_diff_ref_seqs_for_diff_threads, mappings_on_diff_ref_seqs_for_diff_threads_for_saving, mm_to_candidates_cache) num_threads(num_threads_) reduction(+:num_candidates_, num_mappings_, num_mapped_reads_, num_uniquely_mapped_reads_, num_barcode_in_whitelist_, num_corrected_barcode_)
+#pragma omp parallel default(none) shared(window_size_, custom_rid_order_path_, error_threshold_, max_num_best_mappings_, num_threads_, num_reads_, mm_history, reference, index, read_batch, barcode_batch, read_batch_for_loading, barcode_batch_for_loading, std::cerr, num_loaded_reads_for_loading, num_loaded_reads, num_reference_sequences, mappings_on_diff_ref_seqs_for_diff_threads, mappings_on_diff_ref_seqs_for_diff_threads_for_saving, mm_to_candidates_cache, output_tools_, candidate_processor) num_threads(num_threads_) reduction(+:num_candidates_, num_mappings_, num_mapped_reads_, num_uniquely_mapped_reads_, num_barcode_in_whitelist_, num_corrected_barcode_)
     {
       thread_num_candidates = 0;
       thread_num_mappings = 0;
@@ -2892,7 +2740,8 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
               if (mm_to_candidates_cache.Query(
                       mapping_metadata,
                       read_batch.GetSequenceLengthAt(read_index)) == -1) {
-                index.GenerateCandidates(error_threshold_, mapping_metadata);
+                candidate_processor.GenerateCandidates(error_threshold_, index,
+                                                       mapping_metadata);
               }
 
               if (read_index < num_loaded_reads &&
@@ -4007,73 +3856,6 @@ void Chromap<MappingRecord>::AllocateMultiMappings(
             << Chromap<>::GetRealTime() - real_start_time << "s.\n";
   std::cerr << "# multi-mappings that have no uni-mapping overlaps: "
             << num_multi_mappings_without_overlapping_unique_mappings << ".\n";
-}
-
-template <typename MappingRecord>
-void Chromap<MappingRecord>::MergeCandidates(std::vector<Candidate> &c1,
-                                             std::vector<Candidate> &c2,
-                                             std::vector<Candidate> &buffer) {
-  if (c1.size() == 0) {
-    c1.swap(c2);
-    return;
-  }
-  uint32_t i, j;
-  uint32_t size1, size2;
-  size1 = c1.size();
-  size2 = c2.size();
-  buffer.clear();
-
-#ifdef LI_DEBUG
-  for (i = 0; i < size1; ++i)
-    printf("c1: %d %d %d\n", (int)(c1[i].position >> 32), (int)c1[i].position,
-           c1[i].count);
-  for (i = 0; i < size2; ++i)
-    printf("c2: %d %d %d\n", (int)(c2[i].position >> 32), (int)c2[i].position,
-           c2[i].count);
-#endif
-  i = 0;
-  j = 0;
-  while (i < size1 && j < size2) {
-    if (c1[i].position == c2[j].position) {
-      if (buffer.empty() ||
-          c1[i].position > buffer.back().position + error_threshold_) {
-        if (c1[i].count > c2[j].count) {
-          buffer.push_back(c1[i]);
-        } else {
-          buffer.push_back(c2[j]);
-        }
-      }
-      ++i, ++j;
-    } else if (c1[i].position < c2[j].position) {
-      if (buffer.empty() ||
-          c1[i].position > buffer.back().position + error_threshold_) {
-        buffer.push_back(c1[i]);
-      }
-      ++i;
-    } else {
-      if (buffer.empty() ||
-          c2[j].position > buffer.back().position + error_threshold_) {
-        buffer.push_back(c2[j]);
-      }
-      ++j;
-    }
-  }
-  while (i < size1) {
-    if (buffer.empty() ||
-        c1[i].position > buffer.back().position + error_threshold_) {
-      buffer.push_back(c1[i]);
-    }
-    ++i;
-  }
-  while (j < size2) {
-    if (buffer.empty() ||
-        c2[j].position > buffer.back().position + error_threshold_) {
-      buffer.push_back(c2[j]);
-    }
-    ++j;
-  }
-  // c1 = buffer;
-  c1.swap(buffer);
 }
 
 template <typename MappingRecord>

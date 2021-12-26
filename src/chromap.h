@@ -421,11 +421,6 @@ class Chromap {
                             int *mapping_end_position);
   int GetLongestMatchLength(const char *pattern, const char *text,
                             const int read_length);
-  void MergeCandidates(std::vector<Candidate> &c1, std::vector<Candidate> &c2,
-                       std::vector<Candidate> &buffer);
-  int SupplementCandidates(
-      const Index &index,
-      PairedEndMappingMetadata &paired_end_mapping_metadata);
   void PostProcessingInLowMemory(uint32_t num_mappings_in_mem,
                                  uint32_t num_reference_sequences,
                                  const SequenceBatch &reference);
@@ -593,7 +588,8 @@ class Chromap {
   std::vector<std::string> read_file2_paths_;
   std::vector<std::string> barcode_file_paths_;
   std::string barcode_whitelist_file_path_;
-  int barcode_format_[3];  // 0-start, 1-end (includsive), 2-strand(-1:minus, 1:plus)
+  int barcode_format_[3];  // 0-start, 1-end (includsive), 2-strand(-1:minus,
+                           // 1:plus)
   int read1_format_[3];
   int read2_format_[3];
   std::string mapping_output_file_path_;
