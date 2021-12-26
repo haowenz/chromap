@@ -334,68 +334,68 @@ void Index::Load() {
             << Chromap<>::GetRealTime() - real_start_time << "s.\n";
 }
 
-void Index::GenerateCandidatesOnOneDirection(
-    int error_threshold, int num_seeds_required, uint32_t num_minimizers,
-    std::vector<uint64_t> &hits, std::vector<Candidate> &candidates) const {
-  hits.emplace_back(UINT64_MAX);
-  if (hits.size() > 0) {
-    int minimizer_count = 1;
-    // The number of seeds with the exact same reference position.
-    int equal_count = 1;
-    int best_equal_count = 1;
-    uint64_t previous_hit = hits[0];
-    uint32_t previous_reference_id = previous_hit >> 32;
-    uint32_t previous_reference_position = previous_hit;
-    uint64_t best_local_hit = hits[0];
-    for (uint32_t pi = 1; pi < hits.size(); ++pi) {
-      uint32_t current_reference_id = hits[pi] >> 32;
-      uint32_t current_reference_position = hits[pi];
-#ifdef LI_DEBUG
-      printf("%s: %d %d\n", __func__, current_reference_id,
-             current_reference_position);
-#endif
-      if (current_reference_id != previous_reference_id ||
-          current_reference_position >
-              previous_reference_position + error_threshold ||
-          ((uint32_t)minimizer_count >= num_minimizers &&
-           current_reference_position >
-               (uint32_t)best_local_hit + error_threshold)) {
-        if (minimizer_count >= num_seeds_required) {
-          Candidate candidate;
-          candidate.position = best_local_hit;
-          candidate.count = best_equal_count;
-          candidates.push_back(candidate);
-        }
+// void Index::GenerateCandidatesOnOneDirection(
+//    int error_threshold, int num_seeds_required, uint32_t num_minimizers,
+//    std::vector<uint64_t> &hits, std::vector<Candidate> &candidates) const {
+//  hits.emplace_back(UINT64_MAX);
+//  if (hits.size() > 0) {
+//    int minimizer_count = 1;
+//    // The number of seeds with the exact same reference position.
+//    int equal_count = 1;
+//    int best_equal_count = 1;
+//    uint64_t previous_hit = hits[0];
+//    uint32_t previous_reference_id = previous_hit >> 32;
+//    uint32_t previous_reference_position = previous_hit;
+//    uint64_t best_local_hit = hits[0];
+//    for (uint32_t pi = 1; pi < hits.size(); ++pi) {
+//      uint32_t current_reference_id = hits[pi] >> 32;
+//      uint32_t current_reference_position = hits[pi];
+//#ifdef LI_DEBUG
+//      printf("%s: %d %d\n", __func__, current_reference_id,
+//             current_reference_position);
+//#endif
+//      if (current_reference_id != previous_reference_id ||
+//          current_reference_position >
+//              previous_reference_position + error_threshold ||
+//          ((uint32_t)minimizer_count >= num_minimizers &&
+//           current_reference_position >
+//               (uint32_t)best_local_hit + error_threshold)) {
+//        if (minimizer_count >= num_seeds_required) {
+//          Candidate candidate;
+//          candidate.position = best_local_hit;
+//          candidate.count = best_equal_count;
+//          candidates.push_back(candidate);
+//        }
+//
+//        minimizer_count = 1;
+//        equal_count = 1;
+//        best_equal_count = 1;
+//        best_local_hit = hits[pi];
+//      } else {
+//        if (hits[pi] == best_local_hit) {
+//          ++equal_count;
+//          ++best_equal_count;
+//        } else if (hits[pi] == previous_hit) {
+//          ++equal_count;
+//          if (equal_count > best_equal_count) {
+//            best_local_hit = previous_hit;
+//            best_equal_count = equal_count;
+//          }
+//        } else {
+//          equal_count = 1;
+//        }
+//
+//        ++minimizer_count;
+//      }
+//
+//      previous_hit = hits[pi];
+//      previous_reference_id = current_reference_id;
+//      previous_reference_position = current_reference_position;
+//    }
+//  }
+//}
 
-        minimizer_count = 1;
-        equal_count = 1;
-        best_equal_count = 1;
-        best_local_hit = hits[pi];
-      } else {
-        if (hits[pi] == best_local_hit) {
-          ++equal_count;
-          ++best_equal_count;
-        } else if (hits[pi] == previous_hit) {
-          ++equal_count;
-          if (equal_count > best_equal_count) {
-            best_local_hit = previous_hit;
-            best_equal_count = equal_count;
-          }
-        } else {
-          equal_count = 1;
-        }
-
-        ++minimizer_count;
-      }
-
-      previous_hit = hits[pi];
-      previous_reference_id = current_reference_id;
-      previous_reference_position = current_reference_position;
-    }
-  }
-}
-
-// Return the number of repetitive seeds
+// Return the number of repetitive seeds.
 int Index::CollectSeedHits(
     int max_seed_frequency, int repetitive_seed_frequency,
     const std::vector<std::pair<uint64_t, uint64_t> > &minimizers,
@@ -574,12 +574,13 @@ int Index::CollectSeedHits(
 // hits. Return the minimizer count of the best candidate, if it finishes
 // normally or return a negative value if it stops early due to too many
 // candidates with low minimizer count.
-int Index::GenerateCandidatesFromRepetitiveReadWithMateInfo(
+int Index::CollectSeedHitsFromRepetitiveReadWithMateInfo(
     int error_threshold,
     const std::vector<std::pair<uint64_t, uint64_t> > &minimizers,
     uint32_t &repetitive_seed_length, std::vector<uint64_t> &hits,
-    std::vector<Candidate> &candidates, std::vector<Candidate> &mate_candidates,
-    Direction direction, uint32_t search_range) const {
+    const std::vector<Candidate> &mate_candidates, const Direction direction,
+    uint32_t search_range, int min_num_seeds_required_for_mapping,
+    int max_seed_frequency0) const {
   const uint32_t mate_candidates_size = mate_candidates.size();
   int max_minimizer_count = 0;
   int best_candidate_num = 0;
@@ -595,9 +596,9 @@ int Index::GenerateCandidatesFromRepetitiveReadWithMateInfo(
 
   const bool mate_has_too_many_candidates =
       best_candidate_num >= 300 ||
-      mate_candidates_size > (uint32_t)max_seed_frequencies_[0];
+      mate_candidates_size > (uint32_t)max_seed_frequency0;
   const bool mate_has_too_many_low_support_candidates =
-      max_minimizer_count <= min_num_seeds_required_for_mapping_ &&
+      max_minimizer_count <= min_num_seeds_required_for_mapping &&
       best_candidate_num >= 200;
   if (mate_has_too_many_candidates ||
       mate_has_too_many_low_support_candidates) {
@@ -638,7 +639,6 @@ int Index::GenerateCandidatesFromRepetitiveReadWithMateInfo(
   uint32_t previous_repetitive_seed_position =
       std::numeric_limits<uint32_t>::max();
   repetitive_seed_length = 0;
-  hits.reserve(max_seed_frequencies_[0]);
   for (uint32_t mi = 0; mi < minimizers.size(); ++mi) {
     khiter_t khash_iterator =
         kh_get(k64, lookup_table_, minimizers[mi].first << 1);
@@ -720,7 +720,7 @@ int Index::GenerateCandidatesFromRepetitiveReadWithMateInfo(
         }
       }  // for bi
 
-      if (num_occurrences >= (uint32_t)max_seed_frequencies_[0]) {
+      if (num_occurrences >= (uint32_t)max_seed_frequency0) {
         if (previous_repetitive_seed_position >
             read_position) {  // first minimizer
           repetitive_seed_length += kmer_size_;
@@ -743,61 +743,64 @@ int Index::GenerateCandidatesFromRepetitiveReadWithMateInfo(
   //	  printf("%s: %d %d\n", __func__,
   //(int)(hits->at(i)>>32),(int)hits->at(i)); std::cerr << "Rescue gen on one
   // dir\n";
-  GenerateCandidatesOnOneDirection(error_threshold, /*num_seeds_required=*/1,
-                                   minimizers.size(), hits, candidates);
+
+  // GenerateCandidatesOnOneDirection(error_threshold, /*num_seeds_required=*/1,
+  //                                 minimizers.size(), hits, candidates);
+
   // printf("%s: %d %d\n", __func__, hits->size(), candidates->size()) ;
   return max_minimizer_count;
 }
 
-void Index::GenerateCandidates(int error_threshold,
-                               MappingMetadata &mapping_metadata) const {
-  const std::vector<std::pair<uint64_t, uint64_t> > &minimizers =
-      mapping_metadata.minimizers_;
-  std::vector<uint64_t> &positive_hits = mapping_metadata.positive_hits_;
-  std::vector<uint64_t> &negative_hits = mapping_metadata.negative_hits_;
-  std::vector<Candidate> &positive_candidates =
-      mapping_metadata.positive_candidates_;
-  std::vector<Candidate> &negative_candidates =
-      mapping_metadata.negative_candidates_;
-  uint32_t &repetitive_seed_length = mapping_metadata.repetitive_seed_length_;
-
-  repetitive_seed_length = 0;
-  int repetitive_seed_count = CollectSeedHits(
-      max_seed_frequencies_[0], max_seed_frequencies_[0], minimizers,
-      repetitive_seed_length, positive_hits, negative_hits, false);
-
-  bool use_high_frequency_minimizers = false;
-  if (positive_hits.size() + negative_hits.size() == 0) {
-    positive_hits.clear();
-    negative_hits.clear();
-    repetitive_seed_length = 0;
-    repetitive_seed_count = CollectSeedHits(
-        max_seed_frequencies_[1], max_seed_frequencies_[0], minimizers,
-        repetitive_seed_length, positive_hits, negative_hits, true);
-    use_high_frequency_minimizers = true;
-    if (positive_hits.size() == 0 || negative_hits.size() == 0) {
-      use_high_frequency_minimizers = false;
-    }
-  }
-
-  int num_required_seeds = minimizers.size() - repetitive_seed_count;
-  num_required_seeds = num_required_seeds > 1 ? num_required_seeds : 1;
-  num_required_seeds = num_required_seeds > min_num_seeds_required_for_mapping_
-                           ? min_num_seeds_required_for_mapping_
-                           : num_required_seeds;
-  if (use_high_frequency_minimizers) {
-    num_required_seeds = min_num_seeds_required_for_mapping_;
-  }
-
-  // std::cerr << "Normal positive gen on one dir\n";
-  GenerateCandidatesOnOneDirection(error_threshold, num_required_seeds,
-                                   minimizers.size(), positive_hits,
-                                   positive_candidates);
-  // std::cerr << "Normal negative gen on one dir\n";
-  GenerateCandidatesOnOneDirection(error_threshold, num_required_seeds,
-                                   minimizers.size(), negative_hits,
-                                   negative_candidates);
-  // fprintf(stderr, "p+n: %d\n", positive_candidates->size() +
-  // negative_candidates->size()) ;
-}
+// void Index::GenerateCandidates(int error_threshold,
+//                               MappingMetadata &mapping_metadata) const {
+//  const std::vector<std::pair<uint64_t, uint64_t> > &minimizers =
+//      mapping_metadata.minimizers_;
+//  std::vector<uint64_t> &positive_hits = mapping_metadata.positive_hits_;
+//  std::vector<uint64_t> &negative_hits = mapping_metadata.negative_hits_;
+//  std::vector<Candidate> &positive_candidates =
+//      mapping_metadata.positive_candidates_;
+//  std::vector<Candidate> &negative_candidates =
+//      mapping_metadata.negative_candidates_;
+//  uint32_t &repetitive_seed_length = mapping_metadata.repetitive_seed_length_;
+//
+//  repetitive_seed_length = 0;
+//  int repetitive_seed_count = CollectSeedHits(
+//      max_seed_frequencies_[0], max_seed_frequencies_[0], minimizers,
+//      repetitive_seed_length, positive_hits, negative_hits, false);
+//
+//  bool use_high_frequency_minimizers = false;
+//  if (positive_hits.size() + negative_hits.size() == 0) {
+//    positive_hits.clear();
+//    negative_hits.clear();
+//    repetitive_seed_length = 0;
+//    repetitive_seed_count = CollectSeedHits(
+//        max_seed_frequencies_[1], max_seed_frequencies_[0], minimizers,
+//        repetitive_seed_length, positive_hits, negative_hits, true);
+//    use_high_frequency_minimizers = true;
+//    if (positive_hits.size() == 0 || negative_hits.size() == 0) {
+//      use_high_frequency_minimizers = false;
+//    }
+//  }
+//
+//  int num_required_seeds = minimizers.size() - repetitive_seed_count;
+//  num_required_seeds = num_required_seeds > 1 ? num_required_seeds : 1;
+//  num_required_seeds = num_required_seeds >
+//  min_num_seeds_required_for_mapping_
+//                           ? min_num_seeds_required_for_mapping_
+//                           : num_required_seeds;
+//  if (use_high_frequency_minimizers) {
+//    num_required_seeds = min_num_seeds_required_for_mapping_;
+//  }
+//
+//  // std::cerr << "Normal positive gen on one dir\n";
+//  GenerateCandidatesOnOneDirection(error_threshold, num_required_seeds,
+//                                   minimizers.size(), positive_hits,
+//                                   positive_candidates);
+//  // std::cerr << "Normal negative gen on one dir\n";
+//  GenerateCandidatesOnOneDirection(error_threshold, num_required_seeds,
+//                                   minimizers.size(), negative_hits,
+//                                   negative_candidates);
+//  // fprintf(stderr, "p+n: %d\n", positive_candidates->size() +
+//  // negative_candidates->size()) ;
+//}
 }  // namespace chromap
