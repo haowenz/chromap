@@ -6,18 +6,62 @@ on:
   pull_request:
     branches: [ master ]
 
-jobs:
-  build:
+env:
+  DEVELOPER_DIR: /Applications/Xcode_12.4.app/Contents/Developer
 
+jobs:
+  ubuntu:
     runs-on: ubuntu-latest
     strategy:
       matrix:
         compiler: [g++, clang++]
-
     steps:
     - uses: actions/checkout@v2
-    - name: Compile Chromap and run it
-      run: |
+    - name: install-deps
+      run:
         sudo apt-get update; sudo apt-get install -y clang libomp5 libomp-dev
-        make cxx=${{ matrix.compiler }}
+    - name: build-chromap
+      run:
+        make CXX=${{ matrix.compiler }}
+    - name: test-chromap
+      run:
+        ./chromap -h
+
+  macos:
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        compiler: [clang++]
+    steps:
+    - uses: actions/checkout@v2
+    - name: cache-openmp
+      id: cache-openmp
+      uses: actions/cache@v2.1.7
+      with:
+        path: openmp-install
+        key: openmp-macos-install-20201213
+    - name: build-openmp
+      if: steps.cache-openmp.outputs.cache-hit != 'true'
+      run: |
+        wget https://github.com/llvm/llvm-project/releases/download/llvmorg-11.0.0/openmp-11.0.0.src.tar.xz
+        tar -xf openmp-11.0.0.src.tar.xz
+        cd openmp-11.0.0.src
+        sed -i'' -e '/.size __kmp_unnamed_critical_addr/d' runtime/src/z_Linux_asm.S
+        sed -i'' -e 's/__kmp_unnamed_critical_addr/___kmp_unnamed_critical_addr/g' runtime/src/z_Linux_asm.S
+        mkdir -p build && cd build
+        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=install -DCMAKE_OSX_ARCHITECTURES="x86_64;arm64" \
+            -DLIBOMP_ENABLE_SHARED=OFF -DLIBOMP_OMPT_SUPPORT=OFF -DLIBOMP_USE_HWLOC=OFF ..
+        cmake --build . -j 3
+        cmake --build . --target install
+        mkdir $GITHUB_WORKSPACE/openmp-install
+        cp -r install/* $GITHUB_WORKSPACE/openmp-install
+    - name: install-openmp
+      run: |
+        sudo cp $GITHUB_WORKSPACE/openmp-install/include/* $DEVELOPER_DIR/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include
+        sudo cp $GITHUB_WORKSPACE/openmp-install/lib/libomp.a $DEVELOPER_DIR/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/lib
+    - name: build-chromap
+      run:
+        make CXX=${{ matrix.compiler }} CXXFLAGS="-arch x86_64 -isysroot $DEVELOPER_DIR/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk -std=c++11 -Wall -O3 -Xclang -fopenmp -msse4.1" LDFLAGS="-L$DEVELOPER_DIR/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/lib -rpath $DEVELOPER_DIR/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/lib -lm -lz -lomp"
+    - name: test-chromap
+      run:
         ./chromap -h
