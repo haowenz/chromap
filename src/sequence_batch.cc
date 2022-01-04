@@ -3,6 +3,7 @@
 #include <tuple>
 
 #include "chromap.h"
+#include "utils.h"
 
 namespace chromap {
 constexpr uint8_t SequenceBatch::char_to_uint8_table_[256];
@@ -12,14 +13,13 @@ void SequenceBatch::InitializeLoading(const std::string &sequence_file_path) {
   sequence_file_path_ = sequence_file_path;
   sequence_file_ = gzopen(sequence_file_path_.c_str(), "r");
   if (sequence_file_ == NULL) {
-    Chromap<>::ExitWithMessage("Cannot find sequence file" +
-                               sequence_file_path);
+    ExitWithMessage("Cannot find sequence file" + sequence_file_path);
   }
   sequence_kseq_ = kseq_init(sequence_file_);
 }
 
 uint32_t SequenceBatch::LoadBatch() {
-  double real_start_time = Chromap<>::GetRealTime();
+  double real_start_time = GetRealTime();
   uint32_t num_sequences = 0;
   num_bases_ = 0;
   for (uint32_t sequence_index = 0; sequence_index < max_num_sequences_;
@@ -44,7 +44,7 @@ uint32_t SequenceBatch::LoadBatch() {
       num_bases_ += length;
     } else {
       if (length != -1) {
-        Chromap<>::ExitWithMessage(
+        ExitWithMessage(
             "Didn't reach the end of sequence file, which might be corrupted!");
       }
       // make sure to reach the end of file rather than meet an error
@@ -53,7 +53,7 @@ uint32_t SequenceBatch::LoadBatch() {
   }
   if (num_sequences != 0) {
     std::cerr << "Loaded sequence batch successfully in "
-              << Chromap<>::GetRealTime() - real_start_time << "s, ";
+              << GetRealTime() - real_start_time << "s, ";
     std::cerr << "number of sequences: " << num_sequences << ", ";
     std::cerr << "number of bases: " << num_bases_ << ".\n";
   } else {
@@ -83,7 +83,7 @@ bool SequenceBatch::LoadOneSequenceAndSaveAt(uint32_t sequence_index) {
     }
   } else {
     if (length != -1) {
-      Chromap<>::ExitWithMessage(
+      ExitWithMessage(
           "Didn't reach the end of sequence file, which might be corrupted!");
     }
     // make sure to reach the end of file rather than meet an error
@@ -93,7 +93,7 @@ bool SequenceBatch::LoadOneSequenceAndSaveAt(uint32_t sequence_index) {
 }
 
 uint32_t SequenceBatch::LoadAllSequences() {
-  double real_start_time = Chromap<>::GetRealTime();
+  double real_start_time = GetRealTime();
   sequence_batch_.reserve(200);
   uint32_t num_sequences = 0;
   num_bases_ = 0;
@@ -118,7 +118,7 @@ uint32_t SequenceBatch::LoadAllSequences() {
       num_bases_ += length;
     } else {
       if (length != -1) {
-        Chromap<>::ExitWithMessage(
+        ExitWithMessage(
             "Didn't reach the end of sequence file, which might be corrupted!");
       }
       // make sure to reach the end of file rather than meet an error
@@ -127,7 +127,7 @@ uint32_t SequenceBatch::LoadAllSequences() {
     length = kseq_read(sequence_kseq_);
   }
   std::cerr << "Loaded all sequences successfully in "
-            << Chromap<>::GetRealTime() - real_start_time << "s, ";
+            << GetRealTime() - real_start_time << "s, ";
   std::cerr << "number of sequences: " << num_sequences << ", ";
   std::cerr << "number of bases: " << num_bases_ << ".\n";
   return num_sequences;
