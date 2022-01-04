@@ -6,12 +6,13 @@
 #include <iostream>
 
 #include "chromap.h"
+#include "utils.h"
 
 namespace chromap {
 
 void Index::Statistics(uint32_t num_sequences,
                        const SequenceBatch &reference) const {
-  double real_start_time = Chromap<>::GetRealTime();
+  double real_start_time = GetRealTime();
   int n = 0, n1 = 0;
   uint32_t i;
   uint64_t sum = 0, len = 0;
@@ -34,8 +35,8 @@ void Index::Statistics(uint32_t num_sequences,
   fprintf(stderr,
           "[M::%s::%.3f] distinct minimizers: %d (%.2f%% are singletons); "
           "average occurrences: %.3lf; average spacing: %.3lf\n",
-          __func__, Chromap<>::GetRealTime() - real_start_time, n,
-          100.0 * n1 / n, (double)sum / n, (double)len / sum);
+          __func__, GetRealTime() - real_start_time, n, 100.0 * n1 / n,
+          (double)sum / n, (double)len / sum);
 }
 
 // always reserve space for minimizers in other functions
@@ -163,7 +164,7 @@ void Index::GenerateMinimizerSketch(
 }
 
 void Index::Construct(uint32_t num_sequences, const SequenceBatch &reference) {
-  double real_start_time = Chromap<>::GetRealTime();
+  double real_start_time = GetRealTime();
   // tmp_table stores (minimizer, position)
   std::vector<std::pair<uint64_t, uint64_t> > tmp_table;
   tmp_table.reserve(reference.GetNumBases() / window_size_ * 2);
@@ -230,8 +231,8 @@ void Index::Construct(uint32_t num_sequences, const SequenceBatch &reference) {
             << ", # buckets: " << kh_n_buckets(lookup_table_)
             << ", occurrence table size: " << occurrence_table_.size()
             << ", # singletons: " << num_singletons << ".\n";
-  std::cerr << "Built index successfully in "
-            << Chromap<>::GetRealTime() - real_start_time << "s.\n";
+  std::cerr << "Built index successfully in " << GetRealTime() - real_start_time
+            << "s.\n";
 }
 
 void Index::CheckIndex(uint32_t num_sequences,
@@ -269,7 +270,7 @@ void Index::CheckIndex(uint32_t num_sequences,
 }
 
 void Index::Save() const {
-  double real_start_time = Chromap<>::GetRealTime();
+  double real_start_time = GetRealTime();
   FILE *index_file = fopen(index_file_path_.c_str(), "wb");
   assert(index_file != NULL);
   uint64_t num_bytes = 0;
@@ -299,12 +300,11 @@ void Index::Save() const {
   fclose(index_file);
   // std::cerr << "Index size: " << num_bytes / (1024.0 * 1024 * 1024) << "GB,
   // saved in " << Chromap<>::GetRealTime() - real_start_time << "s.\n";
-  std::cerr << "Saved in " << Chromap<>::GetRealTime() - real_start_time
-            << "s.\n";
+  std::cerr << "Saved in " << GetRealTime() - real_start_time << "s.\n";
 }
 
 void Index::Load() {
-  double real_start_time = Chromap<>::GetRealTime();
+  double real_start_time = GetRealTime();
   FILE *index_file = fopen(index_file_path_.c_str(), "rb");
   assert(index_file != NULL);
   int err = 0;
@@ -331,7 +331,7 @@ void Index::Load() {
   std::cerr << "Lookup table size: " << kh_size(lookup_table_)
             << ", occurrence table size: " << occurrence_table_.size() << ".\n";
   std::cerr << "Loaded index successfully in "
-            << Chromap<>::GetRealTime() - real_start_time << "s.\n";
+            << GetRealTime() - real_start_time << "s.\n";
 }
 
 // Return the number of repetitive seeds.

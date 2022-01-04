@@ -16,6 +16,7 @@
 #include "cxxopts.hpp"
 #include "ksw.h"
 #include "mmcache.hpp"
+#include "utils.h"
 
 namespace chromap {
 template <typename MappingRecord>
@@ -394,8 +395,7 @@ uint32_t Chromap<PairedEndMappingWithBarcode>::CallPeaks(
       }
     }
   }
-  std::cerr << "Built pileup in " << Chromap<>::GetRealTime() - real_start_time
-            << "s.\n";
+  std::cerr << "Built pileup in " << GetRealTime() - real_start_time << "s.\n";
   real_start_time = GetRealTime();
   // Call and save peaks
   tree_extras_on_diff_ref_seqs_.clear();
@@ -430,7 +430,7 @@ uint32_t Chromap<PairedEndMappingWithBarcode>::CallPeaks(
     BuildAugmentedTreeForPeaks(ri);
   }
   std::cerr << "Call peaks and built peak augmented tree in "
-            << Chromap<>::GetRealTime() - real_start_time << "s.\n";
+            << GetRealTime() - real_start_time << "s.\n";
   // Output feature matrix
   return peak_count;
 }
@@ -482,7 +482,7 @@ void Chromap<PairedEndMappingWithBarcode>::OutputFeatureMatrix(
     }
   }
   std::cerr << "Index and output barcodes in "
-            << Chromap<>::GetRealTime() - real_start_time << "s.\n";
+            << GetRealTime() - real_start_time << "s.\n";
   real_start_time = GetRealTime();
   // Second pass to generate matrix
   khash_t(kmatrix) *matrix = kh_init(kmatrix);
@@ -520,8 +520,8 @@ void Chromap<PairedEndMappingWithBarcode>::OutputFeatureMatrix(
       }
     }
   }
-  std::cerr << "Generate feature matrix in "
-            << Chromap<>::GetRealTime() - real_start_time << "s.\n";
+  std::cerr << "Generate feature matrix in " << GetRealTime() - real_start_time
+            << "s.\n";
   // Output matrix
   real_start_time = GetRealTime();
   feature_barcode_matrix_writer_.WriteMatrixOutputHead(
@@ -541,8 +541,8 @@ void Chromap<PairedEndMappingWithBarcode>::OutputFeatureMatrix(
         (uint32_t)feature_matrix[i].first,
         (uint32_t)(feature_matrix[i].first >> 32), feature_matrix[i].second);
   }
-  std::cerr << "Output feature matrix in "
-            << Chromap<>::GetRealTime() - real_start_time << "s.\n";
+  std::cerr << "Output feature matrix in " << GetRealTime() - real_start_time
+            << "s.\n";
 }
 
 template <typename MappingRecord>
@@ -711,7 +711,7 @@ uint32_t Chromap<MappingRecord>::LoadPairedEndReadsWithBarcodes(
     } else if (no_more_read1 && no_more_read2 && no_more_barcode) {
       break;
     } else {
-      Chromap<>::ExitWithMessage("Numbers of reads and barcodes don't match!");
+      ExitWithMessage("Numbers of reads and barcodes don't match!");
     }
     ++num_loaded_pairs;
   }
@@ -727,7 +727,7 @@ uint32_t Chromap<MappingRecord>::LoadPairedEndReadsWithBarcodes(
 template <typename MappingRecord>
 void Chromap<MappingRecord>::ComputeBarcodeAbundance(
     uint64_t max_num_sample_barcodes) {
-  double real_start_time = Chromap<>::GetRealTime();
+  double real_start_time = GetRealTime();
   SequenceBatch barcode_batch(read_batch_size_);
   for (size_t read_file_index = 0; read_file_index < read_file1_paths_.size();
        ++read_file_index) {
@@ -755,7 +755,7 @@ void Chromap<MappingRecord>::ComputeBarcodeAbundance(
           num_sample_barcodes_ * 20 < num_loaded_barcodes) {
         // Since num_loaded_pairs is a constant, this if is actuaclly only
         // effective in the first iteration
-        Chromap<>::ExitWithMessage(
+        ExitWithMessage(
             "Less than 5\% barcodes can be found or corrected based on the "
             "barcode whitelist.\nPlease check whether the barcode whitelist "
             "matches the data, e.g. length, reverse-complement. If this is a "
@@ -775,13 +775,13 @@ void Chromap<MappingRecord>::ComputeBarcodeAbundance(
   }
 
   std::cerr << "Compute barcode abundance using " << num_sample_barcodes_
-            << " in " << Chromap<>::GetRealTime() - real_start_time << "s.\n";
+            << " in " << GetRealTime() - real_start_time << "s.\n";
 }
 
 template <typename MappingRecord>
 void Chromap<MappingRecord>::UpdateBarcodeAbundance(
     uint32_t num_loaded_barcodes, const SequenceBatch &barcode_batch) {
-  double real_start_time = Chromap<>::GetRealTime();
+  double real_start_time = GetRealTime();
   for (uint32_t barcode_index = 0; barcode_index < num_loaded_barcodes;
        ++barcode_index) {
     uint32_t barcode_length = barcode_batch.GetSequenceLengthAt(barcode_index);
@@ -798,7 +798,7 @@ void Chromap<MappingRecord>::UpdateBarcodeAbundance(
     }
   }
   std::cerr << "Update barcode abundance using " << num_sample_barcodes_
-            << " in " << Chromap<>::GetRealTime() - real_start_time << "s.\n";
+            << " in " << GetRealTime() - real_start_time << "s.\n";
 }
 
 template <typename MappingRecord>
@@ -829,7 +829,7 @@ void Chromap<MappingRecord>::PostProcessingInLowMemory(
     return;
   }
 
-  double sort_and_dedupe_start_time = Chromap<>::GetRealTime();
+  double sort_and_dedupe_start_time = GetRealTime();
 
   // Calculate block size and initialize
   uint64_t max_mem_size = 10 * ((uint64_t)1 << 30);
@@ -1041,12 +1041,10 @@ void Chromap<MappingRecord>::PostProcessingInLowMemory(
 
   if (remove_pcr_duplicates_) {
     std::cerr << "Sorted, deduped and outputed mappings in "
-              << Chromap<>::GetRealTime() - sort_and_dedupe_start_time
-              << "s.\n";
+              << GetRealTime() - sort_and_dedupe_start_time << "s.\n";
   } else {
     std::cerr << "Sorted and outputed mappings in "
-              << Chromap<>::GetRealTime() - sort_and_dedupe_start_time
-              << "s.\n";
+              << GetRealTime() - sort_and_dedupe_start_time << "s.\n";
   }
   std::cerr << "# uni-mappings: " << num_uni_mappings
             << ", # multi-mappings: " << num_multi_mappings
@@ -1102,7 +1100,7 @@ void Chromap<MappingRecord>::GenerateCustomizedRidRank(
   }
 
   if (k > ref_size) {
-    chromap::Chromap<>::ExitWithMessage(
+    chromap::ExitWithMessage(
         "Unknown chromsome names found in chromosome order file");
   }
 
@@ -1126,7 +1124,7 @@ void Chromap<MappingRecord>::RerankCandidatesRid(
 
 template <typename MappingRecord>
 void Chromap<MappingRecord>::MapPairedEndReads() {
-  double real_start_time = Chromap<>::GetRealTime();
+  double real_start_time = GetRealTime();
 
   // Load reference
   SequenceBatch reference;
@@ -1222,7 +1220,7 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
     thread_num_candidates, thread_num_mappings, thread_num_mapped_reads, \
     thread_num_uniquely_mapped_reads, thread_num_barcode_in_whitelist,   \
     thread_num_corrected_barcode)
-  double real_start_mapping_time = Chromap<>::GetRealTime();
+  double real_start_mapping_time = GetRealTime();
   for (size_t read_file_index = 0; read_file_index < read_file1_paths_.size();
        ++read_file_index) {
     // Set read batches to the current read files.
@@ -1289,7 +1287,7 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
       std::mt19937 generator(11);
 #pragma omp single
       {
-        double real_batch_start_time = Chromap<>::GetRealTime();
+        double real_batch_start_time = GetRealTime();
         while (num_loaded_pairs > 0) {
           num_reads_ += num_loaded_pairs;
           num_reads_ += num_loaded_pairs;
@@ -1551,9 +1549,8 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
           }
 
           std::cerr << "Mapped " << num_loaded_pairs << " read pairs in "
-                    << Chromap<>::GetRealTime() - real_batch_start_time
-                    << "s.\n";
-          real_batch_start_time = Chromap<>::GetRealTime();
+                    << GetRealTime() - real_batch_start_time << "s.\n";
+          real_batch_start_time = GetRealTime();
 
           // Swap to next batch
           num_loaded_pairs = num_loaded_pairs_for_loading;
@@ -1605,8 +1602,8 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
     }
   }  // end of for read_file_index
 
-  std::cerr << "Mapped all reads in "
-            << Chromap<>::GetRealTime() - real_start_mapping_time << "s.\n";
+  std::cerr << "Mapped all reads in " << GetRealTime() - real_start_mapping_time
+            << "s.\n";
 
   delete[] mm_history1;
   delete[] mm_history2;
@@ -1668,8 +1665,7 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
 
   reference.FinalizeLoading();
 
-  std::cerr << "Total time: " << Chromap<>::GetRealTime() - real_start_time
-            << "s.\n";
+  std::cerr << "Total time: " << GetRealTime() - real_start_time << "s.\n";
 }
 
 template <typename MappingRecord>
@@ -2575,7 +2571,7 @@ void Chromap<MappingRecord>::ApplyTn5ShiftOnPairedEndMapping(
 
 template <typename MappingRecord>
 void Chromap<MappingRecord>::MapSingleEndReads() {
-  double real_start_time = Chromap<>::GetRealTime();
+  double real_start_time = GetRealTime();
 
   SequenceBatch reference;
   reference.InitializeLoading(reference_file_path_);
@@ -2637,7 +2633,7 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
     thread_num_candidates, thread_num_mappings, thread_num_mapped_reads, \
     thread_num_uniquely_mapped_reads, thread_num_barcode_in_whitelist,   \
     thread_num_corrected_barcode)
-  double real_start_mapping_time = Chromap<>::GetRealTime();
+  double real_start_mapping_time = GetRealTime();
   for (size_t read_file_index = 0; read_file_index < read_file1_paths_.size();
        ++read_file_index) {
     read_batch_for_loading.InitializeLoading(
@@ -2698,7 +2694,7 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
 #pragma omp single
       {
         while (num_loaded_reads > 0) {
-          double real_batch_start_time = Chromap<>::GetRealTime();
+          double real_batch_start_time = GetRealTime();
           num_reads_ += num_loaded_reads;
 #pragma omp task
           {
@@ -2823,8 +2819,7 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
                 num_reference_sequences,
                 &mappings_on_diff_ref_seqs_for_diff_threads_for_saving);
           }
-          std::cerr << "Mapped in "
-                    << Chromap<>::GetRealTime() - real_batch_start_time
+          std::cerr << "Mapped in " << GetRealTime() - real_batch_start_time
                     << "s.\n";
         }
       }  // end of openmp single
@@ -2843,8 +2838,8 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
     }
   }
 
-  std::cerr << "Mapped all reads in "
-            << Chromap<>::GetRealTime() - real_start_mapping_time << "s.\n";
+  std::cerr << "Mapped all reads in " << GetRealTime() - real_start_mapping_time
+            << "s.\n";
 
   delete[] mm_history;
 
@@ -2889,8 +2884,7 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
 
   output_tools_.FinalizeMappingOutput();
   reference.FinalizeLoading();
-  std::cerr << "Total time: " << Chromap<>::GetRealTime() - real_start_time
-            << "s.\n";
+  std::cerr << "Total time: " << GetRealTime() - real_start_time << "s.\n";
 }
 
 template <typename MappingRecord>
@@ -3486,7 +3480,7 @@ void Chromap<MappingRecord>::ApplyTn5ShiftOnSingleEndMapping(
 template <typename MappingRecord>
 uint32_t Chromap<MappingRecord>::LoadSingleEndReadsWithBarcodes(
     SequenceBatch *read_batch, SequenceBatch *barcode_batch) {
-  double real_start_time = Chromap<>::GetRealTime();
+  double real_start_time = GetRealTime();
   uint32_t num_loaded_reads = 0;
   while (num_loaded_reads < read_batch_size_) {
     bool no_more_read = read_batch->LoadOneSequenceAndSaveAt(num_loaded_reads);
@@ -3508,13 +3502,13 @@ uint32_t Chromap<MappingRecord>::LoadSingleEndReadsWithBarcodes(
     } else if (no_more_read && no_more_barcode) {
       break;
     } else {
-      Chromap<>::ExitWithMessage("Numbers of reads and barcodes don't match!");
+      ExitWithMessage("Numbers of reads and barcodes don't match!");
     }
     ++num_loaded_reads;
   }
   if (num_loaded_reads > 0) {
     std::cerr << "Loaded " << num_loaded_reads << " reads in "
-              << Chromap<>::GetRealTime() - real_start_time << "s.\n";
+              << GetRealTime() - real_start_time << "s.\n";
   } else {
     std::cerr << "No more reads.\n";
   }
@@ -3581,7 +3575,7 @@ template <typename MappingRecord>
 void Chromap<MappingRecord>::RemovePCRDuplicate(
     uint32_t num_reference_sequences) {
   uint32_t num_mappings = 0;
-  double real_dedupe_start_time = Chromap<>::GetRealTime();
+  double real_dedupe_start_time = GetRealTime();
   for (uint32_t ri = 0; ri < num_reference_sequences; ++ri) {
     // double real_start_time = Chromap<>::GetRealTime();
     // radix_sort_with_barcode(mappings_on_diff_ref_seqs_[ri].data(),
@@ -3595,7 +3589,7 @@ void Chromap<MappingRecord>::RemovePCRDuplicate(
     // real_start_time << "s.\n";
   }
   std::cerr << "Sorted " << num_mappings << " elements in "
-            << Chromap<>::GetRealTime() - real_dedupe_start_time << "s.\n";
+            << GetRealTime() - real_dedupe_start_time << "s.\n";
   num_mappings = 0;
   for (uint32_t ri = 0; ri < num_reference_sequences; ++ri) {
     if (mappings_on_diff_ref_seqs_[ri].size() != 0) {
@@ -3630,7 +3624,7 @@ void Chromap<MappingRecord>::RemovePCRDuplicate(
     }
   }
   std::cerr << num_mappings << " mappings left after dedupe in "
-            << Chromap<>::GetRealTime() - real_dedupe_start_time << "s.\n";
+            << GetRealTime() - real_dedupe_start_time << "s.\n";
 }
 
 template <typename MappingRecord>
@@ -3747,7 +3741,7 @@ uint32_t Chromap<MappingRecord>::GetNumOverlappedMappings(
 template <typename MappingRecord>
 void Chromap<MappingRecord>::AllocateMultiMappings(
     uint32_t num_reference_sequences) {
-  double real_start_time = Chromap<>::GetRealTime();
+  double real_start_time = GetRealTime();
   std::vector<std::vector<MappingRecord>> &mappings =
       remove_pcr_duplicates_ ? deduped_mappings_on_diff_ref_seqs_
                              : mappings_on_diff_ref_seqs_;
@@ -3850,8 +3844,8 @@ void Chromap<MappingRecord>::AllocateMultiMappings(
     }
   }
   std::cerr << "Allocated " << num_allocated_multi_mappings
-            << " multi-mappings in "
-            << Chromap<>::GetRealTime() - real_start_time << "s.\n";
+            << " multi-mappings in " << GetRealTime() - real_start_time
+            << "s.\n";
   std::cerr << "# multi-mappings that have no uni-mapping overlaps: "
             << num_multi_mappings_without_overlapping_unique_mappings << ".\n";
 }
@@ -5806,8 +5800,8 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
       mapping_parameters.low_memory_mode = true;
       mapping_parameters.mapping_output_format = MAPPINGFORMAT_PAIRS;
     } else {
-      chromap::Chromap<>::ExitWithMessage("Unrecognized preset parameters " +
-                                          read_type + "\n");
+      chromap::ExitWithMessage("Unrecognized preset parameters " + read_type +
+                               "\n");
     }
   }
   // Optional parameters
@@ -5957,13 +5951,13 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
     if (result.count("r")) {
       index_parameters.reference_file_path = result["ref"].as<std::string>();
     } else {
-      chromap::Chromap<>::ExitWithMessage("No reference specified!");
+      chromap::ExitWithMessage("No reference specified!");
     }
     if (result.count("o")) {
       index_parameters.index_output_file_path =
           result["output"].as<std::string>();
     } else {
-      chromap::Chromap<>::ExitWithMessage("No output file specified!");
+      chromap::ExitWithMessage("No output file specified!");
     }
     std::cerr << "Build index for the reference.\n";
     std::cerr << "Kmer length: " << index_parameters.kmer_size
@@ -5979,24 +5973,24 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
     if (result.count("r")) {
       mapping_parameters.reference_file_path = result["ref"].as<std::string>();
     } else {
-      chromap::Chromap<>::ExitWithMessage("No reference specified!");
+      chromap::ExitWithMessage("No reference specified!");
     }
     if (result.count("o")) {
       mapping_parameters.mapping_output_file_path =
           result["output"].as<std::string>();
     } else {
-      chromap::Chromap<>::ExitWithMessage("No output file specified!");
+      chromap::ExitWithMessage("No output file specified!");
     }
     if (result.count("x")) {
       mapping_parameters.index_file_path = result["index"].as<std::string>();
     } else {
-      chromap::Chromap<>::ExitWithMessage("No index file specified!");
+      chromap::ExitWithMessage("No index file specified!");
     }
     if (result.count("1")) {
       mapping_parameters.read_file1_paths =
           result["read1"].as<std::vector<std::string>>();
     } else {
-      chromap::Chromap<>::ExitWithMessage("No read file specified!");
+      chromap::ExitWithMessage("No read file specified!");
     }
     if (result.count("2")) {
       mapping_parameters.read_file2_paths =
@@ -6015,7 +6009,7 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
 
     if (result.count("barcode-whitelist")) {
       if (mapping_parameters.is_bulk_data) {
-        chromap::Chromap<>::ExitWithMessage(
+        chromap::ExitWithMessage(
             "No barcode file specified but the barcode whitelist file is "
             "given!");
       }
@@ -6027,7 +6021,7 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
       mapping_parameters.matrix_output_prefix =
           result["matrix-output-prefix"].as<std::string>();
       if (mapping_parameters.is_bulk_data) {
-        chromap::Chromap<>::ExitWithMessage(
+        chromap::ExitWithMessage(
             "No barcode file specified but asked to output matrix files!");
       }
     }
@@ -6163,7 +6157,7 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
         std::cerr << "Output mappings in pairs format.\n";
         break;
       default:
-        chromap::Chromap<>::ExitWithMessage("Unknown mapping output format!");
+        chromap::ExitWithMessage("Unknown mapping output format!");
         break;
     }
 
@@ -6215,8 +6209,7 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
           break;
         }
         case MAPPINGFORMAT_PAIRS:
-          chromap::Chromap<>::ExitWithMessage(
-              "No support for single-end HiC yet!");
+          chromap::ExitWithMessage("No support for single-end HiC yet!");
           break;
         case MAPPINGFORMAT_BED:
         case MAPPINGFORMAT_TAGALIGN:
@@ -6231,7 +6224,7 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
           }
           break;
         default:
-          chromap::Chromap<>::ExitWithMessage("Unknown mapping output format!");
+          chromap::ExitWithMessage("Unknown mapping output format!");
           break;
       }
     } else {
@@ -6268,7 +6261,7 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
           }
           break;
         default:
-          chromap::Chromap<>::ExitWithMessage("Unknown mapping output format!");
+          chromap::ExitWithMessage("Unknown mapping output format!");
           break;
       }
     }
