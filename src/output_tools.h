@@ -13,21 +13,13 @@
 #include "barcode_translator.h"
 #include "bed_mapping.h"
 #include "mapping.h"
+#include "mapping_parameters.h"
 #include "paf_mapping.h"
 #include "pairs_mapping.h"
 #include "sam_mapping.h"
 #include "sequence_batch.h"
 
 namespace chromap {
-
-enum MappingOutputFormat {
-  MAPPINGFORMAT_UNKNOWN,
-  MAPPINGFORMAT_BED,
-  MAPPINGFORMAT_TAGALIGN,
-  MAPPINGFORMAT_PAF,
-  MAPPINGFORMAT_SAM,
-  MAPPINGFORMAT_PAIRS
-};
 
 template <typename MappingRecord>
 bool ReadIdLess(const std::pair<uint32_t, MappingRecord> &a,
