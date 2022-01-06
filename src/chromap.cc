@@ -500,7 +500,7 @@ void Chromap<MappingRecord>::PostProcessingInLowMemory(
     temp_mapping_file_handles_.emplace_back(temp_mapping_file_handle);
     SortOutputMappings(num_reference_sequences, mappings_on_diff_ref_seqs_);
     // double output_temp_mapping_start_time = Chromap<>::GetRealTime();
-    output_tools_.OutputTempMapping(temp_mapping_file_handle.file_path,
+    mapping_writer_.OutputTempMapping(temp_mapping_file_handle.file_path,
                                     num_reference_sequences,
                                     mappings_on_diff_ref_seqs_);
     // std::cerr << "Output temp mappings in " << Chromap<>::GetRealTime() -
@@ -637,7 +637,7 @@ void Chromap<MappingRecord>::PostProcessingInLowMemory(
             if (Tn5_shift_) {
               last_mapping.Tn5Shift();
             }
-            output_tools_.AppendMapping(last_rid, reference, last_mapping);
+            mapping_writer_.AppendMapping(last_rid, reference, last_mapping);
             ++num_mappings_passing_filters;
             //}
           }
@@ -708,7 +708,7 @@ void Chromap<MappingRecord>::PostProcessingInLowMemory(
     if (Tn5_shift_) {
       last_mapping.Tn5Shift();
     }
-    output_tools_.AppendMapping(last_rid, reference, last_mapping);
+    mapping_writer_.AppendMapping(last_rid, reference, last_mapping);
     ++num_mappings_passing_filters;
     //}
   }
@@ -877,12 +877,12 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
 
   // Initialize output tools
   if (mapping_output_format_ == MAPPINGFORMAT_PAIRS) {
-    output_tools_.SetPairsCustomRidRank(pairs_custom_rid_rank_);
+    mapping_writer_.SetPairsCustomRidRank(pairs_custom_rid_rank_);
   }
 
-  output_tools_.InitializeMappingOutput(
+  mapping_writer_.InitializeMappingOutput(
       barcode_length_, mapping_output_file_path_, mapping_output_format_);
-  output_tools_.OutputHeader(num_reference_sequences, reference);
+  mapping_writer_.OutputHeader(num_reference_sequences, reference);
 
   CandidateProcessor candidate_processor(min_num_seeds_required_for_mapping_,
                                          max_seed_frequencies_);
@@ -930,7 +930,7 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
       barcode_batch_for_loading.SwapSequenceBatch(barcode_batch);
       // TODO(Haowen): simplify this condition check.
       if (num_loaded_pairs > 0) {
-        output_tools_.SetBarcodeLength(barcode_batch.GetSequenceLengthAt(0));
+        mapping_writer_.SetBarcodeLength(barcode_batch.GetSequenceLengthAt(0));
       }
     }
 
@@ -958,7 +958,7 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
       }
     }
 
-#pragma omp parallel default(none) shared(output_mappings_not_in_whitelist_, barcode_whitelist_file_path_, trim_adapters_, window_size_, custom_rid_order_path_, split_alignment_, error_threshold_, max_seed_frequencies_, max_num_best_mappings_, max_insert_size_, num_threads_, num_reads_, low_memory_mode_, num_reference_sequences, reference, index, read_batch1, read_batch2, barcode_batch, read_batch1_for_loading, read_batch2_for_loading, barcode_batch_for_loading, candidate_processor, output_tools_, std::cerr, num_loaded_pairs_for_loading, num_loaded_pairs, mappings_on_diff_ref_seqs_for_diff_threads, mappings_on_diff_ref_seqs_for_diff_threads_for_saving, mappings_on_diff_ref_seqs_, mapping_output_file_path_, num_mappings_in_mem, max_num_mappings_in_mem, temp_mapping_file_handles_, mm_to_candidates_cache, mm_history1, mm_history2) num_threads(num_threads_) reduction(+:num_candidates_, num_mappings_, num_mapped_reads_, num_uniquely_mapped_reads_, num_barcode_in_whitelist_, num_corrected_barcode_)
+#pragma omp parallel default(none) shared(output_mappings_not_in_whitelist_, barcode_whitelist_file_path_, trim_adapters_, window_size_, custom_rid_order_path_, split_alignment_, error_threshold_, max_seed_frequencies_, max_num_best_mappings_, max_insert_size_, num_threads_, num_reads_, low_memory_mode_, num_reference_sequences, reference, index, read_batch1, read_batch2, barcode_batch, read_batch1_for_loading, read_batch2_for_loading, barcode_batch_for_loading, candidate_processor, mapping_writer_, std::cerr, num_loaded_pairs_for_loading, num_loaded_pairs, mappings_on_diff_ref_seqs_for_diff_threads, mappings_on_diff_ref_seqs_for_diff_threads_for_saving, mappings_on_diff_ref_seqs_, mapping_output_file_path_, num_mappings_in_mem, max_num_mappings_in_mem, temp_mapping_file_handles_, mm_to_candidates_cache, mm_history1, mm_history2) num_threads(num_threads_) reduction(+:num_candidates_, num_mappings_, num_mapped_reads_, num_uniquely_mapped_reads_, num_barcode_in_whitelist_, num_corrected_barcode_)
     {
       thread_num_candidates = 0;
       thread_num_mappings = 0;
@@ -1261,7 +1261,7 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
               temp_mapping_file_handles_.emplace_back(temp_mapping_file_handle);
               SortOutputMappings(num_reference_sequences,
                                  mappings_on_diff_ref_seqs_);
-              output_tools_.OutputTempMapping(
+              mapping_writer_.OutputTempMapping(
                   temp_mapping_file_handle.file_path, num_reference_sequences,
                   mappings_on_diff_ref_seqs_);
               num_mappings_in_mem = 0;
@@ -1361,7 +1361,7 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
     //}
   }
 
-  output_tools_.FinalizeMappingOutput();
+  mapping_writer_.FinalizeMappingOutput();
 
   reference.FinalizeLoading();
 
@@ -1381,7 +1381,7 @@ void Chromap<MappingRecord>::OutputMappingsInVector(
       if (mapq >= mapq_threshold) {
         // if (allocate_multi_mappings_ || (only_output_unique_mappings_ &&
         // is_unique == 1)) {
-        output_tools_.AppendMapping(ri, reference, *it);
+        mapping_writer_.AppendMapping(ri, reference, *it);
         ++num_mappings_passing_filters;
         //}
       }
@@ -2213,9 +2213,9 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
     }
   }
 
-  output_tools_.InitializeMappingOutput(
+  mapping_writer_.InitializeMappingOutput(
       barcode_length_, mapping_output_file_path_, mapping_output_format_);
-  output_tools_.OutputHeader(num_reference_sequences, reference);
+  mapping_writer_.OutputHeader(num_reference_sequences, reference);
 
   mm_cache mm_to_candidates_cache(2000003);
   mm_to_candidates_cache.SetKmerLength(kmer_size_);
@@ -2250,7 +2250,7 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
       barcode_batch_for_loading.SwapSequenceBatch(barcode_batch);
       // TODO(Haowen): simplify this condition check.
       if (num_loaded_reads > 0) {
-        output_tools_.SetBarcodeLength(barcode_batch.GetSequenceLengthAt(0));
+        mapping_writer_.SetBarcodeLength(barcode_batch.GetSequenceLengthAt(0));
       }
     }
 
@@ -2279,7 +2279,7 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
             num_threads_ / num_reference_sequences);
       }
     }
-#pragma omp parallel default(none) shared(barcode_whitelist_file_path_, output_mappings_not_in_whitelist_, window_size_, custom_rid_order_path_, error_threshold_, max_num_best_mappings_, max_seed_frequencies_, num_threads_, num_reads_, mm_history, reference, index, read_batch, barcode_batch, read_batch_for_loading, barcode_batch_for_loading, std::cerr, num_loaded_reads_for_loading, num_loaded_reads, num_reference_sequences, mappings_on_diff_ref_seqs_for_diff_threads, mappings_on_diff_ref_seqs_for_diff_threads_for_saving, mm_to_candidates_cache, output_tools_, candidate_processor) num_threads(num_threads_) reduction(+:num_candidates_, num_mappings_, num_mapped_reads_, num_uniquely_mapped_reads_, num_barcode_in_whitelist_, num_corrected_barcode_)
+#pragma omp parallel default(none) shared(barcode_whitelist_file_path_, output_mappings_not_in_whitelist_, window_size_, custom_rid_order_path_, error_threshold_, max_num_best_mappings_, max_seed_frequencies_, num_threads_, num_reads_, mm_history, reference, index, read_batch, barcode_batch, read_batch_for_loading, barcode_batch_for_loading, std::cerr, num_loaded_reads_for_loading, num_loaded_reads, num_reference_sequences, mappings_on_diff_ref_seqs_for_diff_threads, mappings_on_diff_ref_seqs_for_diff_threads_for_saving, mm_to_candidates_cache, mapping_writer_, candidate_processor) num_threads(num_threads_) reduction(+:num_candidates_, num_mappings_, num_mapped_reads_, num_uniquely_mapped_reads_, num_barcode_in_whitelist_, num_corrected_barcode_)
     {
       thread_num_candidates = 0;
       thread_num_mappings = 0;
@@ -2479,7 +2479,7 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
     OutputMappings(num_reference_sequences, reference, mappings);
   }
 
-  output_tools_.FinalizeMappingOutput();
+  mapping_writer_.FinalizeMappingOutput();
   reference.FinalizeLoading();
   std::cerr << "Total time: " << GetRealTime() - real_start_time << "s.\n";
 }
