@@ -1,16 +1,13 @@
 #ifndef CHROMAP_H_
 #define CHROMAP_H_
 
-#include <sys/resource.h>
-#include <sys/time.h>
-
 #include <memory>
 #include <random>
 #include <string>
 #include <tuple>
 #include <vector>
 
-#include "feature_barcode_matrix_writer.h"
+#include "feature_barcode_matrix.h"
 #include "index.h"
 #include "index_parameters.h"
 #include "khash.h"
@@ -25,17 +22,6 @@
 #define CHROMAP_VERSION "0.1.4-r285"
 
 namespace chromap {
-struct uint128_t {
-  uint64_t first;
-  uint64_t second;
-};
-
-struct StackCell {
-  size_t x;  // node
-  int k, w;  // k: level; w: 0 if left child hasn't been processed
-  StackCell(){};
-  StackCell(int k_, size_t x_, int w_) : x(x_), k(k_), w(w_){};
-};
 
 struct _mm_history {
   unsigned int timestamp;
@@ -44,36 +30,6 @@ struct _mm_history {
   std::vector<Candidate> negative_candidates;
   uint32_t repetitive_seed_length;
 };
-
-struct Peak {
-  uint32_t start_position;
-  uint16_t length;
-  uint32_t index;
-};
-
-KHASH_MAP_INIT_INT64(k128, uint128_t);
-KHASH_MAP_INIT_INT64(k64_seq, uint64_t);
-KHASH_SET_INIT_INT(k32_set);
-KHASH_MAP_INIT_INT64(kmatrix, uint32_t);
-
-struct BarcodeWithQual {
-  uint32_t corrected_base_index1;
-  char correct_base1;
-  uint32_t corrected_base_index2;
-  char correct_base2;
-  double score;
-  bool operator>(const BarcodeWithQual &b) const {
-    return std::tie(score, corrected_base_index1, correct_base1,
-                    corrected_base_index2, correct_base2) >
-           std::tie(b.score, b.corrected_base_index1, b.correct_base1,
-                    b.corrected_base_index2, b.correct_base2);
-  }
-};
-
-#define SortMappingWithoutBarcode(m)                                      \
-  (((((m).fragment_start_position_ << 16) | (m).fragment_length_) << 8) | \
-   (m).mapq_)
-//#define SortMappingWithoutBarcode(m) (m)
 
 class ChromapDriver {
  public:
@@ -95,7 +51,6 @@ class Chromap {
     barcode_lookup_table_ = NULL;
     barcode_whitelist_lookup_table_ = NULL;
     barcode_histogram_ = NULL;
-    barcode_index_table_ = NULL;
   }
 
   // For mapping
@@ -158,7 +113,6 @@ class Chromap {
     barcode_lookup_table_ = kh_init(k64_seq);
     barcode_whitelist_lookup_table_ = kh_init(k64_seq);
     barcode_histogram_ = kh_init(k64_seq);
-    barcode_index_table_ = kh_init(k64_seq);
 
     NUM_VPU_LANES_ = 0;
     if (error_threshold_ < 8) {
@@ -181,9 +135,7 @@ class Chromap {
     if (barcode_histogram_ != NULL) {
       kh_destroy(k64_seq, barcode_histogram_);
     }
-    if (barcode_index_table_ != NULL) {
-      kh_destroy(k64_seq, barcode_index_table_);
-    }
+
     if (barcode_lookup_table_ != NULL) {
       kh_destroy(k64_seq, barcode_lookup_table_);
     }
@@ -430,18 +382,7 @@ class Chromap {
   bool CorrectBarcodeAt(uint32_t barcode_index, SequenceBatch &barcode_batch,
                         uint64_t &num_barcode_in_whitelist,
                         uint64_t &num_corrected_barcode);
-  uint32_t CallPeaks(uint16_t coverage_threshold,
-                     uint32_t num_reference_sequences,
-                     const SequenceBatch &reference);
-  void OutputFeatureMatrix(uint32_t num_sequences,
-                           const SequenceBatch &reference);
-  void GetNumOverlappedBins(uint32_t rid, uint32_t start_position,
-                            uint16_t mapping_length, uint32_t num_sequences,
-                            const SequenceBatch &reference,
-                            std::vector<uint32_t> &overlapped_peak_indices);
-  uint32_t GetNumOverlappedPeaks(
-      uint32_t ref_id, const MappingRecord &mapping,
-      std::vector<uint32_t> &overlapped_peak_indices);
+
   void BuildAugmentedTreeForPeaks(uint32_t ref_id);
   void OutputMappingsInVector(
       uint8_t mapq_threshold, uint32_t num_reference_sequences,
@@ -546,7 +487,6 @@ class Chromap {
   // (max_level, # nodes)
   std::vector<std::pair<int, uint32_t> > tree_info_on_diff_ref_seqs_;
   OutputTools<MappingRecord> output_tools_;
-  FeatureBarcodeMatrixWriter feature_barcode_matrix_writer_;
   // For mapping stats.
   uint64_t num_candidates_ = 0;
   uint64_t num_mappings_ = 0;
@@ -561,13 +501,9 @@ class Chromap {
   uint64_t num_corrected_barcode_ = 0;
   uint32_t barcode_length_ = 0;
   khash_t(k64_seq) * barcode_histogram_;
-  khash_t(k64_seq) * barcode_index_table_;
   bool skip_barcode_check_ = false;
-
-  // For peak calling
-  std::vector<std::vector<uint16_t> > pileup_on_diff_ref_seqs_;
-  std::vector<std::vector<Peak> > peaks_on_diff_ref_seqs_;
 };
+
 }  // namespace chromap
 
 #endif  // CHROMAP_H_
