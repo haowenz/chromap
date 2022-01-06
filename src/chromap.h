@@ -14,7 +14,7 @@
 #include "ksort.h"
 #include "mapping_metadata.h"
 #include "mapping_parameters.h"
-#include "output_tools.h"
+#include "mapping_writer.h"
 #include "paired_end_mapping_metadata.h"
 #include "sequence_batch.h"
 #include "temp_mapping.h"
@@ -124,7 +124,7 @@ class Chromap {
     ParseReadFormat(mapping_parameters.read_format);
     if (mapping_parameters.barcode_translate_table_path.length() > 0) {
       std::string tmp = mapping_parameters.barcode_translate_table_path;
-      output_tools_.SetBarcodeTranslateTable(tmp);
+      mapping_writer_.SetBarcodeTranslateTable(tmp);
     }
   }
 
@@ -479,7 +479,7 @@ class Chromap {
   std::vector<std::vector<uint32_t> > tree_extras_on_diff_ref_seqs_;  // max
   // (max_level, # nodes)
   std::vector<std::pair<int, uint32_t> > tree_info_on_diff_ref_seqs_;
-  OutputTools<MappingRecord> output_tools_;
+  MappingWriter<MappingRecord> mapping_writer_;
   // For mapping stats.
   uint64_t num_candidates_ = 0;
   uint64_t num_mappings_ = 0;
