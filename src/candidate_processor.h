@@ -32,6 +32,10 @@ class CandidateProcessor {
       int error_threshold, uint32_t search_range, const Index &index,
       PairedEndMappingMetadata &paired_end_mapping_metadata) const;
 
+  void ReduceCandidatesForPairedEndRead(
+      uint32_t mapping_positions_distance,
+      PairedEndMappingMetadata &paired_end_mapping_metadata) const;
+
  private:
   void GenerateCandidatesOnOneDirection(
       int error_threshold, int num_seeds_required, uint32_t num_minimizers,
@@ -45,8 +49,16 @@ class CandidateProcessor {
       const std::vector<Candidate> &mate_candidates, const Direction direction,
       uint32_t search_range) const;
 
-  void MergeCandidates(int error_threshold, std::vector<Candidate> &c1, std::vector<Candidate> &c2,
+  void MergeCandidates(int error_threshold, std::vector<Candidate> &c1,
+                       std::vector<Candidate> &c2,
                        std::vector<Candidate> &buffer) const;
+
+  void ReduceCandidatesForPairedEndReadOnOneDirection(
+      uint32_t mapping_positions_distance,
+      const std::vector<Candidate> &candidates1,
+      const std::vector<Candidate> &candidates2,
+      std::vector<Candidate> &filtered_candidates1,
+      std::vector<Candidate> &filtered_candidates2) const;
 
   const int min_num_seeds_required_for_mapping_;
   // Vector of size 2. The first element is the frequency threshold, and the
