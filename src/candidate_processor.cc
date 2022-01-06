@@ -222,6 +222,38 @@ int CandidateProcessor::SupplementCandidates(
   return ret;
 }
 
+void CandidateProcessor::ReduceCandidatesForPairedEndRead(
+    uint32_t mapping_positions_distance,
+    PairedEndMappingMetadata &paired_end_mapping_metadata) const {
+  const std::vector<Candidate> &positive_candidates1 =
+      paired_end_mapping_metadata.mapping_metadata1_
+          .positive_candidates_buffer_;
+  const std::vector<Candidate> &negative_candidates1 =
+      paired_end_mapping_metadata.mapping_metadata1_
+          .negative_candidates_buffer_;
+  const std::vector<Candidate> &positive_candidates2 =
+      paired_end_mapping_metadata.mapping_metadata2_
+          .positive_candidates_buffer_;
+  const std::vector<Candidate> &negative_candidates2 =
+      paired_end_mapping_metadata.mapping_metadata2_
+          .negative_candidates_buffer_;
+  std::vector<Candidate> &filtered_positive_candidates1 =
+      paired_end_mapping_metadata.mapping_metadata1_.positive_candidates_;
+  std::vector<Candidate> &filtered_negative_candidates1 =
+      paired_end_mapping_metadata.mapping_metadata1_.negative_candidates_;
+  std::vector<Candidate> &filtered_positive_candidates2 =
+      paired_end_mapping_metadata.mapping_metadata2_.positive_candidates_;
+  std::vector<Candidate> &filtered_negative_candidates2 =
+      paired_end_mapping_metadata.mapping_metadata2_.negative_candidates_;
+
+  ReduceCandidatesForPairedEndReadOnOneDirection(
+      mapping_positions_distance, positive_candidates1, negative_candidates2,
+      filtered_positive_candidates1, filtered_negative_candidates2);
+  ReduceCandidatesForPairedEndReadOnOneDirection(
+      mapping_positions_distance, negative_candidates1, positive_candidates2,
+      filtered_negative_candidates1, filtered_positive_candidates2);
+}
+
 int CandidateProcessor::GenerateCandidatesFromRepetitiveReadWithMateInfo(
     int error_threshold, const Index &index,
     const std::vector<std::pair<uint64_t, uint64_t>> &minimizers,
@@ -371,4 +403,75 @@ void CandidateProcessor::MergeCandidates(int error_threshold,
 
   c1.swap(buffer);
 }
+
+void CandidateProcessor::ReduceCandidatesForPairedEndReadOnOneDirection(
+    uint32_t mapping_positions_distance,
+    const std::vector<Candidate> &candidates1,
+    const std::vector<Candidate> &candidates2,
+    std::vector<Candidate> &filtered_candidates1,
+    std::vector<Candidate> &filtered_candidates2) const {
+  uint32_t i1 = 0;
+  uint32_t i2 = 0;
+  int num_unpaired_candidate1 = 0;
+  int num_unpaired_candidate2 = 0;
+  int num_unpaired_candidate_threshold = 5;
+  int max_candidate_count1 = 6;
+  int max_candidate_count2 = 6;
+  uint32_t previous_end_i2 = i2;
+#ifdef LI_DEBUG
+  for (uint32_t i = 0; i < candidates1.size(); ++i)
+    printf("%s 0: %d %d:%d\n", __func__, i,
+           (int)(candidates1[i].position >> 32), (int)candidates1[i].position);
+  for (uint32_t i = 0; i < candidates2.size(); ++i)
+    printf("%s 1: %d %d:%d\n", __func__, i,
+           (int)(candidates2[i].position >> 32), (int)candidates2[i].position);
+#endif
+  while (i1 < candidates1.size() && i2 < candidates2.size()) {
+    if (candidates1[i1].position >
+        candidates2[i2].position + mapping_positions_distance) {
+      if (i2 >= previous_end_i2 &&
+          num_unpaired_candidate2 < num_unpaired_candidate_threshold &&
+          (candidates1[i1].position >> 32) ==
+              (candidates2[i2].position >> 32) &&
+          candidates2[i2].count >= max_candidate_count2) {
+        filtered_candidates2.emplace_back(candidates2[i2]);
+        ++num_unpaired_candidate2;
+      }
+      ++i2;
+    } else if (candidates2[i2].position >
+               candidates1[i1].position + mapping_positions_distance) {
+      if (num_unpaired_candidate1 < num_unpaired_candidate_threshold &&
+          (candidates1[i1].position >> 32) ==
+              (candidates2[i2].position >> 32) &&
+          candidates1[i1].count >= max_candidate_count1) {
+        filtered_candidates1.emplace_back(candidates1[i1]);
+        ++num_unpaired_candidate1;
+      }
+      ++i1;
+    } else {
+      // ok, find a pair, we store current ni2 somewhere and keep looking until
+      // we go out of the range, then we go back and then move to next pi1 and
+      // keep doing the similar thing.
+      filtered_candidates1.emplace_back(candidates1[i1]);
+      if (candidates1[i1].count > max_candidate_count1) {
+        max_candidate_count1 = candidates1[i1].count;
+      }
+      uint32_t current_i2 = i2;
+      while (current_i2 < candidates2.size() &&
+             candidates2[current_i2].position <=
+                 candidates1[i1].position + mapping_positions_distance) {
+        if (current_i2 >= previous_end_i2) {
+          filtered_candidates2.emplace_back(candidates2[current_i2]);
+          if (candidates2[current_i2].count > max_candidate_count2) {
+            max_candidate_count2 = candidates2[current_i2].count;
+          }
+        }
+        ++current_i2;
+      }
+      previous_end_i2 = current_i2;
+      ++i1;
+    }
+  }
+}
+
 }  // namespace chromap

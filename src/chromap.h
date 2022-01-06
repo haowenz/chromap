@@ -163,13 +163,6 @@ class Chromap {
                                            const SequenceBatch &barcode_batch,
                                            const SequenceBatch &read_batch1,
                                            const SequenceBatch &read_batch2);
-  void ReduceCandidatesForPairedEndReadOnOneDirection(
-      const std::vector<Candidate> &candidates1,
-      const std::vector<Candidate> &candidates2,
-      std::vector<Candidate> &filtered_candidates1,
-      std::vector<Candidate> &filtered_candidates2);
-  void ReduceCandidatesForPairedEndRead(
-      PairedEndMappingMetadata &paired_end_mapping_metadata);
   void GenerateBestMappingsForPairedEndReadOnOneDirection(
       Direction first_read_direction, uint32_t pair_index, int num_candidates1,
       int min_num_errors1, int num_best_mappings1, int second_min_num_errors1,
