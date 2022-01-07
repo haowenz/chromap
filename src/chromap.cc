@@ -502,8 +502,8 @@ void Chromap<MappingRecord>::PostProcessingInLowMemory(
     SortOutputMappings(num_reference_sequences, mappings_on_diff_ref_seqs_);
     // double output_temp_mapping_start_time = Chromap<>::GetRealTime();
     mapping_writer_.OutputTempMapping(temp_mapping_file_handle.file_path,
-                                    num_reference_sequences,
-                                    mappings_on_diff_ref_seqs_);
+                                      num_reference_sequences,
+                                      mappings_on_diff_ref_seqs_);
     // std::cerr << "Output temp mappings in " << Chromap<>::GetRealTime() -
     // output_temp_mapping_start_time << "s.\n";
     num_mappings_in_mem = 0;
@@ -1252,7 +1252,7 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
             // Handle output
             num_mappings_in_mem += MoveMappingsInBuffersToMappingContainer(
                 num_reference_sequences,
-                &mappings_on_diff_ref_seqs_for_diff_threads_for_saving);
+                mappings_on_diff_ref_seqs_for_diff_threads_for_saving);
             if (low_memory_mode_ &&
                 num_mappings_in_mem > max_num_mappings_in_mem) {
               TempMappingFileHandle<MappingRecord> temp_mapping_file_handle;
@@ -2415,7 +2415,7 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
           {
             MoveMappingsInBuffersToMappingContainer(
                 num_reference_sequences,
-                &mappings_on_diff_ref_seqs_for_diff_threads_for_saving);
+                mappings_on_diff_ref_seqs_for_diff_threads_for_saving);
           }
           std::cerr << "Mapped in " << GetRealTime() - real_batch_start_time
                     << "s.\n";
@@ -3131,23 +3131,22 @@ template <typename MappingRecord>
 uint32_t Chromap<MappingRecord>::MoveMappingsInBuffersToMappingContainer(
     uint32_t num_reference_sequences,
     std::vector<std::vector<std::vector<MappingRecord>>>
-        *mappings_on_diff_ref_seqs_for_diff_threads_for_saving) {
+        &mappings_on_diff_ref_seqs_for_diff_threads_for_saving) {
   // double real_start_time = Chromap<>::GetRealTime();
   uint32_t num_moved_mappings = 0;
   for (int ti = 0; ti < num_threads_; ++ti) {
     for (uint32_t i = 0; i < num_reference_sequences; ++i) {
       num_moved_mappings +=
-          (*mappings_on_diff_ref_seqs_for_diff_threads_for_saving)[ti][i]
-              .size();
+          mappings_on_diff_ref_seqs_for_diff_threads_for_saving[ti][i].size();
       mappings_on_diff_ref_seqs_[i].insert(
           mappings_on_diff_ref_seqs_[i].end(),
           std::make_move_iterator(
-              (*mappings_on_diff_ref_seqs_for_diff_threads_for_saving)[ti][i]
+              mappings_on_diff_ref_seqs_for_diff_threads_for_saving[ti][i]
                   .begin()),
           std::make_move_iterator(
-              (*mappings_on_diff_ref_seqs_for_diff_threads_for_saving)[ti][i]
+              mappings_on_diff_ref_seqs_for_diff_threads_for_saving[ti][i]
                   .end()));
-      (*mappings_on_diff_ref_seqs_for_diff_threads_for_saving)[ti][i].clear();
+      mappings_on_diff_ref_seqs_for_diff_threads_for_saving[ti][i].clear();
     }
   }
   // std::cerr << "Moved mappings in " << Chromap<>::GetRealTime() -
