@@ -166,9 +166,17 @@ class SAMMapping : public Mapping {
         NM_(NM),
         n_cigar_(n_cigar),
         cigar_(cigar),
-        MD_(MD_tag),
-        sequence_(sequence),
-        sequence_qual_(sequence_qual) {}
+        MD_(MD_tag) {
+    uint32_t sequence_length = GetSequenceLength();
+    if (sequence_length != sequence.length()) {
+      sequence_ = sequence.substr(0, sequence_length);
+      sequence_qual_ = sequence_qual.substr(0, sequence_length);
+    } else {
+      sequence_ = sequence;
+      sequence_qual_ = sequence_qual;
+    }
+  }
+
   bool operator<(const SAMMapping &m) const {
     int read1_flag = flag_ & BAM_FREAD1;
     int m_read1_flag = m.flag_ & BAM_FREAD1;
@@ -223,6 +231,19 @@ class SAMMapping : public Mapping {
     }
     return alignment_length;
   }
+
+  uint32_t GetSequenceLength() const {
+    uint32_t sequence_length = 0;
+    for (int ci = 0; ci < n_cigar_; ++ci) {
+      uint32_t op = bam_cigar_op(cigar_[ci]);
+      uint32_t op_length = bam_cigar_oplen(cigar_[ci]);
+      if ((bam_cigar_type(op) & 0x1) > 0) {
+        sequence_length += op_length;
+      }
+    }
+    return sequence_length;
+  }
+
   uint32_t GetStartPosition() const {  // inclusive
     return pos_ + 1;
     /*if (IsPositiveStrand()) {
