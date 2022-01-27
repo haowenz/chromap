@@ -196,7 +196,7 @@ class SequenceBatch {
   kseq_t *sequence_kseq_;
   std::vector<kseq_t *> sequence_batch_;
   std::vector<std::string> negative_sequence_batch_;
-  int effective_range_[3];  // actual range within each sequence.
+  int effective_range_[3] = {0, -1, 1};  // actual range within each sequence.
   static constexpr uint8_t char_to_uint8_table_[256] = {
       4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
       4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
