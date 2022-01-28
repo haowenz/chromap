@@ -19,7 +19,7 @@
 #include "sequence_batch.h"
 #include "temp_mapping.h"
 
-#define CHROMAP_VERSION "0.1.5-r302"
+#define CHROMAP_VERSION "0.1.5-r304"
 
 namespace chromap {
 
