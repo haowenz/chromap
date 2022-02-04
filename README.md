@@ -29,6 +29,7 @@ cd chromap && make
     - [Map ATAC-seq/scATAC-seq short reads](#map-atac)
     - [Map Hi-C short reads](#map-hic)
   - [Getting help](#help)
+  - [Citing Chromap](#cite)
 
 ## <a name="uguide"></a>User Guide
 
@@ -196,6 +197,12 @@ can be displayed by running Chromap with **-h** or be found at the
 [manpage][manpage]. If you encounter bugs or have further questions or 
 requests, you can raise an issue at the [issue page][issue].
 
+### <a name="cite"></a>Citing Chromap
+
+If you use Chromap, please cite:
+
+> Zhang, H., Song, L., Wang, X., Cheng, H., Wang, C., Meyer, C. A., ... & Li, H. (2021). Fast alignment and preprocessing of chromatin profiles with Chromap. Nature communications, 12(1), 1-6.
+> https://doi.org/10.1038/s41467-021-26865-w
 
 [bed]: https://genome.ucsc.edu/FAQ/FAQformat.html#format1
 [paf]: https://github.com/lh3/miniasm/blob/master/PAF.md
