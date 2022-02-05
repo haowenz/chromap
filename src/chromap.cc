@@ -415,6 +415,8 @@ void Chromap<MappingRecord>::ComputeBarcodeAbundance(
     uint64_t max_num_sample_barcodes) {
   double real_start_time = GetRealTime();
   SequenceBatch barcode_batch(read_batch_size_);
+  barcode_batch.SetSeqEffectiveRange(barcode_format_[0], barcode_format_[1],
+                                       barcode_format_[2]);
   for (size_t read_file_index = 0; read_file_index < read_file1_paths_.size();
        ++read_file_index) {
     barcode_batch.InitializeLoading(barcode_file_paths_[read_file_index]);
@@ -436,7 +438,6 @@ void Chromap<MappingRecord>::ComputeBarcodeAbundance(
           ++num_sample_barcodes_;
         }
       }
-
       if (!skip_barcode_check_ &&
           num_sample_barcodes_ * 20 < num_loaded_barcodes) {
         // Since num_loaded_pairs is a constant, this if is actuaclly only
@@ -445,7 +446,7 @@ void Chromap<MappingRecord>::ComputeBarcodeAbundance(
             "Less than 5\% barcodes can be found or corrected based on the "
             "barcode whitelist.\nPlease check whether the barcode whitelist "
             "matches the data, e.g. length, reverse-complement. If this is a "
-            "false positive warning, please run Chromap with the option "
+            "false warning, please run Chromap with the option "
             "--skip-barcode-check.");
       }
 
