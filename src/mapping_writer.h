@@ -22,12 +22,6 @@
 namespace chromap {
 
 template <typename MappingRecord>
-bool ReadIdLess(const std::pair<uint32_t, MappingRecord> &a,
-                const std::pair<uint32_t, MappingRecord> &b) {
-  return a.second.read_id_ < b.second.read_id_;
-}
-
-template <typename MappingRecord>
 class MappingWriter {
  public:
   MappingWriter() {}
