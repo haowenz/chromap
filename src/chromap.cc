@@ -416,7 +416,7 @@ void Chromap<MappingRecord>::ComputeBarcodeAbundance(
   double real_start_time = GetRealTime();
   SequenceBatch barcode_batch(read_batch_size_);
   barcode_batch.SetSeqEffectiveRange(barcode_format_[0], barcode_format_[1],
-                                       barcode_format_[2]);
+                                     barcode_format_[2]);
   for (size_t read_file_index = 0; read_file_index < read_file1_paths_.size();
        ++read_file_index) {
     barcode_batch.InitializeLoading(barcode_file_paths_[read_file_index]);
@@ -491,7 +491,8 @@ void Chromap<MappingRecord>::UpdateBarcodeAbundance(
 template <typename MappingRecord>
 void Chromap<MappingRecord>::PostProcessingInLowMemory(
     uint32_t num_mappings_in_mem, uint32_t num_reference_sequences,
-    const SequenceBatch &reference) {
+    const SequenceBatch &reference,
+    const MappingProcessor<MappingRecord> &mapping_processor) {
   // First, process the mappings in the memory and save them on disk.
   if (num_mappings_in_mem > 0) {
     TempMappingFileHandle<MappingRecord> temp_mapping_file_handle;
@@ -499,7 +500,8 @@ void Chromap<MappingRecord>::PostProcessingInLowMemory(
         mapping_output_file_path_ + ".temp" +
         std::to_string(temp_mapping_file_handles_.size());
     temp_mapping_file_handles_.emplace_back(temp_mapping_file_handle);
-    SortOutputMappings(num_reference_sequences, mappings_on_diff_ref_seqs_);
+    mapping_processor.SortOutputMappings(num_reference_sequences,
+                                         mappings_on_diff_ref_seqs_);
     // double output_temp_mapping_start_time = Chromap<>::GetRealTime();
     mapping_writer_.OutputTempMapping(temp_mapping_file_handle.file_path,
                                       num_reference_sequences,
@@ -861,11 +863,8 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
 
   // Initialize mapping container
   mappings_on_diff_ref_seqs_.reserve(num_reference_sequences);
-  deduped_mappings_on_diff_ref_seqs_.reserve(num_reference_sequences);
   for (uint32_t i = 0; i < num_reference_sequences; ++i) {
     mappings_on_diff_ref_seqs_.emplace_back(std::vector<MappingRecord>());
-    deduped_mappings_on_diff_ref_seqs_.emplace_back(
-        std::vector<MappingRecord>());
   }
 
   // Preprocess barcodes for single cell data
@@ -887,6 +886,10 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
 
   CandidateProcessor candidate_processor(min_num_seeds_required_for_mapping_,
                                          max_seed_frequencies_);
+
+  MappingProcessor<MappingRecord> mapping_processor(
+      min_unique_mapping_mapq_, multi_mapping_allocation_seed_,
+      multi_mapping_allocation_distance_, max_num_best_mappings_);
 
   uint32_t num_mappings_in_mem = 0;
   uint64_t max_num_mappings_in_mem =
@@ -959,7 +962,7 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
       }
     }
 
-#pragma omp parallel default(none) shared(output_mappings_not_in_whitelist_, barcode_whitelist_file_path_, trim_adapters_, window_size_, custom_rid_order_path_, split_alignment_, error_threshold_, max_seed_frequencies_, max_num_best_mappings_, max_insert_size_, num_threads_, num_reads_, low_memory_mode_, num_reference_sequences, reference, index, read_batch1, read_batch2, barcode_batch, read_batch1_for_loading, read_batch2_for_loading, barcode_batch_for_loading, candidate_processor, mapping_writer_, std::cerr, num_loaded_pairs_for_loading, num_loaded_pairs, mappings_on_diff_ref_seqs_for_diff_threads, mappings_on_diff_ref_seqs_for_diff_threads_for_saving, mappings_on_diff_ref_seqs_, mapping_output_file_path_, num_mappings_in_mem, max_num_mappings_in_mem, temp_mapping_file_handles_, mm_to_candidates_cache, mm_history1, mm_history2) num_threads(num_threads_) reduction(+:num_candidates_, num_mappings_, num_mapped_reads_, num_uniquely_mapped_reads_, num_barcode_in_whitelist_, num_corrected_barcode_)
+#pragma omp parallel default(none) shared(output_mappings_not_in_whitelist_, barcode_whitelist_file_path_, trim_adapters_, window_size_, custom_rid_order_path_, split_alignment_, error_threshold_, max_seed_frequencies_, max_num_best_mappings_, max_insert_size_, num_threads_, num_reads_, low_memory_mode_, num_reference_sequences, reference, index, read_batch1, read_batch2, barcode_batch, read_batch1_for_loading, read_batch2_for_loading, barcode_batch_for_loading, candidate_processor, mapping_processor, mapping_writer_, std::cerr, num_loaded_pairs_for_loading, num_loaded_pairs, mappings_on_diff_ref_seqs_for_diff_threads, mappings_on_diff_ref_seqs_for_diff_threads_for_saving, mappings_on_diff_ref_seqs_, mapping_output_file_path_, num_mappings_in_mem, max_num_mappings_in_mem, temp_mapping_file_handles_, mm_to_candidates_cache, mm_history1, mm_history2) num_threads(num_threads_) reduction(+:num_candidates_, num_mappings_, num_mapped_reads_, num_uniquely_mapped_reads_, num_barcode_in_whitelist_, num_corrected_barcode_)
     {
       thread_num_candidates = 0;
       thread_num_mappings = 0;
@@ -1260,8 +1263,8 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
                   mapping_output_file_path_ + ".temp" +
                   std::to_string(temp_mapping_file_handles_.size());
               temp_mapping_file_handles_.emplace_back(temp_mapping_file_handle);
-              SortOutputMappings(num_reference_sequences,
-                                 mappings_on_diff_ref_seqs_);
+              mapping_processor.SortOutputMappings(num_reference_sequences,
+                                                   mappings_on_diff_ref_seqs_);
               mapping_writer_.OutputTempMapping(
                   temp_mapping_file_handle.file_path, num_reference_sequences,
                   mappings_on_diff_ref_seqs_);
@@ -1305,7 +1308,7 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
 
   if (low_memory_mode_) {
     PostProcessingInLowMemory(num_mappings_in_mem, num_reference_sequences,
-                              reference);
+                              reference, mapping_processor);
   } else {
     // OutputMappingStatistics(num_reference_sequences,
     // mappings_on_diff_ref_seqs_, mappings_on_diff_ref_seqs_);
@@ -1315,31 +1318,32 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
     }
 
     if (remove_pcr_duplicates_) {
-      RemovePCRDuplicate(num_reference_sequences);
+      mapping_processor.RemovePCRDuplicate(num_reference_sequences,
+                                           mappings_on_diff_ref_seqs_);
       std::cerr << "After removing PCR duplications, ";
       OutputMappingStatistics(num_reference_sequences,
-                              deduped_mappings_on_diff_ref_seqs_,
-                              deduped_mappings_on_diff_ref_seqs_);
+                              mappings_on_diff_ref_seqs_,
+                              mappings_on_diff_ref_seqs_);
     } else {
-      SortOutputMappings(num_reference_sequences, mappings_on_diff_ref_seqs_);
+      mapping_processor.SortOutputMappings(num_reference_sequences,
+                                           mappings_on_diff_ref_seqs_);
     }
 
     if (allocate_multi_mappings_) {
-      AllocateMultiMappings(num_reference_sequences);
+      const uint64_t num_multi_mappings =
+          num_mapped_reads_ - num_uniquely_mapped_reads_;
+      mapping_processor.AllocateMultiMappings(
+          num_reference_sequences, num_multi_mappings,
+          multi_mapping_allocation_distance_, mappings_on_diff_ref_seqs_);
       std::cerr << "After allocating multi-mappings, ";
       OutputMappingStatistics(num_reference_sequences,
-                              allocated_mappings_on_diff_ref_seqs_,
-                              allocated_mappings_on_diff_ref_seqs_);
-      SortOutputMappings(num_reference_sequences,
-                         allocated_mappings_on_diff_ref_seqs_);
-      OutputMappings(num_reference_sequences, reference,
-                     allocated_mappings_on_diff_ref_seqs_);
-    } else {
-      std::vector<std::vector<MappingRecord>> &mappings =
-          remove_pcr_duplicates_ ? deduped_mappings_on_diff_ref_seqs_
-                                 : mappings_on_diff_ref_seqs_;
-      OutputMappings(num_reference_sequences, reference, mappings);
+                              mappings_on_diff_ref_seqs_,
+                              mappings_on_diff_ref_seqs_);
+      mapping_processor.SortOutputMappings(num_reference_sequences,
+                                           mappings_on_diff_ref_seqs_);
     }
+    OutputMappings(num_reference_sequences, reference,
+                   mappings_on_diff_ref_seqs_);
 
     // Temporarily disable feature matrix output. Do not delete the following
     // commented code.
@@ -2199,11 +2203,8 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
       barcode_format_[0], barcode_format_[1], barcode_format_[2]);
 
   mappings_on_diff_ref_seqs_.reserve(num_reference_sequences);
-  deduped_mappings_on_diff_ref_seqs_.reserve(num_reference_sequences);
   for (uint32_t i = 0; i < num_reference_sequences; ++i) {
     mappings_on_diff_ref_seqs_.emplace_back(std::vector<MappingRecord>());
-    deduped_mappings_on_diff_ref_seqs_.emplace_back(
-        std::vector<MappingRecord>());
   }
 
   // Preprocess barcodes for single cell data
@@ -2213,6 +2214,13 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
       ComputeBarcodeAbundance(initial_num_sample_barcodes_);
     }
   }
+
+  CandidateProcessor candidate_processor(min_num_seeds_required_for_mapping_,
+                                         max_seed_frequencies_);
+
+  MappingProcessor<MappingRecord> mapping_processor(
+      min_unique_mapping_mapq_, multi_mapping_allocation_seed_,
+      multi_mapping_allocation_distance_, max_num_best_mappings_);
 
   mapping_writer_.InitializeMappingOutput(
       barcode_length_, mapping_output_file_path_, mapping_output_format_);
@@ -2255,9 +2263,6 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
       }
     }
 
-    CandidateProcessor candidate_processor(min_num_seeds_required_for_mapping_,
-                                           max_seed_frequencies_);
-
     std::vector<std::vector<std::vector<MappingRecord>>>
         mappings_on_diff_ref_seqs_for_diff_threads;
     std::vector<std::vector<std::vector<MappingRecord>>>
@@ -2280,7 +2285,7 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
             num_threads_ / num_reference_sequences);
       }
     }
-#pragma omp parallel default(none) shared(barcode_whitelist_file_path_, output_mappings_not_in_whitelist_, window_size_, custom_rid_order_path_, error_threshold_, max_num_best_mappings_, max_seed_frequencies_, num_threads_, num_reads_, mm_history, reference, index, read_batch, barcode_batch, read_batch_for_loading, barcode_batch_for_loading, std::cerr, num_loaded_reads_for_loading, num_loaded_reads, num_reference_sequences, mappings_on_diff_ref_seqs_for_diff_threads, mappings_on_diff_ref_seqs_for_diff_threads_for_saving, mm_to_candidates_cache, mapping_writer_, candidate_processor) num_threads(num_threads_) reduction(+:num_candidates_, num_mappings_, num_mapped_reads_, num_uniquely_mapped_reads_, num_barcode_in_whitelist_, num_corrected_barcode_)
+#pragma omp parallel default(none) shared(barcode_whitelist_file_path_, output_mappings_not_in_whitelist_, window_size_, custom_rid_order_path_, error_threshold_, max_num_best_mappings_, max_seed_frequencies_, num_threads_, num_reads_, mm_history, reference, index, read_batch, barcode_batch, read_batch_for_loading, barcode_batch_for_loading, std::cerr, num_loaded_reads_for_loading, num_loaded_reads, num_reference_sequences, mappings_on_diff_ref_seqs_for_diff_threads, mappings_on_diff_ref_seqs_for_diff_threads_for_saving, mm_to_candidates_cache, mapping_writer_, candidate_processor, mapping_processor) num_threads(num_threads_) reduction(+:num_candidates_, num_mappings_, num_mapped_reads_, num_uniquely_mapped_reads_, num_barcode_in_whitelist_, num_corrected_barcode_)
     {
       thread_num_candidates = 0;
       thread_num_mappings = 0;
@@ -2454,31 +2459,30 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
   }
 
   if (remove_pcr_duplicates_) {
-    RemovePCRDuplicate(num_reference_sequences);
+    mapping_processor.RemovePCRDuplicate(num_reference_sequences,
+                                         mappings_on_diff_ref_seqs_);
     std::cerr << "After removing PCR duplications, ";
-    OutputMappingStatistics(num_reference_sequences,
-                            deduped_mappings_on_diff_ref_seqs_,
-                            deduped_mappings_on_diff_ref_seqs_);
+    OutputMappingStatistics(num_reference_sequences, mappings_on_diff_ref_seqs_,
+                            mappings_on_diff_ref_seqs_);
   } else {
-    SortOutputMappings(num_reference_sequences, mappings_on_diff_ref_seqs_);
+    mapping_processor.SortOutputMappings(num_reference_sequences,
+                                         mappings_on_diff_ref_seqs_);
   }
 
   if (allocate_multi_mappings_) {
-    AllocateMultiMappings(num_reference_sequences);
+    const uint64_t num_multi_mappings =
+        num_mapped_reads_ - num_uniquely_mapped_reads_;
+    mapping_processor.AllocateMultiMappings(
+        num_reference_sequences, num_multi_mappings,
+        multi_mapping_allocation_distance_, mappings_on_diff_ref_seqs_);
     std::cerr << "After allocating multi-mappings, ";
-    OutputMappingStatistics(num_reference_sequences,
-                            allocated_mappings_on_diff_ref_seqs_,
-                            allocated_mappings_on_diff_ref_seqs_);
-    SortOutputMappings(num_reference_sequences,
-                       allocated_mappings_on_diff_ref_seqs_);
-    OutputMappings(num_reference_sequences, reference,
-                   allocated_mappings_on_diff_ref_seqs_);
-  } else {
-    std::vector<std::vector<MappingRecord>> &mappings =
-        remove_pcr_duplicates_ ? deduped_mappings_on_diff_ref_seqs_
-                               : mappings_on_diff_ref_seqs_;
-    OutputMappings(num_reference_sequences, reference, mappings);
+    OutputMappingStatistics(num_reference_sequences, mappings_on_diff_ref_seqs_,
+                            mappings_on_diff_ref_seqs_);
+    mapping_processor.SortOutputMappings(num_reference_sequences,
+                                         mappings_on_diff_ref_seqs_);
   }
+  OutputMappings(num_reference_sequences, reference,
+                 mappings_on_diff_ref_seqs_);
 
   mapping_writer_.FinalizeMappingOutput();
   reference.FinalizeLoading();
@@ -3152,299 +3156,6 @@ uint32_t Chromap<MappingRecord>::MoveMappingsInBuffersToMappingContainer(
   // std::cerr << "Moved mappings in " << Chromap<>::GetRealTime() -
   // real_start_time << "s.\n";
   return num_moved_mappings;
-}
-
-template <typename MappingRecord>
-void Chromap<MappingRecord>::SortOutputMappings(
-    uint32_t num_reference_sequences,
-    std::vector<std::vector<MappingRecord>> &mappings) {
-  // double real_dedupe_start_time = Chromap<>::GetRealTime();
-  uint32_t num_mappings = 0;
-  for (uint32_t ri = 0; ri < num_reference_sequences; ++ri) {
-    std::sort(mappings[ri].begin(), mappings[ri].end());
-    num_mappings += mappings[ri].size();
-  }
-  // std::cerr << "Sorted " << num_mappings << " elements in " <<
-  // Chromap<>::GetRealTime() - real_dedupe_start_time << "s.\n";
-}
-
-template <typename MappingRecord>
-void Chromap<MappingRecord>::RemovePCRDuplicate(
-    uint32_t num_reference_sequences) {
-  uint32_t num_mappings = 0;
-  double real_dedupe_start_time = GetRealTime();
-  for (uint32_t ri = 0; ri < num_reference_sequences; ++ri) {
-    // double real_start_time = Chromap<>::GetRealTime();
-    // radix_sort_with_barcode(mappings_on_diff_ref_seqs_[ri].data(),
-    // mappings_on_diff_ref_seqs_[ri].data() +
-    // mappings_on_diff_ref_seqs_[ri].size());
-    std::sort(mappings_on_diff_ref_seqs_[ri].begin(),
-              mappings_on_diff_ref_seqs_[ri].end());
-    num_mappings += mappings_on_diff_ref_seqs_[ri].size();
-    // std::cerr << "Sorted " << mappings_on_diff_ref_seqs_[ri].size() << "
-    // elements on " << ri << " in " << Chromap<>::GetRealTime() -
-    // real_start_time << "s.\n";
-  }
-  std::cerr << "Sorted " << num_mappings << " elements in "
-            << GetRealTime() - real_dedupe_start_time << "s.\n";
-  num_mappings = 0;
-  for (uint32_t ri = 0; ri < num_reference_sequences; ++ri) {
-    if (mappings_on_diff_ref_seqs_[ri].size() != 0) {
-      deduped_mappings_on_diff_ref_seqs_[ri].emplace_back(
-          mappings_on_diff_ref_seqs_[ri]
-              .front());  // ideally I should output the last of the dups of
-                          // first mappings.
-      // std::vector<MappingRecord>::iterator last_it =
-      // mappings_on_diff_ref_seqs_[ri].begin();
-      auto last_it = mappings_on_diff_ref_seqs_[ri].begin();
-      uint32_t last_dup_count = 1;
-      // for (std::vector<MappingRecord>::iterator it =
-      // ++(mappings_on_diff_ref_seqs_[ri].begin()); it !=
-      // mappings_on_diff_ref_seqs_[ri].end(); ++it) {
-      for (auto it = ++(mappings_on_diff_ref_seqs_[ri].begin());
-           it != mappings_on_diff_ref_seqs_[ri].end(); ++it) {
-        if (!((*it) == (*last_it))) {
-          // last_it->num_dups = last_dup_count;
-          deduped_mappings_on_diff_ref_seqs_[ri].back().num_dups_ = std::min(
-              (uint32_t)std::numeric_limits<uint8_t>::max(), last_dup_count);
-          last_dup_count = 1;
-          deduped_mappings_on_diff_ref_seqs_[ri].emplace_back((*it));
-          last_it = it;
-        } else {
-          ++last_dup_count;
-        }
-      }
-      deduped_mappings_on_diff_ref_seqs_[ri].back().num_dups_ = std::min(
-          (uint32_t)std::numeric_limits<uint8_t>::max(), last_dup_count);
-      std::vector<MappingRecord>().swap(mappings_on_diff_ref_seqs_[ri]);
-      num_mappings += deduped_mappings_on_diff_ref_seqs_[ri].size();
-    }
-  }
-  std::cerr << num_mappings << " mappings left after dedupe in "
-            << GetRealTime() - real_dedupe_start_time << "s.\n";
-}
-
-template <typename MappingRecord>
-void Chromap<MappingRecord>::BuildAugmentedTree(uint32_t ref_id) {
-  // std::sort(mappings.begin(), mappings.end(), IntervalLess());
-  int max_level = 0;
-  size_t i, last_i = 0;  // last_i points to the rightmost node in the tree
-  uint32_t last = 0;     // last is the max value at node last_i
-  int k;
-  std::vector<MappingRecord> &mappings =
-      allocated_mappings_on_diff_ref_seqs_[ref_id];
-  std::vector<uint32_t> &extras = tree_extras_on_diff_ref_seqs_[ref_id];
-  if (mappings.size() == 0) {
-    max_level = -1;
-  }
-  for (i = 0; i < mappings.size(); i += 2) {
-    last_i = i;
-    // last = mappings[i].max = mappings[i].en; // leaves (i.e. at level 0)
-    last = extras[i] =
-        mappings[i].GetEndPosition();  // leaves (i.e. at level 0)
-  }
-  for (k = 1; 1LL << k <= (int64_t)mappings.size();
-       ++k) {  // process internal nodes in the bottom-up order
-    size_t x = 1LL << (k - 1);
-    size_t i0 = (x << 1) - 1;
-    size_t step = x << 2;  // i0 is the first node
-    for (i = i0; i < mappings.size();
-         i += step) {               // traverse all nodes at level k
-      uint32_t el = extras[i - x];  // max value of the left child
-      uint32_t er =
-          i + x < mappings.size() ? extras[i + x] : last;  // of the right child
-      uint32_t e = mappings[i].GetEndPosition();
-      e = e > el ? e : el;
-      e = e > er ? e : er;
-      extras[i] = e;  // set the max value for node i
-    }
-    last_i =
-        last_i >> k & 1
-            ? last_i - x
-            : last_i +
-                  x;  // last_i now points to the parent of the original last_i
-    if (last_i < mappings.size() &&
-        extras[last_i] > last)  // update last accordingly
-      last = extras[last_i];
-  }
-  max_level = k - 1;
-  tree_info_on_diff_ref_seqs_.emplace_back(max_level, mappings.size());
-}
-
-template <typename MappingRecord>
-uint32_t Chromap<MappingRecord>::GetNumOverlappedMappings(
-    uint32_t ref_id, const MappingRecord &mapping) {
-  int t = 0;
-  StackCell stack[64];
-  // out.clear();
-  int num_overlapped_mappings = 0;
-  int max_level = tree_info_on_diff_ref_seqs_[ref_id].first;
-  uint32_t num_tree_nodes = tree_info_on_diff_ref_seqs_[ref_id].second;
-  std::vector<MappingRecord> &mappings =
-      allocated_mappings_on_diff_ref_seqs_[ref_id];
-  std::vector<uint32_t> &extras = tree_extras_on_diff_ref_seqs_[ref_id];
-  // uint32_t interval_start = mapping.fragment_start_position;
-  uint32_t interval_start =
-      mapping.GetStartPosition() > (uint32_t)multi_mapping_allocation_distance_
-          ? mapping.GetStartPosition() - multi_mapping_allocation_distance_
-          : 0;
-  uint32_t interval_end =
-      mapping.GetEndPosition() + (uint32_t)multi_mapping_allocation_distance_;
-  stack[t++] = StackCell(max_level, (1LL << max_level) - 1,
-                         0);  // push the root; this is a top down traversal
-  while (
-      t) {  // the following guarantees that numbers in out[] are always sorted
-    StackCell z = stack[--t];
-    if (z.k <=
-        3) {  // we are in a small subtree; traverse every node in this subtree
-      size_t i, i0 = z.x >> z.k << z.k, i1 = i0 + (1LL << (z.k + 1)) - 1;
-      if (i1 >= num_tree_nodes) {
-        i1 = num_tree_nodes;
-      }
-      for (i = i0; i < i1 && mappings[i].GetStartPosition() < interval_end;
-           ++i) {
-        if (interval_start <
-            mappings[i].GetEndPosition()) {  // if overlap, append to out[]
-          // out.push_back(i);
-          ++num_overlapped_mappings;
-        }
-      }
-    } else if (z.w == 0) {  // if left child not processed
-      size_t y =
-          z.x - (1LL << (z.k - 1));  // the left child of z.x; NB: y may be out
-                                     // of range (i.e. y>=a.size())
-      stack[t++] = StackCell(
-          z.k, z.x,
-          1);  // re-add node z.x, but mark the left child having been processed
-      if (y >= num_tree_nodes ||
-          extras[y] > interval_start)  // push the left child if y is out of
-                                       // range or may overlap with the query
-        stack[t++] = StackCell(z.k - 1, y, 0);
-    } else if (z.x < num_tree_nodes &&
-               mappings[z.x].GetStartPosition() <
-                   interval_end) {  // need to push the right child
-      if (interval_start < mappings[z.x].GetEndPosition()) {
-        // out.push_back(z.x); // test if z.x overlaps the query; if yes, append
-        // to out[]
-        ++num_overlapped_mappings;
-      }
-      stack[t++] = StackCell(z.k - 1, z.x + (1LL << (z.k - 1)),
-                             0);  // push the right child
-    }
-  }
-  return num_overlapped_mappings;
-}
-
-template <typename MappingRecord>
-void Chromap<MappingRecord>::AllocateMultiMappings(
-    uint32_t num_reference_sequences) {
-  double real_start_time = GetRealTime();
-  std::vector<std::vector<MappingRecord>> &mappings =
-      remove_pcr_duplicates_ ? deduped_mappings_on_diff_ref_seqs_
-                             : mappings_on_diff_ref_seqs_;
-  multi_mappings_.reserve((num_mapped_reads_ - num_uniquely_mapped_reads_) / 2);
-  allocated_mappings_on_diff_ref_seqs_.reserve(num_reference_sequences);
-  tree_extras_on_diff_ref_seqs_.reserve(num_reference_sequences);
-  tree_info_on_diff_ref_seqs_.reserve(num_reference_sequences);
-  // two passes, one for memory pre-allocation, another to move the mappings.
-  for (uint32_t ri = 0; ri < num_reference_sequences; ++ri) {
-    allocated_mappings_on_diff_ref_seqs_.emplace_back(
-        std::vector<MappingRecord>());
-    tree_extras_on_diff_ref_seqs_.emplace_back(std::vector<uint32_t>());
-    uint32_t num_uni_mappings = 0;
-    uint32_t num_multi_mappings = 0;
-    for (uint32_t mi = 0; mi < mappings[ri].size(); ++mi) {
-      MappingRecord &mapping = mappings[ri][mi];
-      if ((mapping.mapq_) <
-          min_unique_mapping_mapq_) {  // we have to ensure that the mapq is
-                                       // lower than this if and only if it is a
-                                       // multi-read.
-        ++num_multi_mappings;
-      } else {
-        ++num_uni_mappings;
-      }
-    }
-    allocated_mappings_on_diff_ref_seqs_[ri].reserve(num_uni_mappings);
-    tree_extras_on_diff_ref_seqs_[ri].reserve(num_uni_mappings);
-    for (uint32_t mi = 0; mi < mappings[ri].size(); ++mi) {
-      MappingRecord &mapping = mappings[ri][mi];
-      if ((mapping.mapq_) < min_unique_mapping_mapq_) {
-        multi_mappings_.emplace_back(ri, mapping);
-      } else {
-        allocated_mappings_on_diff_ref_seqs_[ri].emplace_back(mapping);
-        tree_extras_on_diff_ref_seqs_[ri].emplace_back(0);
-      }
-    }
-    std::vector<MappingRecord>().swap(mappings[ri]);
-    BuildAugmentedTree(ri);
-  }
-  std::cerr << "Got all " << multi_mappings_.size() << " multi-mappings!\n";
-  std::stable_sort(multi_mappings_.begin(), multi_mappings_.end(),
-                   ReadIdLess<MappingRecord>);
-  std::vector<uint32_t> weights;
-  weights.reserve(max_num_best_mappings_);
-  uint32_t sum_weight = 0;
-  assert(multi_mappings_.size() > 0);
-  uint32_t previous_read_id = multi_mappings_[0].second.read_id_;
-  uint32_t start_mapping_index = 0;
-  // add a fake mapping at the end and make sure its id is different from the
-  // last one
-  assert(multi_mappings_.size() != UINT32_MAX);
-  std::pair<uint32_t, MappingRecord> foo_mapping = multi_mappings_.back();
-  foo_mapping.second.read_id_ = UINT32_MAX;
-  multi_mappings_.emplace_back(foo_mapping);
-  std::mt19937 generator(multi_mapping_allocation_seed_);
-  uint32_t current_read_id;  //, reference_id, mapping_index;
-  // uint32_t allocated_read_id, allocated_reference_id,
-  // allocated_mapping_index;
-  uint32_t num_allocated_multi_mappings = 0;
-  uint32_t num_multi_mappings_without_overlapping_unique_mappings = 0;
-  for (uint32_t mi = 0; mi < multi_mappings_.size(); ++mi) {
-    std::pair<uint32_t, MappingRecord> &current_multi_mapping =
-        multi_mappings_[mi];  // mappings[reference_id][mapping_index];
-    current_read_id = current_multi_mapping.second.read_id_;
-    uint32_t num_overlaps = GetNumOverlappedMappings(
-        current_multi_mapping.first, current_multi_mapping.second);
-    // std::cerr << mi << " " << current_read_id << " " << previous_read_id << "
-    // " << reference_id << " " << mapping_index << " " << interval_start << " "
-    // << num_overlaps << " " << sum_weight << "\n";
-    if (current_read_id == previous_read_id) {
-      weights.emplace_back(num_overlaps);
-      sum_weight += num_overlaps;
-    } else {
-      // deal with the previous one.
-      if (sum_weight == 0) {
-        ++num_multi_mappings_without_overlapping_unique_mappings;
-        // assert(weights.size() > 1); // After PCR dedupe, some multi-reads may
-        // become uni-reads. For now, we just assign it to that unique mapping
-        // positions. std::fill(weights.begin(), weights.end(), 1); // We drop
-        // the multi-mappings that have no overlap with uni-mappings.
-      } else {
-        std::discrete_distribution<uint32_t> distribution(weights.begin(),
-                                                          weights.end());
-        uint32_t randomly_assigned_mapping_index = distribution(generator);
-        allocated_mappings_on_diff_ref_seqs_
-            [multi_mappings_[start_mapping_index +
-                             randomly_assigned_mapping_index]
-                 .first]
-                .emplace_back(multi_mappings_[start_mapping_index +
-                                              randomly_assigned_mapping_index]
-                                  .second);
-        ++num_allocated_multi_mappings;
-      }
-      // update current
-      weights.clear();
-      weights.emplace_back(num_overlaps);
-      sum_weight = num_overlaps;
-      start_mapping_index = mi;
-      previous_read_id = current_read_id;
-    }
-  }
-  std::cerr << "Allocated " << num_allocated_multi_mappings
-            << " multi-mappings in " << GetRealTime() - real_start_time
-            << "s.\n";
-  std::cerr << "# multi-mappings that have no uni-mapping overlaps: "
-            << num_multi_mappings_without_overlapping_unique_mappings << ".\n";
 }
 
 template <typename MappingRecord>

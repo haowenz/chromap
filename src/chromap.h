@@ -14,6 +14,7 @@
 #include "ksort.h"
 #include "mapping_metadata.h"
 #include "mapping_parameters.h"
+#include "mapping_processor.h"
 #include "mapping_writer.h"
 #include "paired_end_mapping_metadata.h"
 #include "sequence_batch.h"
@@ -311,9 +312,10 @@ class Chromap {
                             int *mapping_end_position);
   int GetLongestMatchLength(const char *pattern, const char *text,
                             const int read_length);
-  void PostProcessingInLowMemory(uint32_t num_mappings_in_mem,
-                                 uint32_t num_reference_sequences,
-                                 const SequenceBatch &reference);
+  void PostProcessingInLowMemory(
+      uint32_t num_mappings_in_mem, uint32_t num_reference_sequences,
+      const SequenceBatch &reference,
+      const MappingProcessor<MappingRecord> &mapping_processor);
   void VerifyCandidatesOnOneDirectionUsingSIMD(
       Direction candidate_direction, const SequenceBatch &read_batch,
       uint32_t read_index, const SequenceBatch &reference,
@@ -473,12 +475,6 @@ class Chromap {
   int min_unique_mapping_mapq_ = 4;
   std::vector<TempMappingFileHandle<MappingRecord> > temp_mapping_file_handles_;
   std::vector<std::vector<MappingRecord> > mappings_on_diff_ref_seqs_;
-  std::vector<std::vector<MappingRecord> > deduped_mappings_on_diff_ref_seqs_;
-  std::vector<std::pair<uint32_t, MappingRecord> > multi_mappings_;
-  std::vector<std::vector<MappingRecord> > allocated_mappings_on_diff_ref_seqs_;
-  std::vector<std::vector<uint32_t> > tree_extras_on_diff_ref_seqs_;  // max
-  // (max_level, # nodes)
-  std::vector<std::pair<int, uint32_t> > tree_info_on_diff_ref_seqs_;
   MappingWriter<MappingRecord> mapping_writer_;
   // For mapping stats.
   uint64_t num_candidates_ = 0;
