@@ -21,8 +21,7 @@ namespace chromap {
 template <typename MappingRecord>
 struct TempMappingFileHandle {
   std::string file_path;
-  FILE *file;
-  bool all_loaded;
+  FILE* file;
   uint32_t num_mappings;
   uint32_t block_size;
   uint32_t current_rid;
@@ -32,14 +31,22 @@ struct TempMappingFileHandle {
   // This vector only keep mappings on the same ref seq.
   std::vector<MappingRecord> mappings;
 
-  inline void InitializeTempMappingLoading(uint32_t num_reference_sequences) {
+  inline const MappingRecord& GetCurrentMapping() const {
+    return mappings[current_mapping_index];
+  }
+
+  inline bool HasMappings() const { return num_mappings != 0; }
+
+  inline void InitializeTempMappingLoading(uint32_t temp_mapping_block_size) {
     file = fopen(file_path.c_str(), "rb");
     assert(file != NULL);
-    all_loaded = false;
+    num_mappings = 0;
+    block_size = temp_mapping_block_size;
     current_rid = 0;
+    current_mapping_index = 0;
     fread(&num_mappings_on_current_rid, sizeof(size_t), 1, file);
-    mappings.resize(block_size);
     num_loaded_mappings_on_current_rid = 0;
+    mappings.resize(block_size);
     // std::cerr << "Block size: " << block_size << ", initialize temp file " <<
     // file_path << "\n";
   }
@@ -78,11 +85,11 @@ struct TempMappingFileHandle {
           // std::cerr << "Load size " << num_mappings_on_current_rid << "\n";
           num_loaded_mappings_on_current_rid = 0;
         } else {
-          all_loaded = true;
           break;
         }
       }
     }
+
     current_mapping_index = 0;
   }
 
@@ -129,7 +136,6 @@ inline void TempMappingFileHandle<PAFMapping>::LoadTempMappingBlock(
         // std::cerr << "Load size " << num_mappings_on_current_rid << "\n";
         num_loaded_mappings_on_current_rid = 0;
       } else {
-        all_loaded = true;
         break;
       }
     }
@@ -172,7 +178,6 @@ inline void TempMappingFileHandle<PairedPAFMapping>::LoadTempMappingBlock(
         // std::cerr << "Load size " << num_mappings_on_current_rid << "\n";
         num_loaded_mappings_on_current_rid = 0;
       } else {
-        all_loaded = true;
         break;
       }
     }
@@ -215,7 +220,6 @@ inline void TempMappingFileHandle<SAMMapping>::LoadTempMappingBlock(
         // std::cerr << "Load size " << num_mappings_on_current_rid << "\n";
         num_loaded_mappings_on_current_rid = 0;
       } else {
-        all_loaded = true;
         break;
       }
     }
@@ -258,7 +262,6 @@ inline void TempMappingFileHandle<PairsMapping>::LoadTempMappingBlock(
         // std::cerr << "Load size " << num_mappings_on_current_rid << "\n";
         num_loaded_mappings_on_current_rid = 0;
       } else {
-        all_loaded = true;
         break;
       }
     }
