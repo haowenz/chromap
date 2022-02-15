@@ -20,7 +20,7 @@
 #include "sequence_batch.h"
 #include "temp_mapping.h"
 
-#define CHROMAP_VERSION "0.1.6-r309"
+#define CHROMAP_VERSION "0.1.6-r310"
 
 namespace chromap {
 
@@ -312,6 +312,10 @@ class Chromap {
                             int *mapping_end_position);
   int GetLongestMatchLength(const char *pattern, const char *text,
                             const int read_length);
+
+  size_t FindBestMappingIndexFromDuplicates(
+      const std::vector<MappingRecord> &duplicates);
+
   void PostProcessingInLowMemory(
       uint32_t num_mappings_in_mem, uint32_t num_reference_sequences,
       const SequenceBatch &reference,
@@ -379,6 +383,11 @@ class Chromap {
                         uint64_t &num_corrected_barcode);
 
   void BuildAugmentedTreeForPeaks(uint32_t ref_id);
+
+  void OutputTempMappings(
+      uint32_t num_reference_sequences,
+      const MappingProcessor<MappingRecord> &mapping_processor);
+
   void OutputMappingsInVector(
       uint8_t mapq_threshold, uint32_t num_reference_sequences,
       const SequenceBatch &reference,
