@@ -530,7 +530,7 @@ size_t Chromap<MappingRecord>::FindBestMappingIndexFromDuplicates(
 }
 
 template <typename MappingRecord>
-void Chromap<MappingRecord>::PostProcessingInLowMemory(
+void Chromap<MappingRecord>::ProcessAndOutputMappingsInLowMemory(
     uint32_t num_mappings_in_mem, uint32_t num_reference_sequences,
     const SequenceBatch &reference,
     const MappingProcessor<MappingRecord> &mapping_processor) {
@@ -1276,8 +1276,9 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
   index.Destroy();
 
   if (low_memory_mode_) {
-    PostProcessingInLowMemory(num_mappings_in_mem, num_reference_sequences,
-                              reference, mapping_processor);
+    ProcessAndOutputMappingsInLowMemory(num_mappings_in_mem,
+                                        num_reference_sequences, reference,
+                                        mapping_processor);
   } else {
     // OutputMappingStatistics(num_reference_sequences,
     // mappings_on_diff_ref_seqs_, mappings_on_diff_ref_seqs_);

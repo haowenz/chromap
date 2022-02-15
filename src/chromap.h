@@ -316,10 +316,11 @@ class Chromap {
   size_t FindBestMappingIndexFromDuplicates(
       const std::vector<MappingRecord> &duplicates);
 
-  void PostProcessingInLowMemory(
+  void ProcessAndOutputMappingsInLowMemory(
       uint32_t num_mappings_in_mem, uint32_t num_reference_sequences,
       const SequenceBatch &reference,
       const MappingProcessor<MappingRecord> &mapping_processor);
+
   void VerifyCandidatesOnOneDirectionUsingSIMD(
       Direction candidate_direction, const SequenceBatch &read_batch,
       uint32_t read_index, const SequenceBatch &reference,
