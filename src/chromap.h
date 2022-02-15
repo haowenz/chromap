@@ -11,7 +11,6 @@
 #include "index.h"
 #include "index_parameters.h"
 #include "khash.h"
-#include "ksort.h"
 #include "mapping_metadata.h"
 #include "mapping_parameters.h"
 #include "mapping_processor.h"
@@ -19,18 +18,11 @@
 #include "paired_end_mapping_metadata.h"
 #include "sequence_batch.h"
 #include "temp_mapping.h"
+#include "utils.h"
 
 #define CHROMAP_VERSION "0.1.6-r310"
 
 namespace chromap {
-
-struct _mm_history {
-  unsigned int timestamp;
-  std::vector<std::pair<uint64_t, uint64_t> > minimizers;
-  std::vector<Candidate> positive_candidates;
-  std::vector<Candidate> negative_candidates;
-  uint32_t repetitive_seed_length;
-};
 
 class ChromapDriver {
  public:
@@ -146,11 +138,6 @@ class Chromap {
       }
     }
   }
-
-  KRADIX_SORT_INIT(without_barcode, MappingWithoutBarcode,
-                   SortMappingWithoutBarcode, 11);
-  KRADIX_SORT_INIT(with_barcode, MappingWithBarcode, SortMappingWithoutBarcode,
-                   15);
 
   // For paired-end read mapping
   void MapPairedEndReads();

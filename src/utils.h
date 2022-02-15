@@ -4,6 +4,9 @@
 #include <sys/resource.h>
 #include <sys/time.h>
 
+#include "candidate.h"
+#include "khash.h"
+
 namespace chromap {
 
 struct uint128_t {
@@ -25,10 +28,13 @@ struct BarcodeWithQual {
   }
 };
 
-#define SortMappingWithoutBarcode(m)                                      \
-  (((((m).fragment_start_position_ << 16) | (m).fragment_length_) << 8) | \
-   (m).mapq_)
-//#define SortMappingWithoutBarcode(m) (m)
+struct _mm_history {
+  unsigned int timestamp;
+  std::vector<std::pair<uint64_t, uint64_t> > minimizers;
+  std::vector<Candidate> positive_candidates;
+  std::vector<Candidate> negative_candidates;
+  uint32_t repetitive_seed_length;
+};
 
 KHASH_MAP_INIT_INT64(k128, uint128_t);
 KHASH_MAP_INIT_INT64(k64_seq, uint64_t);
