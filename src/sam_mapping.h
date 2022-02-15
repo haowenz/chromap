@@ -168,6 +168,15 @@ class SAMMapping : public Mapping {
         cigar_(cigar),
         MD_(MD_tag) {
     uint32_t sequence_length = GetSequenceLength();
+
+    if (!IsPositiveStrand()) {
+      for (uint32_t i = 0; i < sequence_length; ++i) {
+        char current_qual = sequence_qual_[i];
+        sequence_qual_[i] = sequence_qual_[sequence_length - 1 - i];
+        sequence_qual_[sequence_length - 1 - i] = current_qual;
+      }
+    }
+
     if (sequence_length != sequence.length()) {
       sequence_ = sequence.substr(0, sequence_length);
       sequence_qual_ = sequence_qual.substr(0, sequence_length);

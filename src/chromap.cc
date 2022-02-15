@@ -1824,13 +1824,13 @@ void Chromap<MappingRecord>::ProcessBestMappingsForPairedEndReadOnOneDirection(
           EmplaceBackMappingRecord(
               read_id, read1_name, barcode_key, 1, ref_start_position1, rid1,
               flag1, first_read_direction == kPositive ? 1 : 0, is_unique, mapq,
-              NM1, n_cigar1, cigar1, MD_tag1, read1,
+              NM1, n_cigar1, cigar1, MD_tag1, effect_read1,
               read_batch1.GetSequenceQualAt(pair_index),
               &(mappings_on_diff_ref_seqs[rid1]));
           EmplaceBackMappingRecord(
               read_id, read2_name, barcode_key, 1, ref_start_position2, rid2,
               flag2, second_read_direction == kPositive ? 1 : 0, is_unique,
-              mapq, NM2, n_cigar2, cigar2, MD_tag2, read2,
+              mapq, NM2, n_cigar2, cigar2, MD_tag2, effect_read2,
               read_batch2.GetSequenceQualAt(pair_index),
               &(mappings_on_diff_ref_seqs[rid2]));
         } else if (mapping_output_format_ == MAPPINGFORMAT_PAIRS) {
@@ -2965,7 +2965,7 @@ void Chromap<MappingRecord>::ProcessBestMappingsForSingleEndRead(
           }
           EmplaceBackMappingRecord(read_id, read_name, barcode_key, 1,
                                    ref_start_position, rid, flag, 0, is_unique,
-                                   mapq, NM, n_cigar, cigar, MD_tag, read,
+                                   mapq, NM, n_cigar, cigar, MD_tag, effect_read,
                                    read_batch.GetSequenceQualAt(read_index),
                                    &(mappings_on_diff_ref_seqs[rid]));
         } else if (mapping_output_format_ == MAPPINGFORMAT_PAF) {
