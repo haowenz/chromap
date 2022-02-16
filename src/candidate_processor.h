@@ -18,6 +18,8 @@ namespace chromap {
 
 class CandidateProcessor {
  public:
+  CandidateProcessor() = delete;
+
   CandidateProcessor(int min_num_seeds_required_for_mapping,
                      const std::vector<int> max_seed_frequencies)
       : min_num_seeds_required_for_mapping_(min_num_seeds_required_for_mapping),
