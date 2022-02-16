@@ -87,6 +87,8 @@ class PairedEndMappingMetadata {
 
   friend class CandidateProcessor;
   template <typename MappingRecord>
+  friend class MappingGenerator;
+  template <typename MappingRecord>
   friend class Chromap;
 };
 
