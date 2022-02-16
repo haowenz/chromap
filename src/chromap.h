@@ -271,6 +271,7 @@ class Chromap {
 
   // Supportive functions
   void ConstructIndex();
+
   int BandedAlignPatternToText(const char *pattern, const char *text,
                                const int read_length,
                                int *mapping_end_location);
@@ -315,6 +316,7 @@ class Chromap {
       std::vector<std::pair<int, uint64_t> > &mappings, int &min_num_errors,
       int &num_best_mappings, int &second_min_num_errors,
       int &num_second_best_mappings);
+
   void VerifyCandidatesOnOneDirection(
       Direction candidate_direction, const SequenceBatch &read_batch,
       uint32_t read_index, const SequenceBatch &reference,
@@ -323,29 +325,35 @@ class Chromap {
       std::vector<int> &split_sites, int &min_num_errors,
       int &num_best_mappings, int &second_min_num_errors,
       int &num_second_best_mappings);
+
   void VerifyCandidates(const SequenceBatch &read_batch, uint32_t read_index,
                         const SequenceBatch &reference,
                         MappingMetadata &mapping_metadata);
+
   void GenerateMDTag(const char *pattern, const char *text,
                      int mapping_start_position, int n_cigar,
                      const uint32_t *cigar, int &NM, std::string &MD_tag);
-  void AllocateMultiMappings(uint32_t num_reference_sequences);
-  void RemovePCRDuplicate(uint32_t num_reference_sequences);
+
   uint32_t MoveMappingsInBuffersToMappingContainer(
       uint32_t num_reference_sequences,
       std::vector<std::vector<std::vector<MappingRecord> > >
           &mappings_on_diff_ref_seqs_for_diff_threads_for_saving);
+
   void OutputBarcodeStatistics();
+
   void OutputMappingStatistics();
+
   void OutputMappingStatistics(
       uint32_t num_reference_sequences,
       const std::vector<std::vector<MappingRecord> > &uni_mappings,
       const std::vector<std::vector<MappingRecord> > &multi_mappings);
+
   uint8_t GetMAPQForSingleEndRead(
       int error_threshold, int num_candidates, uint32_t repetitive_seed_length,
       uint16_t alignment_length, int min_num_errors, int num_best_mappings,
       int second_min_num_errors, int num_second_best_mappings,
       int max_num_error_difference, int read_length);
+
   uint8_t GetMAPQForPairedEndRead(
       int num_positive_candidates, int num_negative_candidates,
       uint32_t repetitive_seed_length1, uint32_t repetitive_seed_length2,
@@ -357,20 +365,17 @@ class Chromap {
       int second_min_num_errors2, int num_second_best_mappings1,
       int num_second_best_mappings2, int read1_length, int read2_length,
       int force_mapq, uint8_t &mapq1, uint8_t &mapq2);
-  void SortOutputMappings(uint32_t num_reference_sequences,
-                          std::vector<std::vector<MappingRecord> > &mappings);
-  void BuildAugmentedTree(uint32_t ref_id);
-  uint32_t GetNumOverlappedMappings(uint32_t ref_id,
-                                    const MappingRecord &mapping);
+
   void LoadBarcodeWhitelist();
+
   void ComputeBarcodeAbundance(uint64_t max_num_sample_barcodes);
+
   void UpdateBarcodeAbundance(uint32_t num_loaded_barcodes,
                               const SequenceBatch &barcode_batch);
+
   bool CorrectBarcodeAt(uint32_t barcode_index, SequenceBatch &barcode_batch,
                         uint64_t &num_barcode_in_whitelist,
                         uint64_t &num_corrected_barcode);
-
-  void BuildAugmentedTreeForPeaks(uint32_t ref_id);
 
   void OutputTempMappings(
       uint32_t num_reference_sequences,
@@ -383,20 +388,25 @@ class Chromap {
   void OutputMappings(uint32_t num_reference_sequences,
                       const SequenceBatch &reference,
                       const std::vector<std::vector<MappingRecord> > &mappings);
+
   int AdjustGapBeginning(Direction mapping_direction, const char *ref,
                          const char *read, int *gap_beginning, int read_end,
                          int ref_start_position, int ref_end_position,
                          int *n_cigar, uint32_t **cigar);
+
   void GetRefStartEndPositionForReadFromMapping(
       Direction mapping_direction, const std::pair<int, uint64_t> &mapping,
       const char *read, int read_length, int in_split_site,
       const SequenceBatch &reference, uint32_t *ref_start_position,
       uint32_t *ref_end_position, int *n_cigar, uint32_t **cigar, int *NM,
       std::string &MD_TAG);
+
   void GenerateCustomizedRidRank(const std::string rid_order_path,
                                  const SequenceBatch &reference,
                                  std::vector<int> &rid_rank);
+
   void RerankCandidatesRid(std::vector<Candidate> &candidates);
+
   void ParseReadFormat(const std::string &read_format);
 
  private:
