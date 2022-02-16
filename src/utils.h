@@ -3,6 +3,7 @@
 
 #include <sys/resource.h>
 #include <sys/time.h>
+#include <tuple>
 
 #include "candidate.h"
 #include "khash.h"
@@ -34,6 +35,21 @@ struct _mm_history {
   std::vector<Candidate> positive_candidates;
   std::vector<Candidate> negative_candidates;
   uint32_t repetitive_seed_length;
+};
+
+enum Direction {
+  kPositive,
+  kNegative,
+};
+
+struct mmHit {
+  uint32_t mi;
+  uint64_t position;
+
+  bool operator<(const mmHit &h) const {
+    // the inversed direction is to make a min-heap
+    return position > h.position;
+  }
 };
 
 KHASH_MAP_INIT_INT64(k128, uint128_t);

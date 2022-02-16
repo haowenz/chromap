@@ -8,26 +8,12 @@
 #include "khash.h"
 #include "mapping_metadata.h"
 #include "sequence_batch.h"
+#include "utils.h"
 
 namespace chromap {
 #define KHashFunctionForIndex(a) ((a) >> 1)
 #define KHashEqForIndex(a, b) ((a) >> 1 == (b) >> 1)
 KHASH_INIT(k64, uint64_t, uint64_t, 1, KHashFunctionForIndex, KHashEqForIndex);
-
-enum Direction {
-  kPositive,
-  kNegative,
-};
-
-struct mmHit {
-  uint32_t mi;
-  uint64_t position;
-
-  bool operator<(const mmHit &h) const {
-    // the inversed direction is to make a min-heap
-    return position > h.position;
-  }
-};
 
 class Index {
  public:

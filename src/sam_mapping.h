@@ -2,6 +2,7 @@
 #define SAMMAPPING_H_
 
 #include <string>
+#include <tuple>
 
 #include "mapping.h"
 
