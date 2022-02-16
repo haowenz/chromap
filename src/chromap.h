@@ -272,35 +272,6 @@ class Chromap {
   // Supportive functions
   void ConstructIndex();
 
-  int BandedAlignPatternToText(const char *pattern, const char *text,
-                               const int read_length,
-                               int *mapping_end_location);
-  int BandedAlignPatternToTextWithDropOff(const char *pattern, const char *text,
-                                          const int read_length,
-                                          int *mapping_end_location,
-                                          int *read_mapping_length);
-  int BandedAlignPatternToTextWithDropOffFrom3End(const char *pattern,
-                                                  const char *text,
-                                                  const int read_length,
-                                                  int *mapping_end_position,
-                                                  int *read_mapping_length);
-  void BandedAlign4PatternsToText(const char **patterns, const char *text,
-                                  int read_length,
-                                  int32_t *mapping_edit_distances,
-                                  int32_t *mapping_end_positions);
-  void BandedAlign8PatternsToText(const char **patterns, const char *text,
-                                  int read_length,
-                                  int16_t *mapping_edit_distances,
-                                  int16_t *mapping_end_positions);
-  void BandedTraceback(int min_num_errors, const char *pattern,
-                       const char *text, const int read_length,
-                       int *mapping_start_position);
-  void BandedTracebackToEnd(int min_num_errors, const char *pattern,
-                            const char *text, const int read_length,
-                            int *mapping_end_position);
-  int GetLongestMatchLength(const char *pattern, const char *text,
-                            const int read_length);
-
   size_t FindBestMappingIndexFromDuplicates(
       const std::vector<MappingRecord> &duplicates);
 
