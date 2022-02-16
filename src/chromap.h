@@ -301,10 +301,6 @@ class Chromap {
                         const SequenceBatch &reference,
                         MappingMetadata &mapping_metadata);
 
-  void GenerateMDTag(const char *pattern, const char *text,
-                     int mapping_start_position, int n_cigar,
-                     const uint32_t *cigar, int &NM, std::string &MD_tag);
-
   uint32_t MoveMappingsInBuffersToMappingContainer(
       uint32_t num_reference_sequences,
       std::vector<std::vector<std::vector<MappingRecord> > >
@@ -359,11 +355,6 @@ class Chromap {
   void OutputMappings(uint32_t num_reference_sequences,
                       const SequenceBatch &reference,
                       const std::vector<std::vector<MappingRecord> > &mappings);
-
-  int AdjustGapBeginning(Direction mapping_direction, const char *ref,
-                         const char *read, int *gap_beginning, int read_end,
-                         int ref_start_position, int ref_end_position,
-                         int *n_cigar, uint32_t **cigar);
 
   void GetRefStartEndPositionForReadFromMapping(
       Direction mapping_direction, const std::pair<int, uint64_t> &mapping,
