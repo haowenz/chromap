@@ -170,7 +170,7 @@ class SAMMapping : public Mapping {
     uint32_t sequence_length = GetSequenceLength();
 
     if (!IsPositiveStrand()) {
-      for (uint32_t i = 0; i < sequence_length; ++i) {
+      for (uint32_t i = 0; i < sequence_length / 2; ++i) {
         char current_qual = sequence_qual_[i];
         sequence_qual_[i] = sequence_qual_[sequence_length - 1 - i];
         sequence_qual_[sequence_length - 1 - i] = current_qual;
