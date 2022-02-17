@@ -59,14 +59,15 @@ class MappingGenerator {
       const SequenceBatch &read_batch, uint32_t read_index,
       const SequenceBatch &reference, const SequenceBatch &barcode_batch,
       MappingMetadata &mapping_metadata,
-      std::vector<std::vector<MappingRecord> > &mappings_on_diff_ref_seqs);
+      std::vector<std::vector<MappingRecord>> &mappings_on_diff_ref_seqs);
 
   void GenerateBestMappingsForPairedEndRead(
       uint32_t pair_index, const SequenceBatch &read_batch1,
       const SequenceBatch &read_batch2, const SequenceBatch &barcode_batch,
       const SequenceBatch &reference, std::vector<int> &best_mapping_indices,
-      int force_mapq, PairedEndMappingMetadata &paired_end_mapping_metadata,
-      std::vector<std::vector<MappingRecord> > &mappings_on_diff_ref_seqs);
+      std::mt19937 &generator, int force_mapq,
+      PairedEndMappingMetadata &paired_end_mapping_metadata,
+      std::vector<std::vector<MappingRecord>> &mappings_on_diff_ref_seqs);
 
  private:
   void ProcessBestMappingsForSingleEndRead(
@@ -77,21 +78,21 @@ class MappingGenerator {
       uint32_t read_index, const SequenceBatch &reference,
       const SequenceBatch &barcode_batch,
       const std::vector<int> &best_mapping_indices,
-      const std::vector<std::pair<int, uint64_t> > &mappings,
+      const std::vector<std::pair<int, uint64_t>> &mappings,
       const std::vector<int> &split_sites, int &best_mapping_index,
       int &num_best_mappings_reported,
-      std::vector<std::vector<MappingRecord> > &mappings_on_diff_ref_seqs);
+      std::vector<std::vector<MappingRecord>> &mappings_on_diff_ref_seqs);
 
   void GenerateBestMappingsForPairedEndReadOnOneDirection(
       Direction first_read_direction, uint32_t pair_index, int num_candidates1,
       int min_num_errors1, int num_best_mappings1, int second_min_num_errors1,
       int num_second_best_mappings1, const SequenceBatch &read_batch1,
-      const std::vector<std::pair<int, uint64_t> > &mappings1,
+      const std::vector<std::pair<int, uint64_t>> &mappings1,
       int num_candidates2, int min_num_errors2, int num_best_mappings2,
       int second_min_num_errors2, int num_second_best_mappings2,
       const SequenceBatch &read_batch2, const SequenceBatch &reference,
-      const std::vector<std::pair<int, uint64_t> > &mappings2,
-      std::vector<std::pair<uint32_t, uint32_t> > &best_mappings,
+      const std::vector<std::pair<int, uint64_t>> &mappings2,
+      std::vector<std::pair<uint32_t, uint32_t>> &best_mappings,
       int &min_sum_errors, int &num_best_mappings, int &second_min_sum_errors,
       int &num_second_best_mappings);
 
@@ -100,13 +101,13 @@ class MappingGenerator {
       int second_min_sum_errors, int min_num_errors1, int num_best_mappings1,
       int second_min_num_errors1, int num_second_best_mappings1,
       const SequenceBatch &read_batch1,
-      const std::vector<std::pair<int, uint64_t> > &mappings1,
+      const std::vector<std::pair<int, uint64_t>> &mappings1,
       int min_num_errors2, int num_best_mappings2, int second_min_num_errors2,
       int num_second_best_mappings2, const SequenceBatch &read_batch2,
       const SequenceBatch &reference,
-      const std::vector<std::pair<int, uint64_t> > &mappings2,
-      const std::vector<std::pair<uint32_t, uint32_t> > &edit_best_mappings,
-      std::vector<std::pair<uint32_t, uint32_t> > *best_mappings,
+      const std::vector<std::pair<int, uint64_t>> &mappings2,
+      const std::vector<std::pair<uint32_t, uint32_t>> &edit_best_mappings,
+      std::vector<std::pair<uint32_t, uint32_t>> *best_mappings,
       int *best_alignment_score, int *num_best_mappings,
       int *second_best_alignment_score, int *num_second_best_mappings);
 
@@ -116,20 +117,20 @@ class MappingGenerator {
       uint32_t repetitive_seed_length1, int min_num_errors1,
       int num_best_mappings1, int second_min_num_errors1,
       int num_second_best_mappings1, const SequenceBatch &read_batch1,
-      const std::vector<std::pair<int, uint64_t> > &mappings1,
+      const std::vector<std::pair<int, uint64_t>> &mappings1,
       const std::vector<int> &split_sites1, int num_candidates2,
       uint32_t repetitive_seed_length2, int min_num_errors2,
       int num_best_mappings2, int second_min_num_errors2,
       int num_second_best_mappings2, const SequenceBatch &read_batch2,
       const SequenceBatch &reference, const SequenceBatch &barcode_batch,
       const std::vector<int> &best_mapping_indices,
-      const std::vector<std::pair<int, uint64_t> > &mappings2,
+      const std::vector<std::pair<int, uint64_t>> &mappings2,
       const std::vector<int> &split_sites2,
-      const std::vector<std::pair<uint32_t, uint32_t> > &best_mappings,
+      const std::vector<std::pair<uint32_t, uint32_t>> &best_mappings,
       int min_sum_errors, int num_best_mappings, int second_min_sum_errors,
       int num_second_best_mappings, int &best_mapping_index,
       int &num_best_mappings_reported, int force_mapq,
-      std::vector<std::vector<MappingRecord> > &mappings_on_diff_ref_seqs);
+      std::vector<std::vector<MappingRecord>> &mappings_on_diff_ref_seqs);
 
   void GetRefStartEndPositionForReadFromMapping(
       Direction mapping_direction, const std::pair<int, uint64_t> &mapping,
@@ -278,7 +279,7 @@ void MappingGenerator<MappingRecord>::GenerateBestMappingsForPairedEndRead(
     uint32_t pair_index, const SequenceBatch &read_batch1,
     const SequenceBatch &read_batch2, const SequenceBatch &barcode_batch,
     const SequenceBatch &reference, std::vector<int> &best_mapping_indices,
-    int force_mapq,
+    std::mt19937 &generator, int force_mapq,
     PairedEndMappingMetadata &paired_end_mapping_metadata,
     std::vector<std::vector<MappingRecord>> &mappings_on_diff_ref_seqs) {
   const int num_positive_candidates1 =
@@ -422,7 +423,7 @@ void MappingGenerator<MappingRecord>::GenerateBestMappingsForPairedEndRead(
     // std::vector<int> best_mapping_indices(max_num_best_mappings_);
     std::iota(best_mapping_indices.begin(), best_mapping_indices.end(), 0);
     if (num_best_mappings > max_num_best_mappings_) {
-      std::mt19937 generator(11);
+      // std::mt19937 generator(11);
       for (int i = max_num_best_mappings_; i < num_best_mappings; ++i) {
         std::uniform_int_distribution<int> distribution(
             0, i);  // important: inclusive range
@@ -595,18 +596,20 @@ void MappingGenerator<MappingRecord>::ProcessBestMappingsForSingleEndRead(
 }
 
 template <typename MappingRecord>
-void MappingGenerator<MappingRecord>::GenerateBestMappingsForPairedEndReadOnOneDirection(
-    Direction first_read_direction, uint32_t pair_index, int num_candidates1,
-    int min_num_errors1, int num_best_mappings1, int second_min_num_errors1,
-    int num_second_best_mappings1, const SequenceBatch &read_batch1,
-    const std::vector<std::pair<int, uint64_t>> &mappings1, int num_candidates2,
-    int min_num_errors2, int num_best_mappings2, int second_min_num_errors2,
-    int num_second_best_mappings2, const SequenceBatch &read_batch2,
-    const SequenceBatch &reference,
-    const std::vector<std::pair<int, uint64_t>> &mappings2,
-    std::vector<std::pair<uint32_t, uint32_t>> &best_mappings,
-    int &min_sum_errors, int &num_best_mappings, int &second_min_sum_errors,
-    int &num_second_best_mappings) {
+void MappingGenerator<MappingRecord>::
+    GenerateBestMappingsForPairedEndReadOnOneDirection(
+        Direction first_read_direction, uint32_t pair_index,
+        int num_candidates1, int min_num_errors1, int num_best_mappings1,
+        int second_min_num_errors1, int num_second_best_mappings1,
+        const SequenceBatch &read_batch1,
+        const std::vector<std::pair<int, uint64_t>> &mappings1,
+        int num_candidates2, int min_num_errors2, int num_best_mappings2,
+        int second_min_num_errors2, int num_second_best_mappings2,
+        const SequenceBatch &read_batch2, const SequenceBatch &reference,
+        const std::vector<std::pair<int, uint64_t>> &mappings2,
+        std::vector<std::pair<uint32_t, uint32_t>> &best_mappings,
+        int &min_sum_errors, int &num_best_mappings, int &second_min_sum_errors,
+        int &num_second_best_mappings) {
   uint32_t i1 = 0;
   uint32_t i2 = 0;
   uint32_t min_overlap_length = min_read_length_;
@@ -708,20 +711,21 @@ void MappingGenerator<MappingRecord>::GenerateBestMappingsForPairedEndReadOnOneD
 }
 
 template <typename MappingRecord>
-void MappingGenerator<MappingRecord>::RecalibrateBestMappingsForPairedEndReadOnOneDirection(
-    Direction first_read_direction, uint32_t pair_index, int min_sum_errors,
-    int second_min_sum_errors, int min_num_errors1, int num_best_mappings1,
-    int second_min_num_errors1, int num_second_best_mappings1,
-    const SequenceBatch &read_batch1,
-    const std::vector<std::pair<int, uint64_t>> &mappings1, int min_num_errors2,
-    int num_best_mappings2, int second_min_num_errors2,
-    int num_second_best_mappings2, const SequenceBatch &read_batch2,
-    const SequenceBatch &reference,
-    const std::vector<std::pair<int, uint64_t>> &mappings2,
-    const std::vector<std::pair<uint32_t, uint32_t>> &edit_best_mappings,
-    std::vector<std::pair<uint32_t, uint32_t>> *best_mappings,
-    int *best_alignment_score, int *num_best_mappings,
-    int *second_best_alignment_score, int *num_second_best_mappings) {
+void MappingGenerator<MappingRecord>::
+    RecalibrateBestMappingsForPairedEndReadOnOneDirection(
+        Direction first_read_direction, uint32_t pair_index, int min_sum_errors,
+        int second_min_sum_errors, int min_num_errors1, int num_best_mappings1,
+        int second_min_num_errors1, int num_second_best_mappings1,
+        const SequenceBatch &read_batch1,
+        const std::vector<std::pair<int, uint64_t>> &mappings1,
+        int min_num_errors2, int num_best_mappings2, int second_min_num_errors2,
+        int num_second_best_mappings2, const SequenceBatch &read_batch2,
+        const SequenceBatch &reference,
+        const std::vector<std::pair<int, uint64_t>> &mappings2,
+        const std::vector<std::pair<uint32_t, uint32_t>> &edit_best_mappings,
+        std::vector<std::pair<uint32_t, uint32_t>> *best_mappings,
+        int *best_alignment_score, int *num_best_mappings,
+        int *second_best_alignment_score, int *num_second_best_mappings) {
   int8_t mat[25];
   int i, j, k;
   for (i = k = 0; i < 4; ++i) {
@@ -820,26 +824,27 @@ void MappingGenerator<MappingRecord>::RecalibrateBestMappingsForPairedEndReadOnO
 }
 
 template <typename MappingRecord>
-void MappingGenerator<MappingRecord>::ProcessBestMappingsForPairedEndReadOnOneDirection(
-    Direction first_read_direction, Direction second_read_direction,
-    uint32_t pair_index, uint8_t mapq, int num_candidates1,
-    uint32_t repetitive_seed_length1, int min_num_errors1,
-    int num_best_mappings1, int second_min_num_errors1,
-    int num_second_best_mappings1, const SequenceBatch &read_batch1,
-    const std::vector<std::pair<int, uint64_t>> &mappings1,
-    const std::vector<int> &split_sites1, int num_candidates2,
-    uint32_t repetitive_seed_length2, int min_num_errors2,
-    int num_best_mappings2, int second_min_num_errors2,
-    int num_second_best_mappings2, const SequenceBatch &read_batch2,
-    const SequenceBatch &reference, const SequenceBatch &barcode_batch,
-    const std::vector<int> &best_mapping_indices,
-    const std::vector<std::pair<int, uint64_t>> &mappings2,
-    const std::vector<int> &split_sites2,
-    const std::vector<std::pair<uint32_t, uint32_t>> &best_mappings,
-    int min_sum_errors, int num_best_mappings, int second_min_sum_errors,
-    int num_second_best_mappings, int &best_mapping_index,
-    int &num_best_mappings_reported, int force_mapq,
-    std::vector<std::vector<MappingRecord>> &mappings_on_diff_ref_seqs) {
+void MappingGenerator<MappingRecord>::
+    ProcessBestMappingsForPairedEndReadOnOneDirection(
+        Direction first_read_direction, Direction second_read_direction,
+        uint32_t pair_index, uint8_t mapq, int num_candidates1,
+        uint32_t repetitive_seed_length1, int min_num_errors1,
+        int num_best_mappings1, int second_min_num_errors1,
+        int num_second_best_mappings1, const SequenceBatch &read_batch1,
+        const std::vector<std::pair<int, uint64_t>> &mappings1,
+        const std::vector<int> &split_sites1, int num_candidates2,
+        uint32_t repetitive_seed_length2, int min_num_errors2,
+        int num_best_mappings2, int second_min_num_errors2,
+        int num_second_best_mappings2, const SequenceBatch &read_batch2,
+        const SequenceBatch &reference, const SequenceBatch &barcode_batch,
+        const std::vector<int> &best_mapping_indices,
+        const std::vector<std::pair<int, uint64_t>> &mappings2,
+        const std::vector<int> &split_sites2,
+        const std::vector<std::pair<uint32_t, uint32_t>> &best_mappings,
+        int min_sum_errors, int num_best_mappings, int second_min_sum_errors,
+        int num_second_best_mappings, int &best_mapping_index,
+        int &num_best_mappings_reported, int force_mapq,
+        std::vector<std::vector<MappingRecord>> &mappings_on_diff_ref_seqs) {
   const char *read1 = read_batch1.GetSequenceAt(pair_index);
   const char *read2 = read_batch2.GetSequenceAt(pair_index);
   const uint32_t read1_length = read_batch1.GetSequenceLengthAt(pair_index);

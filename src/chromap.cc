@@ -961,6 +961,7 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
       PairedEndMappingMetadata paired_end_mapping_metadata;
 
       std::vector<int> best_mapping_indices(max_num_best_mappings_);
+      std::mt19937 generator(11);
 #pragma omp single
       {
         double real_batch_start_time = GetRealTime();
@@ -1155,7 +1156,7 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
 
                     mapping_generator.GenerateBestMappingsForPairedEndRead(
                         pair_index, read_batch1, read_batch2, barcode_batch,
-                        reference, best_mapping_indices, force_mapq,
+                        reference, best_mapping_indices, generator, force_mapq,
                         paired_end_mapping_metadata, mappings_on_diff_ref_seqs);
 
                     if (paired_end_mapping_metadata.GetNumBestMappings() == 1) {
