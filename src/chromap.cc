@@ -12,7 +12,7 @@
 #include <sstream>
 #include <type_traits>
 
-//#include "alignment.h"
+#include "alignment.h"
 #include "candidate_processor.h"
 #include "cxxopts.hpp"
 #include "mapping_generator.h"
