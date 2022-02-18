@@ -1483,6 +1483,15 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
       barcode_length_, mapping_output_file_path_, mapping_output_format_);
   mapping_writer_.OutputHeader(num_reference_sequences, reference);
 
+  uint32_t num_mappings_in_mem = 0;
+  uint64_t max_num_mappings_in_mem =
+      1 * ((uint64_t)1 << 30) / sizeof(MappingRecord);
+  if (mapping_output_format_ == MAPPINGFORMAT_SAM ||
+      mapping_output_format_ == MAPPINGFORMAT_PAF ||
+      mapping_output_format_ == MAPPINGFORMAT_PAIRS) {
+    max_num_mappings_in_mem = 1 * ((uint64_t)1 << 29) / sizeof(MappingRecord);
+  }
+
   mm_cache mm_to_candidates_cache(2000003);
   mm_to_candidates_cache.SetKmerLength(kmer_size_);
   struct _mm_history *mm_history = new struct _mm_history[read_batch_size_];
@@ -1542,7 +1551,7 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
             num_threads_ / num_reference_sequences);
       }
     }
-#pragma omp parallel default(none) shared(barcode_whitelist_file_path_, output_mappings_not_in_whitelist_, window_size_, custom_rid_order_path_, error_threshold_, max_num_best_mappings_, max_seed_frequencies_, num_threads_, num_reads_, mm_history, reference, index, read_batch, barcode_batch, read_batch_for_loading, barcode_batch_for_loading, std::cerr, num_loaded_reads_for_loading, num_loaded_reads, num_reference_sequences, mappings_on_diff_ref_seqs_for_diff_threads, mappings_on_diff_ref_seqs_for_diff_threads_for_saving, mm_to_candidates_cache, mapping_writer_, candidate_processor, mapping_processor, mapping_generator) num_threads(num_threads_) reduction(+:num_candidates_, num_mappings_, num_mapped_reads_, num_uniquely_mapped_reads_, num_barcode_in_whitelist_, num_corrected_barcode_)
+#pragma omp parallel default(none) shared(barcode_whitelist_file_path_, output_mappings_not_in_whitelist_, window_size_, custom_rid_order_path_, error_threshold_, max_num_best_mappings_, max_seed_frequencies_, num_threads_, num_reads_, mm_history, reference, index, read_batch, barcode_batch, read_batch_for_loading, barcode_batch_for_loading, std::cerr, num_loaded_reads_for_loading, num_loaded_reads, num_reference_sequences, mappings_on_diff_ref_seqs_for_diff_threads, mappings_on_diff_ref_seqs_for_diff_threads_for_saving, mm_to_candidates_cache, mapping_writer_, candidate_processor, mapping_processor, mapping_generator, num_mappings_in_mem, max_num_mappings_in_mem) num_threads(num_threads_) reduction(+:num_candidates_, num_mappings_, num_mapped_reads_, num_uniquely_mapped_reads_, num_barcode_in_whitelist_, num_corrected_barcode_)
     {
       thread_num_candidates = 0;
       thread_num_mappings = 0;
@@ -1675,9 +1684,14 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
               mappings_on_diff_ref_seqs_for_diff_threads_for_saving);
 #pragma omp task
           {
-            MoveMappingsInBuffersToMappingContainer(
+            num_mappings_in_mem += MoveMappingsInBuffersToMappingContainer(
                 num_reference_sequences,
                 mappings_on_diff_ref_seqs_for_diff_threads_for_saving);
+            if (low_memory_mode_ &&
+                num_mappings_in_mem > max_num_mappings_in_mem) {
+              OutputTempMappings(num_reference_sequences, mapping_processor);
+              num_mappings_in_mem = 0;
+            }
           }
           std::cerr << "Mapped in " << GetRealTime() - real_batch_start_time
                     << "s.\n";
@@ -1710,36 +1724,44 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
 
   index.Destroy();
 
-  if (Tn5_shift_) {
-    ApplyTn5ShiftOnSingleEndMapping(num_reference_sequences,
-                                    &mappings_on_diff_ref_seqs_);
-  }
-
-  if (remove_pcr_duplicates_) {
-    mapping_processor.RemovePCRDuplicate(num_reference_sequences,
-                                         mappings_on_diff_ref_seqs_);
-    std::cerr << "After removing PCR duplications, ";
-    OutputMappingStatistics(num_reference_sequences, mappings_on_diff_ref_seqs_,
-                            mappings_on_diff_ref_seqs_);
+  if (low_memory_mode_) {
+    ProcessAndOutputMappingsInLowMemory(num_mappings_in_mem,
+                                        num_reference_sequences, reference,
+                                        mapping_processor);
   } else {
-    mapping_processor.SortOutputMappings(num_reference_sequences,
-                                         mappings_on_diff_ref_seqs_);
-  }
+    if (Tn5_shift_) {
+      ApplyTn5ShiftOnSingleEndMapping(num_reference_sequences,
+                                      &mappings_on_diff_ref_seqs_);
+    }
 
-  if (allocate_multi_mappings_) {
-    const uint64_t num_multi_mappings =
-        num_mapped_reads_ - num_uniquely_mapped_reads_;
-    mapping_processor.AllocateMultiMappings(
-        num_reference_sequences, num_multi_mappings,
-        multi_mapping_allocation_distance_, mappings_on_diff_ref_seqs_);
-    std::cerr << "After allocating multi-mappings, ";
-    OutputMappingStatistics(num_reference_sequences, mappings_on_diff_ref_seqs_,
-                            mappings_on_diff_ref_seqs_);
-    mapping_processor.SortOutputMappings(num_reference_sequences,
-                                         mappings_on_diff_ref_seqs_);
+    if (remove_pcr_duplicates_) {
+      mapping_processor.RemovePCRDuplicate(num_reference_sequences,
+                                           mappings_on_diff_ref_seqs_);
+      std::cerr << "After removing PCR duplications, ";
+      OutputMappingStatistics(num_reference_sequences,
+                              mappings_on_diff_ref_seqs_,
+                              mappings_on_diff_ref_seqs_);
+    } else {
+      mapping_processor.SortOutputMappings(num_reference_sequences,
+                                           mappings_on_diff_ref_seqs_);
+    }
+
+    if (allocate_multi_mappings_) {
+      const uint64_t num_multi_mappings =
+          num_mapped_reads_ - num_uniquely_mapped_reads_;
+      mapping_processor.AllocateMultiMappings(
+          num_reference_sequences, num_multi_mappings,
+          multi_mapping_allocation_distance_, mappings_on_diff_ref_seqs_);
+      std::cerr << "After allocating multi-mappings, ";
+      OutputMappingStatistics(num_reference_sequences,
+                              mappings_on_diff_ref_seqs_,
+                              mappings_on_diff_ref_seqs_);
+      mapping_processor.SortOutputMappings(num_reference_sequences,
+                                           mappings_on_diff_ref_seqs_);
+    }
+    OutputMappings(num_reference_sequences, reference,
+                   mappings_on_diff_ref_seqs_);
   }
-  OutputMappings(num_reference_sequences, reference,
-                 mappings_on_diff_ref_seqs_);
 
   mapping_writer_.FinalizeMappingOutput();
   reference.FinalizeLoading();

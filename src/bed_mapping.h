@@ -92,7 +92,7 @@ class MappingWithoutBarcode : public Mapping {
     return std::tie(fragment_start_position_) ==
            std::tie(m.fragment_start_position_);
   }
-  bool IsSamePosition(const MappingWithBarcode &m) const {
+  bool IsSamePosition(const MappingWithoutBarcode &m) const {
     return std::tie(fragment_start_position_) ==
            std::tie(m.fragment_start_position_);
   }
