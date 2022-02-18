@@ -3,6 +3,7 @@
 
 #include <string>
 #include <tuple>
+#include <vector>
 
 #include "mapping.h"
 
@@ -138,15 +139,17 @@ class SAMMapping : public Mapping {
   uint32_t is_rev_ : 1, is_alt_ : 1, is_unique_ : 1, mapq_ : 7,
       NM_ : 22;      // is_rev: whether on the reverse strand; mapq: mapping
                      // quality; NM: edit distance
-  int n_cigar_;      // number of CIGAR operations
-  uint32_t *cigar_;  // CIGAR in the BAM encoding: opLen<<4|op; op to integer
-                     // mapping: MIDSH=>01234
+  int n_cigar_ = 0;  // number of CIGAR operations
+  std::vector<uint32_t> cigar_;  // CIGAR in the BAM encoding: opLen<<4|op; op
+                                 // to integer mapping: MIDSH=>01234
   std::string MD_;
   std::string sequence_;
   std::string sequence_qual_;
   // char *XA;        // alternative mappings
   // int score, sub, alt_sc;
+
   SAMMapping() {}
+
   SAMMapping(uint32_t read_id, const std::string &read_name,
              uint64_t cell_barcode, uint8_t num_dups, int64_t pos, int rid,
              int flag, uint8_t is_rev, uint8_t is_alt, uint8_t is_unique,
@@ -166,24 +169,25 @@ class SAMMapping : public Mapping {
         mapq_(mapq),
         NM_(NM),
         n_cigar_(n_cigar),
-        cigar_(cigar),
         MD_(MD_tag) {
-    uint32_t sequence_length = GetSequenceLength();
+    cigar_ = std::vector<uint32_t>(cigar, cigar + n_cigar);
+    free(cigar);
 
     if (!IsPositiveStrand()) {
-      for (uint32_t i = 0; i < sequence_length / 2; ++i) {
-        char current_qual = sequence_qual_[i];
-        sequence_qual_[i] = sequence_qual_[sequence_length - 1 - i];
-        sequence_qual_[sequence_length - 1 - i] = current_qual;
+      for (uint32_t i = 0; i < sequence_qual.length(); ++i) {
+        sequence_qual_.push_back(sequence_qual[sequence_qual.length() - 1 - i]);
       }
+    } else {
+      sequence_qual_ = sequence_qual;
     }
 
-    if (sequence_length != sequence.length()) {
-      sequence_ = sequence.substr(0, sequence_length);
-      sequence_qual_ = sequence_qual.substr(0, sequence_length);
+    uint32_t sequence_length_deduced_from_cigar = GetSequenceLength();
+    if (sequence_length_deduced_from_cigar != sequence.length()) {
+      sequence_ = sequence.substr(0, sequence_length_deduced_from_cigar);
+      sequence_qual_ =
+          sequence_qual_.substr(0, sequence_length_deduced_from_cigar);
     } else {
       sequence_ = sequence;
-      sequence_qual_ = sequence_qual;
     }
   }
 
@@ -222,7 +226,6 @@ class SAMMapping : public Mapping {
       // cigar_string.append(std::to_string((BAM_CIGAR_STR[op])));
       cigar_string.push_back((BAM_CIGAR_STR[op]));
     }
-    delete[] cigar_;
     return cigar_string;
   }
   std::string GenerateIntTagString(const std::string &tag, int value) const {
@@ -275,6 +278,7 @@ class SAMMapping : public Mapping {
            (read_name_.length() + MD_.length()) * sizeof(char) +
            n_cigar_ * sizeof(uint32_t);
   }
+
   size_t WriteToFile(FILE *temp_mapping_output_file) const {
     size_t num_written_bytes = 0;
     num_written_bytes +=
@@ -301,9 +305,8 @@ class SAMMapping : public Mapping {
     num_written_bytes +=
         fwrite(&n_cigar_, sizeof(int), 1, temp_mapping_output_file);
     if (n_cigar_ > 0) {
-      num_written_bytes +=
-          fwrite(cigar_, sizeof(uint32_t), n_cigar_, temp_mapping_output_file);
-      delete[] cigar_;
+      num_written_bytes += fwrite(cigar_.data(), sizeof(uint32_t), n_cigar_,
+                                  temp_mapping_output_file);
     }
     uint16_t MD_length = MD_.length();
     num_written_bytes +=
@@ -321,6 +324,7 @@ class SAMMapping : public Mapping {
                                 sequence_length, temp_mapping_output_file);
     return num_written_bytes;
   }
+
   size_t LoadFromFile(FILE *temp_mapping_output_file) {
     int num_read_bytes = 0;
     num_read_bytes +=
@@ -347,12 +351,15 @@ class SAMMapping : public Mapping {
     is_unique_ = (rev_alt_unique_mapq_NM >> 29) & 1;
     mapq_ = ((rev_alt_unique_mapq_NM << 3) >> 25);
     NM_ = ((rev_alt_unique_mapq_NM << 10) >> 10);
+    int previous_n_cigar_ = n_cigar_;
     num_read_bytes +=
         fread(&n_cigar_, sizeof(int), 1, temp_mapping_output_file);
     if (n_cigar_ > 0) {
-      cigar_ = new uint32_t[n_cigar_];
-      num_read_bytes +=
-          fread(cigar_, sizeof(uint32_t), n_cigar_, temp_mapping_output_file);
+      if (previous_n_cigar_ < n_cigar_) {
+        cigar_.resize(n_cigar_);
+      }
+      num_read_bytes += fread(cigar_.data(), sizeof(uint32_t), n_cigar_,
+                              temp_mapping_output_file);
     }
     uint16_t MD_length = 0;
     num_read_bytes +=

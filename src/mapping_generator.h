@@ -1417,10 +1417,10 @@ void MappingGenerator<SAMMapping>::EmplaceBackMappingRecord(
     uint8_t is_unique, uint8_t mapq, uint32_t NM, int n_cigar, uint32_t *cigar,
     std::string &MD_tag, const char *read, const char *read_qual,
     std::vector<SAMMapping> *mappings_on_diff_ref_seqs) {
-  mappings_on_diff_ref_seqs->emplace_back(SAMMapping(
+  mappings_on_diff_ref_seqs->emplace_back(
       read_id, std::string(read_name), cell_barcode, num_dups, position, rid,
       flag, direction, 0, is_unique, mapq, NM, n_cigar, cigar, MD_tag,
-      std::string(read), std::string(read_qual)));
+      std::string(read), std::string(read_qual));
 }
 
 template <typename MappingRecord>
