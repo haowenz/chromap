@@ -102,6 +102,8 @@ class Chromap {
         custom_rid_order_path_(mapping_parameters.custom_rid_order_path),
         pairs_custom_rid_order_path_(
             mapping_parameters.pairs_custom_rid_order_path),
+        barcode_translate_table_path_(
+            mapping_parameters.barcode_translate_table_path),
         skip_barcode_check_(mapping_parameters.skip_barcode_check) {
     barcode_lookup_table_ = kh_init(k64_seq);
     barcode_whitelist_lookup_table_ = kh_init(k64_seq);
@@ -115,10 +117,6 @@ class Chromap {
     }
 
     ParseReadFormat(mapping_parameters.read_format);
-    if (mapping_parameters.barcode_translate_table_path.length() > 0) {
-      std::string tmp = mapping_parameters.barcode_translate_table_path;
-      mapping_writer_.SetBarcodeTranslateTable(tmp);
-    }
   }
 
   ~Chromap() {
@@ -179,7 +177,8 @@ class Chromap {
   void ProcessAndOutputMappingsInLowMemory(
       uint32_t num_mappings_in_mem, uint32_t num_reference_sequences,
       const SequenceBatch &reference,
-      const MappingProcessor<MappingRecord> &mapping_processor);
+      const MappingProcessor<MappingRecord> &mapping_processor,
+      MappingWriter<MappingRecord> &mapping_writer);
 
   uint32_t MoveMappingsInBuffersToMappingContainer(
       uint32_t num_reference_sequences,
@@ -197,16 +196,19 @@ class Chromap {
 
   void OutputTempMappings(
       uint32_t num_reference_sequences,
-      const MappingProcessor<MappingRecord> &mapping_processor);
+      const MappingProcessor<MappingRecord> &mapping_processor,
+      MappingWriter<MappingRecord> &mapping_writer);
 
   void OutputMappingsInVector(
       uint8_t mapq_threshold, uint32_t num_reference_sequences,
       const SequenceBatch &reference,
-      const std::vector<std::vector<MappingRecord> > &mappings);
+      const std::vector<std::vector<MappingRecord> > &mappings,
+      MappingWriter<MappingRecord> &mapping_writer);
 
   void OutputMappings(uint32_t num_reference_sequences,
                       const SequenceBatch &reference,
-                      const std::vector<std::vector<MappingRecord> > &mappings);
+                      const std::vector<std::vector<MappingRecord> > &mappings,
+                      MappingWriter<MappingRecord> &mapping_writer);
 
   void GenerateCustomizedRidRank(const std::string &rid_order_path,
                                  const SequenceBatch &reference,
@@ -278,6 +280,7 @@ class Chromap {
   std::string pairs_custom_rid_order_path_;
   std::vector<int> custom_rid_rank_;
   std::vector<int> pairs_custom_rid_rank_;
+  std::string barcode_translate_table_path_;
   // khash_t(k32_set)* barcode_whitelist_lookup_table_;
   khash_t(k64_seq) * barcode_whitelist_lookup_table_;
   // For identical read dedupe
@@ -288,7 +291,6 @@ class Chromap {
   int min_unique_mapping_mapq_ = 4;
   std::vector<TempMappingFileHandle<MappingRecord> > temp_mapping_file_handles_;
   std::vector<std::vector<MappingRecord> > mappings_on_diff_ref_seqs_;
-  MappingWriter<MappingRecord> mapping_writer_;
   // For mapping stats.
   uint64_t num_candidates_ = 0;
   uint64_t num_mappings_ = 0;

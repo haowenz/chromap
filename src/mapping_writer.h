@@ -90,7 +90,7 @@ class MappingWriter {
     custom_rid_rank_ = custom_rid_rank;
   }
 
-  inline void SetBarcodeTranslateTable(std::string &file) {
+  inline void SetBarcodeTranslateTable(const std::string &file) {
     barcode_translator_.SetTranslateTable(file);
   }
 
