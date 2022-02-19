@@ -183,7 +183,8 @@ class Chromap {
   uint32_t MoveMappingsInBuffersToMappingContainer(
       uint32_t num_reference_sequences,
       std::vector<std::vector<std::vector<MappingRecord> > >
-          &mappings_on_diff_ref_seqs_for_diff_threads_for_saving);
+          &mappings_on_diff_ref_seqs_for_diff_threads_for_saving,
+      std::vector<std::vector<MappingRecord> > &mappings_on_diff_ref_seqs);
 
   void OutputBarcodeStatistics();
 
@@ -196,6 +197,7 @@ class Chromap {
 
   void OutputTempMappings(
       uint32_t num_reference_sequences,
+      std::vector<std::vector<MappingRecord> > &mappings_on_diff_ref_seqs,
       const MappingProcessor<MappingRecord> &mapping_processor,
       MappingWriter<MappingRecord> &mapping_writer);
 
@@ -290,7 +292,6 @@ class Chromap {
   // For mapping
   int min_unique_mapping_mapq_ = 4;
   std::vector<TempMappingFileHandle<MappingRecord> > temp_mapping_file_handles_;
-  std::vector<std::vector<MappingRecord> > mappings_on_diff_ref_seqs_;
   // For mapping stats.
   uint64_t num_candidates_ = 0;
   uint64_t num_mappings_ = 0;
