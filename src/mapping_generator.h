@@ -55,6 +55,10 @@ class MappingGenerator {
 
   ~MappingGenerator() = default;
 
+  void VerifyCandidates(const SequenceBatch &read_batch, uint32_t read_index,
+                        const SequenceBatch &reference,
+                        MappingMetadata &mapping_metadata);
+
   void GenerateBestMappingsForSingleEndRead(
       const SequenceBatch &read_batch, uint32_t read_index,
       const SequenceBatch &reference, const SequenceBatch &barcode_batch,
@@ -70,6 +74,23 @@ class MappingGenerator {
       std::vector<std::vector<MappingRecord>> &mappings_on_diff_ref_seqs);
 
  private:
+  void VerifyCandidatesOnOneDirectionUsingSIMD(
+      Direction candidate_direction, const SequenceBatch &read_batch,
+      uint32_t read_index, const SequenceBatch &reference,
+      const std::vector<Candidate> &candidates,
+      std::vector<std::pair<int, uint64_t>> &mappings, int &min_num_errors,
+      int &num_best_mappings, int &second_min_num_errors,
+      int &num_second_best_mappings);
+
+  void VerifyCandidatesOnOneDirection(
+      Direction candidate_direction, const SequenceBatch &read_batch,
+      uint32_t read_index, const SequenceBatch &reference,
+      const std::vector<Candidate> &candidates,
+      std::vector<std::pair<int, uint64_t>> &mappings,
+      std::vector<int> &split_sites, int &min_num_errors,
+      int &num_best_mappings, int &second_min_num_errors,
+      int &num_second_best_mappings);
+
   void ProcessBestMappingsForSingleEndRead(
       Direction mapping_direction, uint8_t mapq, int num_candidates,
       uint32_t repetitive_seed_length, int min_num_errors,
@@ -211,6 +232,573 @@ class MappingGenerator {
   const std::vector<int> pairs_custom_rid_rank_;
 };
 
+template <typename MappingRecord>
+void MappingGenerator<MappingRecord>::VerifyCandidates(
+    const SequenceBatch &read_batch, uint32_t read_index,
+    const SequenceBatch &reference, MappingMetadata &mapping_metadata) {
+  const std::vector<std::pair<uint64_t, uint64_t>> &minimizers =
+      mapping_metadata.minimizers_;
+  const std::vector<Candidate> &positive_candidates =
+      mapping_metadata.positive_candidates_;
+  const std::vector<Candidate> &negative_candidates =
+      mapping_metadata.negative_candidates_;
+  std::vector<std::pair<int, uint64_t>> &positive_mappings =
+      mapping_metadata.positive_mappings_;
+  std::vector<std::pair<int, uint64_t>> &negative_mappings =
+      mapping_metadata.negative_mappings_;
+  std::vector<int> &positive_split_sites =
+      mapping_metadata.positive_split_sites_;
+  std::vector<int> &negative_split_sites =
+      mapping_metadata.negative_split_sites_;
+  int &min_num_errors = mapping_metadata.min_num_errors_;
+  int &num_best_mappings = mapping_metadata.num_best_mappings_;
+  int &second_min_num_errors = mapping_metadata.second_min_num_errors_;
+  int &num_second_best_mappings = mapping_metadata.num_second_best_mappings_;
+
+  min_num_errors = error_threshold_ + 1;
+  num_best_mappings = 0;
+  second_min_num_errors = error_threshold_ + 1;
+  num_second_best_mappings = 0;
+
+  if (!split_alignment_) {
+    // Directly obtain the mapping in ideal case.
+    uint32_t i;
+    int maxCnt = 0;
+    int maxTag = 0;
+    // printf("LI_DEBUG: %u %u\n", positive_candidates.size() +
+    // negative_candidates.size(), minimizers.size()) ;
+    for (i = 0; i < positive_candidates.size(); ++i) {
+#ifdef LI_DEBUG
+      printf("%s + %u %u %d:%d\n", __func__, i, positive_candidates[i].count,
+             (int)(positive_candidates[i].position >> 32),
+             (int)positive_candidates[i].position);
+#endif
+      if (positive_candidates[i].count == minimizers.size()) {
+        maxTag = i << 1;
+        ++maxCnt;
+      }
+    }
+    for (i = 0; i < negative_candidates.size(); ++i) {
+#ifdef LI_DEBUG
+      printf("%s - %u %u %d:%d\n", __func__, i, negative_candidates[i].count,
+             (int)(negative_candidates[i].position >> 32),
+             (int)negative_candidates[i].position);
+#endif
+      if (negative_candidates[i].count == minimizers.size()) {
+        maxTag = (i << 1) | 1;
+        ++maxCnt;
+      }
+    }
+    if (maxCnt == 1 &&
+        positive_candidates.size() + negative_candidates.size() == 1) {
+      Direction candidate_direction = (maxTag & 1) ? kNegative : kPositive;
+      uint32_t ci = maxTag >> 1;
+      num_best_mappings = 1;
+      num_second_best_mappings = 0;
+      min_num_errors = 0;
+
+      uint32_t rid = 0;
+      uint32_t position = 0;
+      uint32_t read_length = read_batch.GetSequenceLengthAt(read_index);
+      if (candidate_direction == kPositive) {
+        rid = positive_candidates[ci].position >> 32;
+        position = positive_candidates[ci].position;
+      } else {
+        rid = negative_candidates[ci].position >> 32;
+        position = (uint32_t)negative_candidates[ci].position - read_length + 1;
+      }
+      bool flag = true;
+      if (position < (uint32_t)error_threshold_ ||
+          position >= reference.GetSequenceLengthAt(rid) ||
+          position + read_length + error_threshold_ >=
+              reference.GetSequenceLengthAt(rid)) {
+        flag = false;
+      }
+      if (flag) {
+        if (candidate_direction == kPositive) {
+          positive_mappings.emplace_back(
+              0, positive_candidates[ci].position + read_length - 1);
+        } else {
+          negative_mappings.emplace_back(0, negative_candidates[ci].position);
+        }
+        // fprintf(stderr, "Saved %d\n", positive_candidates.size() +
+        // negative_candidates.size() ) ;
+        return;
+      }
+    }
+  }
+  // printf("Notsaved %d\n", positive_candidates.size() +
+  // negative_candidates.size()) ;
+
+  // Use more sophicated approach to obtain the mapping
+  if (split_alignment_) {
+    std::vector<Candidate> sorted_candidates(positive_candidates);
+    std::sort(sorted_candidates.begin(), sorted_candidates.end());
+    VerifyCandidatesOnOneDirection(
+        kPositive, read_batch, read_index, reference, sorted_candidates,
+        positive_mappings, positive_split_sites, min_num_errors,
+        num_best_mappings, second_min_num_errors, num_second_best_mappings);
+
+    sorted_candidates = negative_candidates;
+    std::sort(sorted_candidates.begin(), sorted_candidates.end());
+    VerifyCandidatesOnOneDirection(
+        kNegative, read_batch, read_index, reference, sorted_candidates,
+        negative_mappings, negative_split_sites, min_num_errors,
+        num_best_mappings, second_min_num_errors, num_second_best_mappings);
+  } else {
+    if (positive_candidates.size() < (size_t)NUM_VPU_LANES_) {
+      VerifyCandidatesOnOneDirection(
+          kPositive, read_batch, read_index, reference, positive_candidates,
+          positive_mappings, positive_split_sites, min_num_errors,
+          num_best_mappings, second_min_num_errors, num_second_best_mappings);
+    } else {
+      std::vector<Candidate> sorted_candidates(positive_candidates);
+      std::sort(sorted_candidates.begin(), sorted_candidates.end());
+      // std::cerr << "best: " << sorted_candidates[0].count << " " << "second
+      // best: " << sorted_candidates[1].count << "\n";
+      VerifyCandidatesOnOneDirectionUsingSIMD(
+          kPositive, read_batch, read_index, reference, sorted_candidates,
+          positive_mappings, min_num_errors, num_best_mappings,
+          second_min_num_errors, num_second_best_mappings);
+      // VerifyCandidatesOnOneDirectionUsingSIMD(kPositive, read_batch,
+      // read_index, reference, positive_candidates, positive_mappings,
+      // min_num_errors, num_best_mappings, second_min_num_errors,
+      // num_second_best_mappings);
+    }
+    if (negative_candidates.size() < (size_t)NUM_VPU_LANES_) {
+      VerifyCandidatesOnOneDirection(
+          kNegative, read_batch, read_index, reference, negative_candidates,
+          negative_mappings, negative_split_sites, min_num_errors,
+          num_best_mappings, second_min_num_errors, num_second_best_mappings);
+    } else {
+      std::vector<Candidate> sorted_candidates(negative_candidates);
+      std::sort(sorted_candidates.begin(), sorted_candidates.end());
+      // std::cerr << "best: " << sorted_candidates[0].count << " " << "second
+      // best: " << sorted_candidates[1].count << "\n";
+      VerifyCandidatesOnOneDirectionUsingSIMD(
+          kNegative, read_batch, read_index, reference, sorted_candidates,
+          negative_mappings, min_num_errors, num_best_mappings,
+          second_min_num_errors, num_second_best_mappings);
+      // VerifyCandidatesOnOneDirectionUsingSIMD(kNegative, read_batch,
+      // read_index, reference, negative_candidates, negative_mappings,
+      // min_num_errors, num_best_mappings, second_min_num_errors,
+      // num_second_best_mappings);
+    }
+  }
+}
+
+template <typename MappingRecord>
+void MappingGenerator<MappingRecord>::VerifyCandidatesOnOneDirectionUsingSIMD(
+    Direction candidate_direction, const SequenceBatch &read_batch,
+    uint32_t read_index, const SequenceBatch &reference,
+    const std::vector<Candidate> &candidates,
+    std::vector<std::pair<int, uint64_t>> &mappings, int &min_num_errors,
+    int &num_best_mappings, int &second_min_num_errors,
+    int &num_second_best_mappings) {
+  const char *read = read_batch.GetSequenceAt(read_index);
+  uint32_t read_length = read_batch.GetSequenceLengthAt(read_index);
+  const std::string &negative_read =
+      read_batch.GetNegativeSequenceAt(read_index);
+
+  size_t num_candidates = candidates.size();
+  Candidate valid_candidates[NUM_VPU_LANES_];
+  const char *valid_candidate_starts[NUM_VPU_LANES_];
+  uint32_t valid_candidate_index = 0;
+  size_t candidate_index = 0;
+  uint32_t candidate_count_threshold = 0;
+  while (candidate_index < num_candidates) {
+    if (candidates[candidate_index].count < candidate_count_threshold) break;
+    uint32_t rid = candidates[candidate_index].position >> 32;
+    uint32_t position = candidates[candidate_index].position;
+    if (candidate_direction == kNegative) {
+      position = position - read_length + 1;
+    }
+    if (position < (uint32_t)error_threshold_ ||
+        position >= reference.GetSequenceLengthAt(rid) ||
+        position + read_length + error_threshold_ >=
+            reference.GetSequenceLengthAt(rid)) {
+      // not a valid candidate
+      ++candidate_index;
+      continue;
+    } else {
+      valid_candidates[valid_candidate_index] =
+          candidates[candidate_index];  // reference.GetSequenceAt(rid) +
+                                        // position - error_threshold_;
+      valid_candidate_starts[valid_candidate_index] =
+          reference.GetSequenceAt(rid) + position - error_threshold_;
+      ++valid_candidate_index;
+    }
+    if (valid_candidate_index == (uint32_t)NUM_VPU_LANES_) {
+      if (NUM_VPU_LANES_ == 8) {
+        int16_t mapping_edit_distances[NUM_VPU_LANES_];
+        int16_t mapping_end_positions[NUM_VPU_LANES_];
+        for (int li = 0; li < NUM_VPU_LANES_; ++li) {
+          mapping_end_positions[li] = read_length - 1;
+        }
+        if (candidate_direction == kPositive) {
+          BandedAlign8PatternsToText(error_threshold_, valid_candidate_starts,
+                                     read, read_length, mapping_edit_distances,
+                                     mapping_end_positions);
+        } else {
+          BandedAlign8PatternsToText(
+              error_threshold_, valid_candidate_starts, negative_read.data(),
+              read_length, mapping_edit_distances, mapping_end_positions);
+        }
+        for (int mi = 0; mi < NUM_VPU_LANES_; ++mi) {
+          if (mapping_edit_distances[mi] <= error_threshold_) {
+            if (mapping_edit_distances[mi] < min_num_errors) {
+              second_min_num_errors = min_num_errors;
+              num_second_best_mappings = num_best_mappings;
+              min_num_errors = mapping_edit_distances[mi];
+              num_best_mappings = 1;
+            } else if (mapping_edit_distances[mi] == min_num_errors) {
+              num_best_mappings++;
+            } else if (mapping_edit_distances[mi] == second_min_num_errors) {
+              num_second_best_mappings++;
+            } else if (mapping_edit_distances[mi] < second_min_num_errors) {
+              num_second_best_mappings = 1;
+              second_min_num_errors = mapping_edit_distances[mi];
+            }
+            if (candidate_direction == kPositive) {
+              mappings.emplace_back((uint8_t)mapping_edit_distances[mi],
+                                    valid_candidates[mi].position -
+                                        error_threshold_ +
+                                        mapping_end_positions[mi]);
+            } else {
+              mappings.emplace_back((uint8_t)mapping_edit_distances[mi],
+                                    valid_candidates[mi].position -
+                                        read_length + 1 - error_threshold_ +
+                                        mapping_end_positions[mi]);
+            }
+          } else {
+            candidate_count_threshold = valid_candidates[mi].count;
+          }
+        }
+      } else if (NUM_VPU_LANES_ == 4) {
+        int32_t mapping_edit_distances[NUM_VPU_LANES_];
+        int32_t mapping_end_positions[NUM_VPU_LANES_];
+        for (int li = 0; li < NUM_VPU_LANES_; ++li) {
+          mapping_end_positions[li] = read_length - 1;
+        }
+        if (candidate_direction == kPositive) {
+          BandedAlign4PatternsToText(error_threshold_, valid_candidate_starts,
+                                     read, read_length, mapping_edit_distances,
+                                     mapping_end_positions);
+        } else {
+          BandedAlign4PatternsToText(
+              error_threshold_, valid_candidate_starts, negative_read.data(),
+              read_length, mapping_edit_distances, mapping_end_positions);
+        }
+        for (int mi = 0; mi < NUM_VPU_LANES_; ++mi) {
+          if (mapping_edit_distances[mi] <= error_threshold_) {
+            if (mapping_edit_distances[mi] < min_num_errors) {
+              second_min_num_errors = min_num_errors;
+              num_second_best_mappings = num_best_mappings;
+              min_num_errors = mapping_edit_distances[mi];
+              num_best_mappings = 1;
+            } else if (mapping_edit_distances[mi] == min_num_errors) {
+              num_best_mappings++;
+            } else if (mapping_edit_distances[mi] == second_min_num_errors) {
+              num_second_best_mappings++;
+            } else if (mapping_edit_distances[mi] < second_min_num_errors) {
+              num_second_best_mappings = 1;
+              second_min_num_errors = mapping_edit_distances[mi];
+            }
+            if (candidate_direction == kPositive) {
+              mappings.emplace_back((uint8_t)mapping_edit_distances[mi],
+                                    valid_candidates[mi].position -
+                                        error_threshold_ +
+                                        mapping_end_positions[mi]);
+            } else {
+              mappings.emplace_back((uint8_t)mapping_edit_distances[mi],
+                                    valid_candidates[mi].position -
+                                        read_length + 1 - error_threshold_ +
+                                        mapping_end_positions[mi]);
+            }
+          } else {
+            candidate_count_threshold = valid_candidates[mi].count;
+          }
+        }
+      }
+      valid_candidate_index = 0;
+      // Check whether we should stop early. Assuming the candidates are sorted
+      // if (GetMAPQForSingleEndRead(error_threshold_, num_candidates, 0,
+      // read_length + error_threshold_, *min_num_errors, *num_best_mappings,
+      // *second_min_num_errors, *num_second_best_mappings) == 0 &&
+      // candidate_count_threshold + 1 < candidates[candidate_index].count)
+      //  candidate_count_threshold = candidates[candidate_index].count - 1 ;
+    }
+    ++candidate_index;
+  }
+
+  for (uint32_t ci = 0; ci < valid_candidate_index; ++ci) {
+    uint32_t rid = valid_candidates[ci].position >> 32;
+    uint32_t position = valid_candidates[ci].position;
+    if (candidate_direction == kNegative) {
+      position = position - read_length + 1;
+    }
+    if (position < (uint32_t)error_threshold_ ||
+        position >= reference.GetSequenceLengthAt(rid) ||
+        position + read_length + error_threshold_ >=
+            reference.GetSequenceLengthAt(rid)) {
+      continue;
+    }
+    int mapping_end_position;
+    int num_errors;
+    if (candidate_direction == kPositive) {
+      num_errors = BandedAlignPatternToText(
+          error_threshold_,
+          reference.GetSequenceAt(rid) + position - error_threshold_, read,
+          read_length, &mapping_end_position);
+    } else {
+      num_errors = BandedAlignPatternToText(
+          error_threshold_,
+          reference.GetSequenceAt(rid) + position - error_threshold_,
+          negative_read.data(), read_length, &mapping_end_position);
+    }
+    if (num_errors <= error_threshold_) {
+      if (num_errors < min_num_errors) {
+        second_min_num_errors = min_num_errors;
+        num_second_best_mappings = num_best_mappings;
+        min_num_errors = num_errors;
+        num_best_mappings = 1;
+      } else if (num_errors == min_num_errors) {
+        num_best_mappings++;
+      } else if (num_errors == second_min_num_errors) {
+        num_second_best_mappings++;
+      } else if (num_errors < second_min_num_errors) {
+        num_second_best_mappings = 1;
+        second_min_num_errors = num_errors;
+      }
+      if (candidate_direction == kPositive) {
+        mappings.emplace_back(num_errors, valid_candidates[ci].position -
+                                              error_threshold_ +
+                                              mapping_end_position);
+      } else {
+        mappings.emplace_back(num_errors,
+                              valid_candidates[ci].position - read_length + 1 -
+                                  error_threshold_ + mapping_end_position);
+      }
+    }
+  }
+}
+
+template <typename MappingRecord>
+void MappingGenerator<MappingRecord>::VerifyCandidatesOnOneDirection(
+    Direction candidate_direction, const SequenceBatch &read_batch,
+    uint32_t read_index, const SequenceBatch &reference,
+    const std::vector<Candidate> &candidates,
+    std::vector<std::pair<int, uint64_t>> &mappings,
+    std::vector<int> &split_sites, int &min_num_errors, int &num_best_mappings,
+    int &second_min_num_errors, int &num_second_best_mappings) {
+  const char *read = read_batch.GetSequenceAt(read_index);
+  uint32_t read_length = read_batch.GetSequenceLengthAt(read_index);
+  const std::string &negative_read =
+      read_batch.GetNegativeSequenceAt(read_index);
+  uint32_t candidate_count_threshold = 0;
+
+  for (uint32_t ci = 0; ci < candidates.size(); ++ci) {
+    if (candidates[ci].count < candidate_count_threshold) break;
+    uint32_t rid = candidates[ci].position >> 32;
+    uint32_t position = candidates[ci].position;
+    if (candidate_direction == kNegative) {
+      position = position - read_length + 1;
+    }
+    if (position < (uint32_t)error_threshold_ ||
+        position >= reference.GetSequenceLengthAt(rid) ||
+        position + read_length + error_threshold_ >=
+            reference.GetSequenceLengthAt(rid)) {
+      continue;
+    }
+    int mapping_end_position = read_length;
+    int gap_beginning = 0;
+    int num_errors;
+    int allow_gap_beginning_ = 20;
+    int mapping_length_threshold = 30;
+    int allow_gap_beginning = allow_gap_beginning_ - error_threshold_;
+    int actual_num_errors = 0;
+    int read_mapping_length = 0;
+    int best_mapping_longest_match = 0;
+    int longest_match = 0;
+
+    if (split_alignment_) {
+      if (candidate_direction == kPositive) {
+        num_errors = BandedAlignPatternToTextWithDropOff(
+            error_threshold_,
+            reference.GetSequenceAt(rid) + position - error_threshold_, read,
+            read_length, &mapping_end_position, &read_mapping_length);
+        if (mapping_end_position < 0 && allow_gap_beginning > 0) {
+          int backup_num_errors = num_errors;
+          int backup_mapping_end_position = -mapping_end_position;
+          int backup_read_mapping_length = read_mapping_length;
+          num_errors = BandedAlignPatternToTextWithDropOff(
+              error_threshold_,
+              reference.GetSequenceAt(rid) + position - error_threshold_ +
+                  allow_gap_beginning,
+              read + allow_gap_beginning, read_length - allow_gap_beginning,
+              &mapping_end_position, &read_mapping_length);
+          if (num_errors > error_threshold_ || mapping_end_position < 0) {
+            num_errors = backup_num_errors;
+            mapping_end_position = backup_mapping_end_position;
+            read_mapping_length = backup_read_mapping_length;
+          } else {
+            gap_beginning = allow_gap_beginning;
+            mapping_end_position +=
+                gap_beginning;  // realign the mapping end position as it is the
+                                // alignment from the whole read
+            // I use this adjustment since "position" is based on the whole
+            // read, and it will be more consistent with no gap beginning case
+            read_mapping_length += gap_beginning;
+          }
+        }
+      } else {
+        num_errors = BandedAlignPatternToTextWithDropOffFrom3End(
+            error_threshold_,
+            reference.GetSequenceAt(rid) + position - error_threshold_,
+            negative_read.data(), read_length, &mapping_end_position,
+            &read_mapping_length);
+        if (mapping_end_position < 0 && allow_gap_beginning > 0) {
+          int backup_num_errors = num_errors;
+          int backup_mapping_end_position = -mapping_end_position;
+          int backup_read_mapping_length = read_mapping_length;
+          num_errors = BandedAlignPatternToTextWithDropOffFrom3End(
+              error_threshold_,
+              reference.GetSequenceAt(rid) + position - error_threshold_,
+              negative_read.data(), read_length - allow_gap_beginning,
+              &mapping_end_position, &read_mapping_length);
+          if (num_errors > error_threshold_ || mapping_end_position < 0) {
+            num_errors = backup_num_errors;
+            mapping_end_position = backup_mapping_end_position;
+            read_mapping_length = backup_read_mapping_length;
+          } else {
+            gap_beginning = allow_gap_beginning;
+            mapping_end_position += gap_beginning;
+            read_mapping_length += gap_beginning;
+          }
+        }
+      }
+      // std::cerr << "ne1: " << num_errors << " " << mapping_end_position <<
+      // "\n"; if (num_errors > 2 * error_threshold_) {
+      //  if (mapping_end_position - error_threshold_ - num_errors >=
+      //  mapping_length_threshold) {
+      //    mapping_end_position -= num_errors;
+      //    num_errors = -(mapping_end_position - error_threshold_);
+      //  }
+      //} else {
+      if (mapping_end_position + 1 - error_threshold_ - num_errors -
+              gap_beginning >=
+          mapping_length_threshold) {
+        actual_num_errors = num_errors;
+        num_errors = -(mapping_end_position - error_threshold_ - num_errors -
+                       gap_beginning);
+
+        if (candidates.size() > 200) {
+          if (candidate_direction == kPositive) {
+            longest_match = GetLongestMatchLength(
+                reference.GetSequenceAt(rid) + position, read, read_length);
+          } else {
+            longest_match =
+                GetLongestMatchLength(reference.GetSequenceAt(rid) + position,
+                                      negative_read.data(), read_length);
+          }
+        }
+      } else {
+        num_errors = error_threshold_ + 1;
+        actual_num_errors = error_threshold_ + 1;
+      }
+      //}
+      // std::cerr << "ne2: " << num_errors << " " << mapping_end_position <<
+      // "\n";
+    } else {
+      if (candidate_direction == kPositive) {
+        num_errors = BandedAlignPatternToText(
+            error_threshold_,
+            reference.GetSequenceAt(rid) + position - error_threshold_, read,
+            read_length, &mapping_end_position);
+      } else {
+        num_errors = BandedAlignPatternToText(
+            error_threshold_,
+            reference.GetSequenceAt(rid) + position - error_threshold_,
+            negative_read.data(), read_length, &mapping_end_position);
+      }
+    }
+
+    // std::cerr << "ne3: " << num_errors << " " << mapping_end_position << " "
+    // << actual_num_errors << " "<< reference.GetSequenceNameAt(rid) <<" " <<
+    // (int)candidates[ci].position << " " << position<<"\n";
+    if (num_errors <= error_threshold_) {
+      if (num_errors < min_num_errors) {
+        second_min_num_errors = min_num_errors;
+        num_second_best_mappings = num_best_mappings;
+        min_num_errors = num_errors;
+        num_best_mappings = 1;
+        if (split_alignment_) {
+          if (candidates.size() > 50) {
+            candidate_count_threshold = candidates[ci].count;
+          } else {
+            candidate_count_threshold = candidates[ci].count / 2;
+          }
+          if (second_min_num_errors < min_num_errors + error_threshold_ / 2 &&
+              best_mapping_longest_match > longest_match &&
+              candidates.size() > 200) {
+            second_min_num_errors = min_num_errors;
+          }
+        }
+        best_mapping_longest_match = longest_match;
+      } else if (num_errors == min_num_errors) {
+        num_best_mappings++;
+        /*if (split_alignment_ && candidates.size() > 50) {
+                candidate_count_threshold = candidates[ci].count + 1;
+        }*/
+      } else if (num_errors == second_min_num_errors) {
+        num_second_best_mappings++;
+      } else if (num_errors < second_min_num_errors) {
+        num_second_best_mappings = 1;
+        second_min_num_errors = num_errors;
+      }
+      if (candidate_direction == kPositive) {
+        mappings.emplace_back(
+            num_errors,
+            candidates[ci].position - error_threshold_ + mapping_end_position);
+      } else {
+        if (split_alignment_ && mapping_output_format_ != MAPPINGFORMAT_SAM) {
+          // mappings->emplace_back(num_errors, candidates[ci].position +
+          // error_threshold_ - 1 - mapping_end_position
+          //					+ read_mapping_length - 1 -
+          // gap_beginning);
+          mappings.emplace_back(num_errors,
+                                candidates[ci].position - gap_beginning);
+        } else {
+          // Need to minus gap_beginning because mapping_end_position is
+          // adjusted by it, but read_length is not.
+          // printf("%d %d %d\n", candidates[ci].position, mapping_end_position,
+          // gap_beginning);
+          mappings.emplace_back(num_errors,
+                                candidates[ci].position - read_length + 1 -
+                                    error_threshold_ + mapping_end_position);
+        }
+      }
+      if (split_alignment_) {
+        /*if (mapping_end_position - error_threshold_ < 0 ||
+           mapping_end_position - error_threshold_ > 200 || mapping_end_position
+           - error_threshold_ < 20) { printf("ERROR! %d %d %d %d %d\n",
+           mapping_end_position, error_threshold_,
+           read_length,(int)candidates[ci].position, gap_beginning);
+                }*/
+        /*if (num_errors < *min_num_errors + error_threshold_ / 2 && num_errors
+        > *min_num_errors
+                        && longest_match > best_mapping_longest_match &&
+        candidates.size() > 200) {
+                (*num_second_best_mappings)++;
+                *second_min_num_errors = *min_num_errors;
+        }*/
+        split_sites.emplace_back(((actual_num_errors & 0xff) << 24) |
+                                 ((gap_beginning & 0xff) << 16) |
+                                 (read_mapping_length & 0xffff));
+      }
+    }
+  }
+}
 template <typename MappingRecord>
 void MappingGenerator<MappingRecord>::GenerateBestMappingsForSingleEndRead(
     const SequenceBatch &read_batch, uint32_t read_index,
