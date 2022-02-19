@@ -153,19 +153,11 @@ class Chromap {
                                            const SequenceBatch &read_batch1,
                                            const SequenceBatch &read_batch2);
 
-  void ApplyTn5ShiftOnPairedEndMapping(
-      uint32_t num_reference_sequences,
-      std::vector<std::vector<MappingRecord> > &mappings);
-
   // For single-end read mapping
   void MapSingleEndReads();
 
   uint32_t LoadSingleEndReadsWithBarcodes(SequenceBatch *read_batch,
                                           SequenceBatch *barcode_batch);
-
-  void ApplyTn5ShiftOnSingleEndMapping(
-      uint32_t num_reference_sequences,
-      std::vector<std::vector<MappingRecord> > *mappings);
 
   // Supportive functions
   void ConstructIndex();

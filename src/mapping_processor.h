@@ -56,6 +56,10 @@ class MappingProcessor {
       int multi_mapping_allocation_distance,
       std::vector<std::vector<MappingRecord>> &mappings) const;
 
+  void ApplyTn5ShiftOnMappings(
+      uint32_t num_reference_sequences,
+      std::vector<std::vector<MappingRecord> > &mappings);
+
  private:
   void BuildAugmentedTree(
       uint32_t ref_id,
@@ -366,6 +370,20 @@ void MappingProcessor<MappingRecord>::AllocateMultiMappings(
             << "s.\n";
   std::cerr << "# multi-mappings that have no uni-mapping overlaps: "
             << num_multi_mappings_without_overlapping_unique_mappings << ".\n";
+}
+
+template <typename MappingRecord>
+void MappingProcessor<MappingRecord>::ApplyTn5ShiftOnMappings(
+    uint32_t num_reference_sequences,
+    std::vector<std::vector<MappingRecord>> &mappings) {
+  uint64_t num_shifted_mappings = 0;
+  for (auto &mappings_on_one_ref_seq : mappings) {
+    for (auto &mapping : mappings_on_one_ref_seq) {
+      mapping.Tn5Shift();
+      ++num_shifted_mappings;
+    }
+  }
+  std::cerr << "# shifted mappings: " << num_shifted_mappings << ".\n";
 }
 
 }  // namespace chromap
