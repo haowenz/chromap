@@ -178,6 +178,8 @@ class Chromap {
       uint32_t num_mappings_in_mem, uint32_t num_reference_sequences,
       const SequenceBatch &reference,
       const MappingProcessor<MappingRecord> &mapping_processor,
+      std::vector<TempMappingFileHandle<MappingRecord> >
+          &temp_mapping_file_handles,
       MappingWriter<MappingRecord> &mapping_writer);
 
   uint32_t MoveMappingsInBuffersToMappingContainer(
@@ -199,6 +201,8 @@ class Chromap {
       uint32_t num_reference_sequences,
       std::vector<std::vector<MappingRecord> > &mappings_on_diff_ref_seqs,
       const MappingProcessor<MappingRecord> &mapping_processor,
+      std::vector<TempMappingFileHandle<MappingRecord> >
+          &temp_mapping_file_handles,
       MappingWriter<MappingRecord> &mapping_writer);
 
   void OutputMappingsInVector(
@@ -291,7 +295,6 @@ class Chromap {
   std::vector<khash_t(k128) *> read_lookup_tables_;
   // For mapping
   int min_unique_mapping_mapq_ = 4;
-  std::vector<TempMappingFileHandle<MappingRecord> > temp_mapping_file_handles_;
   // For mapping stats.
   uint64_t num_candidates_ = 0;
   uint64_t num_mappings_ = 0;
