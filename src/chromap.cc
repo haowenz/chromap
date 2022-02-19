@@ -1289,8 +1289,8 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
     // OutputMappingStatistics(num_reference_sequences,
     // mappings_on_diff_ref_seqs_, mappings_on_diff_ref_seqs_);
     if (Tn5_shift_) {
-      ApplyTn5ShiftOnPairedEndMapping(num_reference_sequences,
-                                      mappings_on_diff_ref_seqs_);
+      mapping_processor.ApplyTn5ShiftOnMappings(num_reference_sequences,
+                                                mappings_on_diff_ref_seqs_);
     }
 
     if (remove_pcr_duplicates_) {
@@ -1402,24 +1402,6 @@ void Chromap<MappingRecord>::OutputMappings(
   //  mapq_threshold_ = 4;
   OutputMappingsInVector(mapq_threshold_, num_reference_sequences, reference,
                          mappings);
-}
-
-template <typename MappingRecord>
-void Chromap<MappingRecord>::ApplyTn5ShiftOnPairedEndMapping(
-    uint32_t num_reference_sequences,
-    std::vector<std::vector<MappingRecord>> &mappings) {
-  uint64_t num_shifted_mappings = 0;
-  for (auto &mappings_on_one_ref_seq : mappings) {
-    for (auto &mapping : mappings_on_one_ref_seq) {
-      // mapping.fragment_start_position += 4;
-      // mapping.positive_alignment_length -= 4;
-      // mapping.fragment_length -= 9;
-      // mapping.negative_alignment_length -= 5;
-      mapping.Tn5Shift();
-      ++num_shifted_mappings;
-    }
-  }
-  std::cerr << "# shifted mappings: " << num_shifted_mappings << ".\n";
 }
 
 template <typename MappingRecord>
@@ -1730,8 +1712,8 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
                                         mapping_processor);
   } else {
     if (Tn5_shift_) {
-      ApplyTn5ShiftOnSingleEndMapping(num_reference_sequences,
-                                      &mappings_on_diff_ref_seqs_);
+      mapping_processor.ApplyTn5ShiftOnMappings(num_reference_sequences,
+                                                mappings_on_diff_ref_seqs_);
     }
 
     if (remove_pcr_duplicates_) {
@@ -1766,27 +1748,6 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
   mapping_writer_.FinalizeMappingOutput();
   reference.FinalizeLoading();
   std::cerr << "Total time: " << GetRealTime() - real_start_time << "s.\n";
-}
-
-template <typename MappingRecord>
-void Chromap<MappingRecord>::ApplyTn5ShiftOnSingleEndMapping(
-    uint32_t num_reference_sequences,
-    std::vector<std::vector<MappingRecord>> *mappings) {
-  uint64_t num_shifted_mappings = 0;
-  for (auto &mappings_on_one_ref_seq : *mappings) {
-    for (auto &mapping : mappings_on_one_ref_seq) {
-      mapping.Tn5Shift();
-      // uint8_t strand = mapping.direction & 1;
-      // if (strand == 1) {
-      //  mapping.fragment_start_position += 4;
-      //  mapping.fragment_length -= 4;
-      //} else {
-      //  mapping.fragment_length -= 5;
-      //}
-      ++num_shifted_mappings;
-    }
-  }
-  std::cerr << "# shifted mappings: " << num_shifted_mappings << ".\n";
 }
 
 template <typename MappingRecord>
