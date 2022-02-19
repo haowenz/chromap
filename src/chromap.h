@@ -31,7 +31,7 @@ class ChromapDriver {
   void ParseArgsAndRun(int argc, char *argv[]);
 };
 
-template <typename MappingRecord = MappingWithoutBarcode>
+template <typename MappingRecord>
 class Chromap {
  public:
   // For index construction
@@ -139,28 +139,39 @@ class Chromap {
     }
   }
 
-  // For paired-end read mapping
+  void ConstructIndex();
+
+  void MapSingleEndReads();
+
   void MapPairedEndReads();
+
+ private:
+  uint32_t LoadSingleEndReadsWithBarcodes(SequenceBatch *read_batch,
+                                          SequenceBatch *barcode_batch);
 
   uint32_t LoadPairedEndReadsWithBarcodes(SequenceBatch &read_batch1,
                                           SequenceBatch &read_batch2,
                                           SequenceBatch &barcode_batch);
+
   void TrimAdapterForPairedEndRead(uint32_t pair_index,
                                    SequenceBatch &read_batch1,
                                    SequenceBatch &read_batch2);
+
   bool PairedEndReadWithBarcodeIsDuplicate(uint32_t pair_index,
                                            const SequenceBatch &barcode_batch,
                                            const SequenceBatch &read_batch1,
                                            const SequenceBatch &read_batch2);
 
-  // For single-end read mapping
-  void MapSingleEndReads();
+  void LoadBarcodeWhitelist();
 
-  uint32_t LoadSingleEndReadsWithBarcodes(SequenceBatch *read_batch,
-                                          SequenceBatch *barcode_batch);
+  void ComputeBarcodeAbundance(uint64_t max_num_sample_barcodes);
 
-  // Supportive functions
-  void ConstructIndex();
+  void UpdateBarcodeAbundance(uint32_t num_loaded_barcodes,
+                              const SequenceBatch &barcode_batch);
+
+  bool CorrectBarcodeAt(uint32_t barcode_index, SequenceBatch &barcode_batch,
+                        uint64_t &num_barcode_in_whitelist,
+                        uint64_t &num_corrected_barcode);
 
   size_t FindBestMappingIndexFromDuplicates(
       const std::vector<MappingRecord> &duplicates);
@@ -169,27 +180,6 @@ class Chromap {
       uint32_t num_mappings_in_mem, uint32_t num_reference_sequences,
       const SequenceBatch &reference,
       const MappingProcessor<MappingRecord> &mapping_processor);
-
-  void VerifyCandidatesOnOneDirectionUsingSIMD(
-      Direction candidate_direction, const SequenceBatch &read_batch,
-      uint32_t read_index, const SequenceBatch &reference,
-      const std::vector<Candidate> &candidates,
-      std::vector<std::pair<int, uint64_t> > &mappings, int &min_num_errors,
-      int &num_best_mappings, int &second_min_num_errors,
-      int &num_second_best_mappings);
-
-  void VerifyCandidatesOnOneDirection(
-      Direction candidate_direction, const SequenceBatch &read_batch,
-      uint32_t read_index, const SequenceBatch &reference,
-      const std::vector<Candidate> &candidates,
-      std::vector<std::pair<int, uint64_t> > &mappings,
-      std::vector<int> &split_sites, int &min_num_errors,
-      int &num_best_mappings, int &second_min_num_errors,
-      int &num_second_best_mappings);
-
-  void VerifyCandidates(const SequenceBatch &read_batch, uint32_t read_index,
-                        const SequenceBatch &reference,
-                        MappingMetadata &mapping_metadata);
 
   uint32_t MoveMappingsInBuffersToMappingContainer(
       uint32_t num_reference_sequences,
@@ -205,17 +195,6 @@ class Chromap {
       const std::vector<std::vector<MappingRecord> > &uni_mappings,
       const std::vector<std::vector<MappingRecord> > &multi_mappings);
 
-  void LoadBarcodeWhitelist();
-
-  void ComputeBarcodeAbundance(uint64_t max_num_sample_barcodes);
-
-  void UpdateBarcodeAbundance(uint32_t num_loaded_barcodes,
-                              const SequenceBatch &barcode_batch);
-
-  bool CorrectBarcodeAt(uint32_t barcode_index, SequenceBatch &barcode_batch,
-                        uint64_t &num_barcode_in_whitelist,
-                        uint64_t &num_corrected_barcode);
-
   void OutputTempMappings(
       uint32_t num_reference_sequences,
       const MappingProcessor<MappingRecord> &mapping_processor);
@@ -224,11 +203,12 @@ class Chromap {
       uint8_t mapq_threshold, uint32_t num_reference_sequences,
       const SequenceBatch &reference,
       const std::vector<std::vector<MappingRecord> > &mappings);
+
   void OutputMappings(uint32_t num_reference_sequences,
                       const SequenceBatch &reference,
                       const std::vector<std::vector<MappingRecord> > &mappings);
 
-  void GenerateCustomizedRidRank(const std::string rid_order_path,
+  void GenerateCustomizedRidRank(const std::string &rid_order_path,
                                  const SequenceBatch &reference,
                                  std::vector<int> &rid_rank);
 
@@ -236,7 +216,6 @@ class Chromap {
 
   void ParseReadFormat(const std::string &read_format);
 
- private:
   // Parameters
   int kmer_size_;
   int window_size_;
@@ -286,8 +265,8 @@ class Chromap {
   std::vector<std::string> read_file2_paths_;
   std::vector<std::string> barcode_file_paths_;
   std::string barcode_whitelist_file_path_;
-  int barcode_format_[3];  // 0-start, 1-end (includsive), 2-strand(-1:minus,
-                           // 1:plus)
+  // 0-start, 1-end (includsive), 2-strand(-1:minus, 1:plus)
+  int barcode_format_[3];
   int read1_format_[3];
   int read2_format_[3];
   std::string mapping_output_file_path_;
