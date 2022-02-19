@@ -535,8 +535,10 @@ void Chromap<MappingRecord>::ProcessAndOutputMappingsInLowMemory(
     uint32_t num_mappings_in_mem, uint32_t num_reference_sequences,
     const SequenceBatch &reference,
     const MappingProcessor<MappingRecord> &mapping_processor,
+    std::vector<TempMappingFileHandle<MappingRecord>>
+        &temp_mapping_file_handles,
     MappingWriter<MappingRecord> &mapping_writer) {
-  if (temp_mapping_file_handles_.size() == 0) {
+  if (temp_mapping_file_handles.size() == 0) {
     return;
   }
 
@@ -549,15 +551,13 @@ void Chromap<MappingRecord>::ProcessAndOutputMappingsInLowMemory(
       mapping_output_format_ == MAPPINGFORMAT_PAF) {
     max_mem_size = (uint64_t)1 << 30;
   }
-  for (size_t hi = 0; hi < temp_mapping_file_handles_.size(); ++hi) {
-    const uint32_t temp_mapping_block_size = max_mem_size /
-                                             temp_mapping_file_handles_.size() /
-                                             sizeof(MappingRecord);
+  for (size_t hi = 0; hi < temp_mapping_file_handles.size(); ++hi) {
+    const uint32_t temp_mapping_block_size =
+        max_mem_size / temp_mapping_file_handles.size() / sizeof(MappingRecord);
 
-    temp_mapping_file_handles_[hi].InitializeTempMappingLoading(
+    temp_mapping_file_handles[hi].InitializeTempMappingLoading(
         temp_mapping_block_size);
-    temp_mapping_file_handles_[hi].LoadTempMappingBlock(
-        num_reference_sequences);
+    temp_mapping_file_handles[hi].LoadTempMappingBlock(num_reference_sequences);
   }
 
   // Merge and dedupe.
@@ -578,19 +578,18 @@ void Chromap<MappingRecord>::ProcessAndOutputMappingsInLowMemory(
   while (true) {
     // Merge, dedupe and output.
     // Find min first (sorted by rid and then barcode and then positions).
-    size_t min_handle_index = temp_mapping_file_handles_.size();
+    size_t min_handle_index = temp_mapping_file_handles.size();
     uint32_t min_rid = std::numeric_limits<uint32_t>::max();
 
-    for (size_t hi = 0; hi < temp_mapping_file_handles_.size(); ++hi) {
+    for (size_t hi = 0; hi < temp_mapping_file_handles.size(); ++hi) {
       const TempMappingFileHandle<MappingRecord> &current_handle =
-          temp_mapping_file_handles_[hi];
+          temp_mapping_file_handles[hi];
       if (current_handle.HasMappings()) {
         const bool rid_is_smaller = current_handle.current_rid < min_rid;
         const bool same_rid_smaller_mapping =
             current_handle.current_rid == min_rid &&
             current_handle.GetCurrentMapping() <
-                temp_mapping_file_handles_[min_handle_index]
-                    .GetCurrentMapping();
+                temp_mapping_file_handles[min_handle_index].GetCurrentMapping();
 
         if (rid_is_smaller || same_rid_smaller_mapping) {
           min_handle_index = hi;
@@ -601,7 +600,7 @@ void Chromap<MappingRecord>::ProcessAndOutputMappingsInLowMemory(
 
     // All mappings are merged. We only have to handle the case when the last
     // mapping is a duplicate.
-    if (min_handle_index == temp_mapping_file_handles_.size()) {
+    if (min_handle_index == temp_mapping_file_handles.size()) {
       break;
     }
 
@@ -609,7 +608,7 @@ void Chromap<MappingRecord>::ProcessAndOutputMappingsInLowMemory(
 
     // Output the current min mapping if it is not a duplicate.
     const MappingRecord &current_min_mapping =
-        temp_mapping_file_handles_[min_handle_index].GetCurrentMapping();
+        temp_mapping_file_handles[min_handle_index].GetCurrentMapping();
 
     const bool is_first_iteration = num_total_mappings == 1;
     const bool current_mapping_is_duplicated_at_cell_level =
@@ -672,7 +671,7 @@ void Chromap<MappingRecord>::ProcessAndOutputMappingsInLowMemory(
       }
     }
 
-    temp_mapping_file_handles_[min_handle_index].Next(num_reference_sequences);
+    temp_mapping_file_handles[min_handle_index].Next(num_reference_sequences);
   }
 
   if (last_mapping.mapq_ >= mapq_threshold_) {
@@ -700,9 +699,9 @@ void Chromap<MappingRecord>::ProcessAndOutputMappingsInLowMemory(
   }
 
   // Delete temp files.
-  for (size_t hi = 0; hi < temp_mapping_file_handles_.size(); ++hi) {
-    temp_mapping_file_handles_[hi].FinalizeTempMappingLoading();
-    remove(temp_mapping_file_handles_[hi].file_path.c_str());
+  for (size_t hi = 0; hi < temp_mapping_file_handles.size(); ++hi) {
+    temp_mapping_file_handles[hi].FinalizeTempMappingLoading();
+    remove(temp_mapping_file_handles[hi].file_path.c_str());
   }
 
   if (remove_pcr_duplicates_) {
@@ -845,6 +844,8 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
     mappings_on_diff_ref_seqs.emplace_back(std::vector<MappingRecord>());
   }
 
+  std::vector<TempMappingFileHandle<MappingRecord>> temp_mapping_file_handles;
+
   // Preprocess barcodes for single cell data
   if (!is_bulk_data_) {
     if (!barcode_whitelist_file_path_.empty()) {
@@ -950,7 +951,7 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
       }
     }
 
-#pragma omp parallel default(none) shared(output_mappings_not_in_whitelist_, barcode_whitelist_file_path_, trim_adapters_, window_size_, custom_rid_order_path_, split_alignment_, error_threshold_, max_seed_frequencies_, max_num_best_mappings_, max_insert_size_, num_threads_, num_reads_, low_memory_mode_, num_reference_sequences, reference, index, read_batch1, read_batch2, barcode_batch, read_batch1_for_loading, read_batch2_for_loading, barcode_batch_for_loading, candidate_processor, mapping_processor, mapping_generator, mapping_writer, std::cerr, num_loaded_pairs_for_loading, num_loaded_pairs, mappings_on_diff_ref_seqs_for_diff_threads, mappings_on_diff_ref_seqs_for_diff_threads_for_saving, mappings_on_diff_ref_seqs, mapping_output_file_path_, num_mappings_in_mem, max_num_mappings_in_mem, temp_mapping_file_handles_, mm_to_candidates_cache, mm_history1, mm_history2) num_threads(num_threads_) reduction(+:num_candidates_, num_mappings_, num_mapped_reads_, num_uniquely_mapped_reads_, num_barcode_in_whitelist_, num_corrected_barcode_)
+#pragma omp parallel default(none) shared(output_mappings_not_in_whitelist_, barcode_whitelist_file_path_, trim_adapters_, window_size_, custom_rid_order_path_, split_alignment_, error_threshold_, max_seed_frequencies_, max_num_best_mappings_, max_insert_size_, num_threads_, num_reads_, low_memory_mode_, num_reference_sequences, reference, index, read_batch1, read_batch2, barcode_batch, read_batch1_for_loading, read_batch2_for_loading, barcode_batch_for_loading, candidate_processor, mapping_processor, mapping_generator, mapping_writer, std::cerr, num_loaded_pairs_for_loading, num_loaded_pairs, mappings_on_diff_ref_seqs_for_diff_threads, mappings_on_diff_ref_seqs_for_diff_threads_for_saving, mappings_on_diff_ref_seqs, mapping_output_file_path_, num_mappings_in_mem, max_num_mappings_in_mem, temp_mapping_file_handles, mm_to_candidates_cache, mm_history1, mm_history2) num_threads(num_threads_) reduction(+:num_candidates_, num_mappings_, num_mapped_reads_, num_uniquely_mapped_reads_, num_barcode_in_whitelist_, num_corrected_barcode_)
     {
       thread_num_candidates = 0;
       thread_num_mappings = 0;
@@ -1248,7 +1249,7 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
                 num_mappings_in_mem > max_num_mappings_in_mem) {
               OutputTempMappings(num_reference_sequences,
                                  mappings_on_diff_ref_seqs, mapping_processor,
-                                 mapping_writer);
+                                 temp_mapping_file_handles, mapping_writer);
               num_mappings_in_mem = 0;
             }
           }  // end of omp task to handle output
@@ -1289,13 +1290,14 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
     // disk.
     if (num_mappings_in_mem > 0) {
       OutputTempMappings(num_reference_sequences, mappings_on_diff_ref_seqs,
-                         mapping_processor, mapping_writer);
+                         mapping_processor, temp_mapping_file_handles,
+                         mapping_writer);
       num_mappings_in_mem = 0;
     }
 
-    ProcessAndOutputMappingsInLowMemory(num_mappings_in_mem,
-                                        num_reference_sequences, reference,
-                                        mapping_processor, mapping_writer);
+    ProcessAndOutputMappingsInLowMemory(
+        num_mappings_in_mem, num_reference_sequences, reference,
+        mapping_processor, temp_mapping_file_handles, mapping_writer);
   } else {
     // OutputMappingStatistics(num_reference_sequences,
     // mappings_on_diff_ref_seqs, mappings_on_diff_ref_seqs);
@@ -1365,12 +1367,14 @@ void Chromap<MappingRecord>::OutputTempMappings(
     uint32_t num_reference_sequences,
     std::vector<std::vector<MappingRecord>> &mappings_on_diff_ref_seqs,
     const MappingProcessor<MappingRecord> &mapping_processor,
+    std::vector<TempMappingFileHandle<MappingRecord>>
+        &temp_mapping_file_handles,
     MappingWriter<MappingRecord> &mapping_writer) {
   TempMappingFileHandle<MappingRecord> temp_mapping_file_handle;
   temp_mapping_file_handle.file_path =
       mapping_output_file_path_ + ".temp" +
-      std::to_string(temp_mapping_file_handles_.size());
-  temp_mapping_file_handles_.emplace_back(temp_mapping_file_handle);
+      std::to_string(temp_mapping_file_handles.size());
+  temp_mapping_file_handles.emplace_back(temp_mapping_file_handle);
 
   mapping_processor.SortOutputMappings(num_reference_sequences,
                                        mappings_on_diff_ref_seqs);
@@ -1455,6 +1459,8 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
   for (uint32_t i = 0; i < num_reference_sequences; ++i) {
     mappings_on_diff_ref_seqs.emplace_back(std::vector<MappingRecord>());
   }
+
+  std::vector<TempMappingFileHandle<MappingRecord>> temp_mapping_file_handles;
 
   // Preprocess barcodes for single cell data
   if (!is_bulk_data_) {
@@ -1553,7 +1559,7 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
             num_threads_ / num_reference_sequences);
       }
     }
-#pragma omp parallel default(none) shared(barcode_whitelist_file_path_, output_mappings_not_in_whitelist_, window_size_, custom_rid_order_path_, error_threshold_, max_num_best_mappings_, max_seed_frequencies_, num_threads_, num_reads_, mm_history, reference, index, read_batch, barcode_batch, read_batch_for_loading, barcode_batch_for_loading, std::cerr, num_loaded_reads_for_loading, num_loaded_reads, num_reference_sequences, mappings_on_diff_ref_seqs_for_diff_threads, mappings_on_diff_ref_seqs_for_diff_threads_for_saving, mappings_on_diff_ref_seqs, mm_to_candidates_cache, mapping_writer, candidate_processor, mapping_processor, mapping_generator, low_memory_mode_, num_mappings_in_mem, max_num_mappings_in_mem) num_threads(num_threads_) reduction(+:num_candidates_, num_mappings_, num_mapped_reads_, num_uniquely_mapped_reads_, num_barcode_in_whitelist_, num_corrected_barcode_)
+#pragma omp parallel default(none) shared(barcode_whitelist_file_path_, output_mappings_not_in_whitelist_, window_size_, custom_rid_order_path_, error_threshold_, max_num_best_mappings_, max_seed_frequencies_, num_threads_, num_reads_, mm_history, reference, index, read_batch, barcode_batch, read_batch_for_loading, barcode_batch_for_loading, std::cerr, num_loaded_reads_for_loading, num_loaded_reads, num_reference_sequences, mappings_on_diff_ref_seqs_for_diff_threads, mappings_on_diff_ref_seqs_for_diff_threads_for_saving, mappings_on_diff_ref_seqs, temp_mapping_file_handles, mm_to_candidates_cache, mapping_writer, candidate_processor, mapping_processor, mapping_generator, low_memory_mode_, num_mappings_in_mem, max_num_mappings_in_mem) num_threads(num_threads_) reduction(+:num_candidates_, num_mappings_, num_mapped_reads_, num_uniquely_mapped_reads_, num_barcode_in_whitelist_, num_corrected_barcode_)
     {
       thread_num_candidates = 0;
       thread_num_mappings = 0;
@@ -1694,7 +1700,7 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
                 num_mappings_in_mem > max_num_mappings_in_mem) {
               OutputTempMappings(num_reference_sequences,
                                  mappings_on_diff_ref_seqs, mapping_processor,
-                                 mapping_writer);
+                                 temp_mapping_file_handles, mapping_writer);
               num_mappings_in_mem = 0;
             }
           }
@@ -1734,13 +1740,14 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
     // disk.
     if (num_mappings_in_mem > 0) {
       OutputTempMappings(num_reference_sequences, mappings_on_diff_ref_seqs,
-                         mapping_processor, mapping_writer);
+                         mapping_processor, temp_mapping_file_handles,
+                         mapping_writer);
       num_mappings_in_mem = 0;
     }
 
-    ProcessAndOutputMappingsInLowMemory(num_mappings_in_mem,
-                                        num_reference_sequences, reference,
-                                        mapping_processor, mapping_writer);
+    ProcessAndOutputMappingsInLowMemory(
+        num_mappings_in_mem, num_reference_sequences, reference,
+        mapping_processor, temp_mapping_file_handles, mapping_writer);
   } else {
     if (Tn5_shift_) {
       mapping_processor.ApplyTn5ShiftOnMappings(num_reference_sequences,
