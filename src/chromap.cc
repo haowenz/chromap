@@ -1031,10 +1031,11 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
 #pragma omp task
           {
             // Handle output
-            num_mappings_in_mem += MoveMappingsInBuffersToMappingContainer(
-                num_reference_sequences,
-                mappings_on_diff_ref_seqs_for_diff_threads_for_saving,
-                mappings_on_diff_ref_seqs);
+            num_mappings_in_mem +=
+                mapping_processor.MoveMappingsInBuffersToMappingContainer(
+                    num_reference_sequences,
+                    mappings_on_diff_ref_seqs_for_diff_threads_for_saving,
+                    mappings_on_diff_ref_seqs);
             if (low_memory_mode_ &&
                 num_mappings_in_mem > max_num_mappings_in_mem) {
               mapping_processor.SortOutputMappings(num_reference_sequences,
@@ -1424,10 +1425,11 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
               mappings_on_diff_ref_seqs_for_diff_threads_for_saving);
 #pragma omp task
           {
-            num_mappings_in_mem += MoveMappingsInBuffersToMappingContainer(
-                num_reference_sequences,
-                mappings_on_diff_ref_seqs_for_diff_threads_for_saving,
-                mappings_on_diff_ref_seqs);
+            num_mappings_in_mem +=
+                mapping_processor.MoveMappingsInBuffersToMappingContainer(
+                    num_reference_sequences,
+                    mappings_on_diff_ref_seqs_for_diff_threads_for_saving,
+                    mappings_on_diff_ref_seqs);
             if (low_memory_mode_ &&
                 num_mappings_in_mem > max_num_mappings_in_mem) {
               mapping_processor.SortOutputMappings(num_reference_sequences,
@@ -1575,34 +1577,6 @@ void Chromap<MappingRecord>::ConstructIndex() {
   index.Statistics(num_sequences, reference);
   index.Save();
   reference.FinalizeLoading();
-}
-
-template <typename MappingRecord>
-uint32_t Chromap<MappingRecord>::MoveMappingsInBuffersToMappingContainer(
-    uint32_t num_reference_sequences,
-    std::vector<std::vector<std::vector<MappingRecord>>>
-        &mappings_on_diff_ref_seqs_for_diff_threads_for_saving,
-    std::vector<std::vector<MappingRecord>> &mappings_on_diff_ref_seqs) {
-  // double real_start_time = Chromap<>::GetRealTime();
-  uint32_t num_moved_mappings = 0;
-  for (int ti = 0; ti < num_threads_; ++ti) {
-    for (uint32_t i = 0; i < num_reference_sequences; ++i) {
-      num_moved_mappings +=
-          mappings_on_diff_ref_seqs_for_diff_threads_for_saving[ti][i].size();
-      mappings_on_diff_ref_seqs[i].insert(
-          mappings_on_diff_ref_seqs[i].end(),
-          std::make_move_iterator(
-              mappings_on_diff_ref_seqs_for_diff_threads_for_saving[ti][i]
-                  .begin()),
-          std::make_move_iterator(
-              mappings_on_diff_ref_seqs_for_diff_threads_for_saving[ti][i]
-                  .end()));
-      mappings_on_diff_ref_seqs_for_diff_threads_for_saving[ti][i].clear();
-    }
-  }
-  // std::cerr << "Moved mappings in " << Chromap<>::GetRealTime() -
-  // real_start_time << "s.\n";
-  return num_moved_mappings;
 }
 
 template <typename MappingRecord>
