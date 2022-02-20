@@ -77,17 +77,6 @@ class MappingWriter {
     fprintf(mapping_output_file_, "%s", line.data());
   }
 
-  inline std::string Seed2Sequence(uint64_t seed, uint32_t seed_length) const {
-    std::string sequence;
-    sequence.reserve(seed_length);
-    uint64_t mask = 3;
-    for (uint32_t i = 0; i < seed_length; ++i) {
-      sequence.push_back(SequenceBatch::Uint8ToChar(
-          (seed >> ((seed_length - 1 - i) * 2)) & mask));
-    }
-    return sequence;
-  }
-
   const std::string mapping_output_file_path_;
   // TODO(Haowen): use this variable to decide output in BED or TagAlign. It
   // should be removed later.
