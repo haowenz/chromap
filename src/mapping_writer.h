@@ -33,13 +33,11 @@ class MappingWriter {
                 const std::vector<int> *custom_rid_rank)
       : mapping_output_file_path_(mapping_output_file_path),
         mapping_output_format_(mapping_output_format),
-        cell_barcode_length_(cell_barcode_length) {
+        cell_barcode_length_(cell_barcode_length),
+        custom_rid_rank_(custom_rid_rank != nullptr ? *custom_rid_rank
+                                                    : std::vector<int>()) {
     if (barcode_translate_table_file_path != nullptr) {
       barcode_translator_.SetTranslateTable(*barcode_translate_table_file_path);
-    }
-
-    if (custom_rid_rank != nullptr) {
-      custom_rid_rank_ = *custom_rid_rank;
     }
 
     mapping_output_file_ = fopen(mapping_output_file_path_.c_str(), "w");
@@ -90,15 +88,15 @@ class MappingWriter {
     return sequence;
   }
 
-  std::string mapping_output_file_path_;
+  const std::string mapping_output_file_path_;
   // TODO(Haowen): use this variable to decide output in BED or TagAlign. It
   // should be removed later.
-  MappingOutputFormat mapping_output_format_ = MAPPINGFORMAT_BED;
-  uint32_t cell_barcode_length_ = 16;
+  const MappingOutputFormat mapping_output_format_;
+  const uint32_t cell_barcode_length_;
   FILE *mapping_output_file_ = nullptr;
   BarcodeTranslator barcode_translator_;
   // for pairs
-  std::vector<int> custom_rid_rank_;
+  const std::vector<int> custom_rid_rank_;
 };
 
 // Specialization for BED format.
