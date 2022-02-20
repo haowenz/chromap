@@ -173,12 +173,6 @@ class Chromap {
                         uint64_t &num_barcode_in_whitelist,
                         uint64_t &num_corrected_barcode);
 
-  uint32_t MoveMappingsInBuffersToMappingContainer(
-      uint32_t num_reference_sequences,
-      std::vector<std::vector<std::vector<MappingRecord> > >
-          &mappings_on_diff_ref_seqs_for_diff_threads_for_saving,
-      std::vector<std::vector<MappingRecord> > &mappings_on_diff_ref_seqs);
-
   void OutputBarcodeStatistics();
 
   void OutputMappingStatistics();
