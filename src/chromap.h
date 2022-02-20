@@ -173,17 +173,6 @@ class Chromap {
                         uint64_t &num_barcode_in_whitelist,
                         uint64_t &num_corrected_barcode);
 
-  size_t FindBestMappingIndexFromDuplicates(
-      const std::vector<MappingRecord> &duplicates);
-
-  void ProcessAndOutputMappingsInLowMemory(
-      uint32_t num_mappings_in_mem, uint32_t num_reference_sequences,
-      const SequenceBatch &reference,
-      const MappingProcessor<MappingRecord> &mapping_processor,
-      std::vector<TempMappingFileHandle<MappingRecord> >
-          &temp_mapping_file_handles,
-      MappingWriter<MappingRecord> &mapping_writer);
-
   uint32_t MoveMappingsInBuffersToMappingContainer(
       uint32_t num_reference_sequences,
       std::vector<std::vector<std::vector<MappingRecord> > >
@@ -198,25 +187,6 @@ class Chromap {
       uint32_t num_reference_sequences,
       const std::vector<std::vector<MappingRecord> > &uni_mappings,
       const std::vector<std::vector<MappingRecord> > &multi_mappings);
-
-  void OutputTempMappings(
-      uint32_t num_reference_sequences,
-      std::vector<std::vector<MappingRecord> > &mappings_on_diff_ref_seqs,
-      const MappingProcessor<MappingRecord> &mapping_processor,
-      std::vector<TempMappingFileHandle<MappingRecord> >
-          &temp_mapping_file_handles,
-      MappingWriter<MappingRecord> &mapping_writer);
-
-  void OutputMappingsInVector(
-      uint8_t mapq_threshold, uint32_t num_reference_sequences,
-      const SequenceBatch &reference,
-      const std::vector<std::vector<MappingRecord> > &mappings,
-      MappingWriter<MappingRecord> &mapping_writer);
-
-  void OutputMappings(uint32_t num_reference_sequences,
-                      const SequenceBatch &reference,
-                      const std::vector<std::vector<MappingRecord> > &mappings,
-                      MappingWriter<MappingRecord> &mapping_writer);
 
   void GenerateCustomizedRidRank(const std::string &rid_order_path,
                                  const SequenceBatch &reference,
@@ -289,7 +259,6 @@ class Chromap {
   std::vector<int> custom_rid_rank_;
   std::vector<int> pairs_custom_rid_rank_;
   std::string barcode_translate_table_path_;
-  // khash_t(k32_set)* barcode_whitelist_lookup_table_;
   khash_t(k64_seq) * barcode_whitelist_lookup_table_;
   // For identical read dedupe
   int allocated_barcode_lookup_table_size_ = (1 << 10);
