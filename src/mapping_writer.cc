@@ -378,7 +378,7 @@ void MappingWriter<PairsMapping>::OutputHeader(uint32_t num_reference_sequences,
   rid_order.resize(num_reference_sequences);
   uint32_t i;
   for (i = 0; i < num_reference_sequences; ++i) {
-    rid_order[this->custom_rid_rank_[i]] = i;
+    rid_order[custom_rid_rank_[i]] = i;
   }
   this->AppendMappingOutput("## pairs format v1.0.0\n#shape: upper triangle\n");
   for (i = 0; i < num_reference_sequences; ++i) {

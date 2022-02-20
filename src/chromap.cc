@@ -370,6 +370,31 @@ bool Chromap<MappingRecord>::CorrectBarcodeAt(
 }
 
 template <typename MappingRecord>
+uint32_t Chromap<MappingRecord>::SampleInputBarcodesAndExamineLength() {
+  if (is_bulk_data_) {
+    return 0;
+  }
+
+  uint32_t sample_batch_size = 1000;
+  SequenceBatch barcode_batch(sample_batch_size);
+
+  barcode_batch.InitializeLoading(barcode_file_paths_[0]);
+
+  uint32_t num_loaded_barcodes = barcode_batch.LoadBatch();
+
+  uint32_t cell_barcode_length = barcode_batch.GetSequenceLengthAt(0);
+  for (uint32_t i = 1; i < num_loaded_barcodes; ++i) {
+    if (barcode_batch.GetSequenceLengthAt(i) != cell_barcode_length) {
+      ExitWithMessage("ERROR: Barcode lengths are not equal in the sample!");
+    }
+  }
+
+  barcode_batch.FinalizeLoading();
+
+  return cell_barcode_length;
+}
+
+template <typename MappingRecord>
 uint32_t Chromap<MappingRecord>::LoadPairedEndReadsWithBarcodes(
     SequenceBatch &read_batch1, SequenceBatch &read_batch2,
     SequenceBatch &barcode_batch) {
@@ -848,24 +873,12 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
 
   // Preprocess barcodes for single cell data
   if (!is_bulk_data_) {
+    barcode_length_ = SampleInputBarcodesAndExamineLength();
     if (!barcode_whitelist_file_path_.empty()) {
       LoadBarcodeWhitelist();
       ComputeBarcodeAbundance(initial_num_sample_barcodes_);
     }
   }
-
-  MappingWriter<MappingRecord> mapping_writer;
-  if (!barcode_translate_table_path_.empty()) {
-    mapping_writer.SetBarcodeTranslateTable(barcode_translate_table_path_);
-  }
-  // Initialize output tools
-  if (mapping_output_format_ == MAPPINGFORMAT_PAIRS) {
-    mapping_writer.SetPairsCustomRidRank(pairs_custom_rid_rank_);
-  }
-
-  mapping_writer.InitializeMappingOutput(
-      barcode_length_, mapping_output_file_path_, mapping_output_format_);
-  mapping_writer.OutputHeader(num_reference_sequences, reference);
 
   CandidateProcessor candidate_processor(min_num_seeds_required_for_mapping_,
                                          max_seed_frequencies_);
@@ -879,6 +892,14 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
       gap_open_penalties_, gap_extension_penalties_, max_num_best_mappings_,
       max_insert_size_, min_read_length_, drop_repetitive_reads_, is_bulk_data_,
       split_alignment_, mapping_output_format_, pairs_custom_rid_rank_);
+
+  MappingWriter<MappingRecord> mapping_writer(
+      mapping_output_file_path_, mapping_output_format_, barcode_length_,
+      barcode_translate_table_path_.empty() ? nullptr
+                                            : &barcode_translate_table_path_,
+      mapping_output_format_ == MAPPINGFORMAT_PAIRS ? &pairs_custom_rid_rank_
+                                                    : nullptr);
+  mapping_writer.OutputHeader(num_reference_sequences, reference);
 
   uint32_t num_mappings_in_mem = 0;
   uint64_t max_num_mappings_in_mem =
@@ -921,10 +942,6 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
     read_batch2_for_loading.SwapSequenceBatch(read_batch2);
     if (!is_bulk_data_) {
       barcode_batch_for_loading.SwapSequenceBatch(barcode_batch);
-      // TODO(Haowen): simplify this condition check.
-      if (num_loaded_pairs > 0) {
-        mapping_writer.SetBarcodeLength(barcode_batch.GetSequenceLengthAt(0));
-      }
     }
 
     // Setup thread private vectors to save mapping results.
@@ -1355,8 +1372,6 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
     //}
   }
 
-  mapping_writer.FinalizeMappingOutput();
-
   reference.FinalizeLoading();
 
   std::cerr << "Total time: " << GetRealTime() - real_start_time << "s.\n";
@@ -1464,6 +1479,7 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
 
   // Preprocess barcodes for single cell data
   if (!is_bulk_data_) {
+    barcode_length_ = SampleInputBarcodesAndExamineLength();
     if (!barcode_whitelist_file_path_.empty()) {
       LoadBarcodeWhitelist();
       ComputeBarcodeAbundance(initial_num_sample_barcodes_);
@@ -1483,12 +1499,12 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
       max_insert_size_, min_read_length_, drop_repetitive_reads_, is_bulk_data_,
       split_alignment_, mapping_output_format_, pairs_custom_rid_rank_);
 
-  MappingWriter<MappingRecord> mapping_writer;
-  if (!barcode_translate_table_path_.empty()) {
-    mapping_writer.SetBarcodeTranslateTable(barcode_translate_table_path_);
-  }
-  mapping_writer.InitializeMappingOutput(
-      barcode_length_, mapping_output_file_path_, mapping_output_format_);
+  MappingWriter<MappingRecord> mapping_writer(
+      mapping_output_file_path_, mapping_output_format_, barcode_length_,
+      barcode_translate_table_path_.empty() ? nullptr
+                                            : &barcode_translate_table_path_,
+      /*custom_rid_rank=*/nullptr);
+
   mapping_writer.OutputHeader(num_reference_sequences, reference);
 
   uint32_t num_mappings_in_mem = 0;
@@ -1531,10 +1547,6 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
 
     if (!is_bulk_data_) {
       barcode_batch_for_loading.SwapSequenceBatch(barcode_batch);
-      // TODO(Haowen): simplify this condition check.
-      if (num_loaded_reads > 0) {
-        mapping_writer.SetBarcodeLength(barcode_batch.GetSequenceLengthAt(0));
-      }
     }
 
     std::vector<std::vector<std::vector<MappingRecord>>>
@@ -1783,7 +1795,6 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
                    mappings_on_diff_ref_seqs, mapping_writer);
   }
 
-  mapping_writer.FinalizeMappingOutput();
   reference.FinalizeLoading();
   std::cerr << "Total time: " << GetRealTime() - real_start_time << "s.\n";
 }
@@ -1938,11 +1949,20 @@ void Chromap<MappingRecord>::LoadBarcodeWhitelist() {
     std::string barcode;
     barcode_whitelist_file_line_string_stream >> barcode;
     size_t barcode_length = barcode.length();
-    if (num_barcodes == 0) {
-      barcode_length_ = barcode_length;
-    } else {
-      assert(barcode_length == barcode_length_);
+    if (barcode_length > 32) {
+      ExitWithMessage("ERROR: barcode length is greater than 32!");
     }
+
+    if (barcode_length != barcode_length_) {
+      if (num_barcodes == 0) {
+        ExitWithMessage(
+            "ERROR: whitelist and input barcode lengths are not equal!");
+      } else {
+        ExitWithMessage(
+            "ERROR: barcode lengths are not equal in the whitelist!");
+      }
+    }
+
     // if (first_line) {
     //  //size_t barcode_length = kmer.length();
     //  // Allocate memory to save pore model parameters
