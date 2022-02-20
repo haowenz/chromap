@@ -24,8 +24,29 @@ namespace chromap {
 template <typename MappingRecord>
 class MappingWriter {
  public:
-  MappingWriter() {}
-  ~MappingWriter() {}
+  MappingWriter() = delete;
+
+  MappingWriter(const std::string &mapping_output_file_path,
+                MappingOutputFormat &mapping_output_format,
+                uint32_t cell_barcode_length,
+                const std::string *barcode_translate_table_file_path,
+                const std::vector<int> *custom_rid_rank)
+      : mapping_output_file_path_(mapping_output_file_path),
+        mapping_output_format_(mapping_output_format),
+        cell_barcode_length_(cell_barcode_length) {
+    if (barcode_translate_table_file_path != nullptr) {
+      barcode_translator_.SetTranslateTable(*barcode_translate_table_file_path);
+    }
+
+    if (custom_rid_rank != nullptr) {
+      custom_rid_rank_ = *custom_rid_rank;
+    }
+
+    mapping_output_file_ = fopen(mapping_output_file_path_.c_str(), "w");
+    assert(mapping_output_file_ != nullptr);
+  }
+
+  ~MappingWriter() { fclose(mapping_output_file_); }
 
   // Output the mappings in a temp file.
   inline void OutputTempMapping(
@@ -47,33 +68,16 @@ class MappingWriter {
     fclose(temp_mapping_output_file);
   }
 
-  inline void InitializeMappingOutput(
-      uint32_t cell_barcode_length, const std::string &mapping_output_file_path,
-      MappingOutputFormat &format) {
-    cell_barcode_length_ = cell_barcode_length;
-    mapping_output_file_path_ = mapping_output_file_path;
-    mapping_output_file_ = fopen(mapping_output_file_path_.c_str(), "w");
-    assert(mapping_output_file_ != NULL);
-    mapping_output_format_ = format;
-  }
-
-  inline void SetBarcodeLength(uint32_t cell_barcode_length) {
-    cell_barcode_length_ = cell_barcode_length;
-  }
-
-  inline void FinalizeMappingOutput() { fclose(mapping_output_file_); }
-
-  inline void AppendMappingOutput(const std::string &line) {
-    fprintf(mapping_output_file_, "%s", line.data());
-  }
-
   void OutputHeader(uint32_t num_reference_sequences,
                     const SequenceBatch &reference);
 
   void AppendMapping(uint32_t rid, const SequenceBatch &reference,
                      const MappingRecord &mapping);
 
-  inline uint32_t GetNumMappings() const { return num_mappings_; }
+ protected:
+  inline void AppendMappingOutput(const std::string &line) {
+    fprintf(mapping_output_file_, "%s", line.data());
+  }
 
   inline std::string Seed2Sequence(uint64_t seed, uint32_t seed_length) const {
     std::string sequence;
@@ -86,24 +90,15 @@ class MappingWriter {
     return sequence;
   }
 
-  inline void SetPairsCustomRidRank(const std::vector<int> &custom_rid_rank) {
-    custom_rid_rank_ = custom_rid_rank;
-  }
-
-  inline void SetBarcodeTranslateTable(const std::string &file) {
-    barcode_translator_.SetTranslateTable(file);
-  }
-
-  std::vector<int> custom_rid_rank_;  // for pairs
- protected:
   std::string mapping_output_file_path_;
-  FILE *mapping_output_file_;
   // TODO(Haowen): use this variable to decide output in BED or TagAlign. It
   // should be removed later.
   MappingOutputFormat mapping_output_format_ = MAPPINGFORMAT_BED;
-  uint32_t num_mappings_;
   uint32_t cell_barcode_length_ = 16;
+  FILE *mapping_output_file_ = nullptr;
   BarcodeTranslator barcode_translator_;
+  // for pairs
+  std::vector<int> custom_rid_rank_;
 };
 
 // Specialization for BED format.
