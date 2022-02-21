@@ -105,15 +105,12 @@ class Chromap {
 
   void OutputMappingStatistics();
 
-  void OutputMappingStatistics(uint32_t num_reference_sequences,
-                               const std::vector<std::vector<MappingRecord> >
-                                   &mappings_on_diff_ref_seqs);
-
   void GenerateCustomizedRidRank(const std::string &rid_order_path,
                                  uint32_t num_reference_sequences,
                                  const SequenceBatch &reference,
                                  std::vector<int> &rid_rank);
 
+  // TODO: generate reranked candidates directly.
   void RerankCandidatesRid(std::vector<Candidate> &candidates);
 
   void ParseReadFormat(const std::string &read_format);
