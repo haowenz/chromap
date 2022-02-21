@@ -388,7 +388,7 @@ uint32_t Chromap<MappingRecord>::SampleInputBarcodesAndExamineLength() {
   uint32_t cell_barcode_length = barcode_batch.GetSequenceLengthAt(0);
   for (uint32_t i = 1; i < num_loaded_barcodes; ++i) {
     if (barcode_batch.GetSequenceLengthAt(i) != cell_barcode_length) {
-      ExitWithMessage("ERROR: Barcode lengths are not equal in the sample!");
+      ExitWithMessage("ERROR: barcode lengths are not equal in the sample!");
     }
   }
 
@@ -564,8 +564,7 @@ void Chromap<MappingRecord>::GenerateCustomizedRidRank(
   }
 
   if (k > ref_size) {
-    chromap::ExitWithMessage(
-        "Unknown chromsome names found in chromosome order file");
+    ExitWithMessage("Unknown chromsome names found in chromosome order file");
   }
 
   /*for (i = 0 ; i < ref_size; ++i) {
@@ -576,9 +575,7 @@ void Chromap<MappingRecord>::GenerateCustomizedRidRank(
 template <typename MappingRecord>
 void Chromap<MappingRecord>::RerankCandidatesRid(
     std::vector<Candidate> &candidates) {
-  int i;
-  int size = candidates.size();
-  for (i = 0; i < size; ++i) {
+  for (size_t i = 0; i < candidates.size(); ++i) {
     uint64_t rid = (uint32_t)(candidates[i].position >> 32);
     rid = custom_rid_rank_[rid];
     candidates[i].position =
