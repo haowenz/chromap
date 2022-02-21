@@ -43,7 +43,6 @@ class Chromap {
         index_file_path_(index_parameters.index_output_file_path) {
     barcode_lookup_table_ = NULL;
     barcode_whitelist_lookup_table_ = NULL;
-    barcode_histogram_ = NULL;
   }
 
   // For mapping
@@ -107,7 +106,6 @@ class Chromap {
         skip_barcode_check_(mapping_parameters.skip_barcode_check) {
     barcode_lookup_table_ = kh_init(k64_seq);
     barcode_whitelist_lookup_table_ = kh_init(k64_seq);
-    barcode_histogram_ = kh_init(k64_seq);
 
     NUM_VPU_LANES_ = 0;
     if (error_threshold_ < 8) {
@@ -122,9 +120,6 @@ class Chromap {
   ~Chromap() {
     if (barcode_whitelist_lookup_table_ != NULL) {
       kh_destroy(k64_seq, barcode_whitelist_lookup_table_);
-    }
-    if (barcode_histogram_ != NULL) {
-      kh_destroy(k64_seq, barcode_histogram_);
     }
 
     if (barcode_lookup_table_ != NULL) {
@@ -273,7 +268,6 @@ class Chromap {
   uint64_t num_barcode_in_whitelist_ = 0;
   uint64_t num_corrected_barcode_ = 0;
   uint32_t barcode_length_ = 0;
-  khash_t(k64_seq) * barcode_histogram_;
   bool skip_barcode_check_ = false;
 };
 
