@@ -1108,7 +1108,6 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
                                            mappings_on_diff_ref_seqs);
       std::cerr << "After removing PCR duplications, ";
       OutputMappingStatistics(num_reference_sequences,
-                              mappings_on_diff_ref_seqs,
                               mappings_on_diff_ref_seqs);
     } else {
       mapping_processor.SortOutputMappings(num_reference_sequences,
@@ -1123,7 +1122,6 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
           multi_mapping_allocation_distance_, mappings_on_diff_ref_seqs);
       std::cerr << "After allocating multi-mappings, ";
       OutputMappingStatistics(num_reference_sequences,
-                              mappings_on_diff_ref_seqs,
                               mappings_on_diff_ref_seqs);
       mapping_processor.SortOutputMappings(num_reference_sequences,
                                            mappings_on_diff_ref_seqs);
@@ -1499,7 +1497,6 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
                                            mappings_on_diff_ref_seqs);
       std::cerr << "After removing PCR duplications, ";
       OutputMappingStatistics(num_reference_sequences,
-                              mappings_on_diff_ref_seqs,
                               mappings_on_diff_ref_seqs);
     } else {
       mapping_processor.SortOutputMappings(num_reference_sequences,
@@ -1514,7 +1511,6 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
           multi_mapping_allocation_distance_, mappings_on_diff_ref_seqs);
       std::cerr << "After allocating multi-mappings, ";
       OutputMappingStatistics(num_reference_sequences,
-                              mappings_on_diff_ref_seqs,
                               mappings_on_diff_ref_seqs);
       mapping_processor.SortOutputMappings(num_reference_sequences,
                                            mappings_on_diff_ref_seqs);
@@ -1608,20 +1604,14 @@ void Chromap<MappingRecord>::OutputMappingStatistics() {
 template <typename MappingRecord>
 void Chromap<MappingRecord>::OutputMappingStatistics(
     uint32_t num_reference_sequences,
-    const std::vector<std::vector<MappingRecord>> &uni_mappings,
-    const std::vector<std::vector<MappingRecord>> &multi_mappings) {
+    const std::vector<std::vector<MappingRecord>> &mappings_on_diff_ref_seqs) {
   uint64_t num_uni_mappings = 0;
   uint64_t num_multi_mappings = 0;
-  for (auto &uni_mappings_on_one_ref_seq : uni_mappings) {
-    for (auto &uni_mapping : uni_mappings_on_one_ref_seq) {
-      if ((uni_mapping.is_unique_) == 1) {
+  for (auto &mappings_on_one_ref_seq : mappings_on_diff_ref_seqs) {
+    for (auto &mapping : mappings_on_one_ref_seq) {
+      if ((mapping.is_unique_) == 1) {
         ++num_uni_mappings;
-      }
-    }
-  }
-  for (auto &multi_mappings_on_one_ref_seq : multi_mappings) {
-    for (auto &multi_mapping : multi_mappings_on_one_ref_seq) {
-      if ((multi_mapping.is_unique_) != 1) {
+      } else {
         ++num_multi_mappings;
       }
     }
