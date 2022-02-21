@@ -6,12 +6,12 @@
 #include "utils.h"
 
 namespace chromap {
+
 constexpr uint8_t SequenceBatch::char_to_uint8_table_[256];
 constexpr char SequenceBatch::uint8_to_char_table_[8];
 
 void SequenceBatch::InitializeLoading(const std::string &sequence_file_path) {
-  sequence_file_path_ = sequence_file_path;
-  sequence_file_ = gzopen(sequence_file_path_.c_str(), "r");
+  sequence_file_ = gzopen(sequence_file_path.c_str(), "r");
   if (sequence_file_ == NULL) {
     ExitWithMessage("Cannot find sequence file" + sequence_file_path);
   }
@@ -137,4 +137,31 @@ void SequenceBatch::FinalizeLoading() {
   kseq_destroy(sequence_kseq_);
   gzclose(sequence_file_);
 }
+
+void SequenceBatch::ReplaceByEffectiveRange(kstring_t &seq) {
+  if (effective_range_[0] == 0 && effective_range_[1] == -1 &&
+      effective_range_[2] == 1) {
+    return;
+  }
+  int i, j;
+  int start = effective_range_[0];
+  int end = effective_range_[1];
+  if (effective_range_[1] == -1) end = seq.l - 1;
+  for (i = 0; i < end - start + 1; ++i) {
+    seq.s[i] = seq.s[start + i];
+  }
+  seq.s[i] = '\0';
+  seq.l = end - start + 1;
+  if (effective_range_[2] == -1) {
+    for (i = 0; i < (int)seq.l; ++i) {
+      seq.s[i] = Uint8ToChar(((uint8_t)3) ^ (CharToUint8(seq.s[i])));
+    }
+    for (i = 0, j = seq.l - 1; i < j; ++i, --j) {
+      char tmp = seq.s[i];
+      seq.s[i] = seq.s[j];
+      seq.s[j] = tmp;
+    }
+  }
+}
+
 }  // namespace chromap
