@@ -516,12 +516,10 @@ void Chromap<MappingRecord>::UpdateBarcodeAbundance(
 
 template <typename MappingRecord>
 void Chromap<MappingRecord>::GenerateCustomizedRidRank(
-    const std::string &rid_order_path, const SequenceBatch &reference,
-    std::vector<int> &rid_rank) {
-  int ref_size = reference.GetSequenceBatchSize();
-  int i = 0;
-  rid_rank.resize(ref_size);
-  for (i = 0; i < ref_size; ++i) {
+    const std::string &rid_order_path, uint32_t num_reference_sequences,
+    const SequenceBatch &reference, std::vector<int> &rid_rank) {
+  rid_rank.resize(num_reference_sequences);
+  for (uint32_t i = 0; i < num_reference_sequences; ++i) {
     rid_rank[i] = i;
   }
 
@@ -532,7 +530,7 @@ void Chromap<MappingRecord>::GenerateCustomizedRidRank(
   std::map<std::string, int> rname_to_rank;
   std::ifstream file_stream(rid_order_path);
   std::string line;
-  i = 0;
+  uint32_t i = 0;
   while (getline(file_stream, line)) {
     rname_to_rank[line] = i;
     i += 1;
@@ -540,7 +538,7 @@ void Chromap<MappingRecord>::GenerateCustomizedRidRank(
   file_stream.close();
 
   // First put the chrosomes in the list provided by user
-  for (i = 0; i < ref_size; ++i) {
+  for (uint32_t i = 0; i < num_reference_sequences; ++i) {
     std::string rname(reference.GetSequenceNameAt(i));
     if (rname_to_rank.find(rname) != rname_to_rank.end()) {
       rid_rank[i] = rname_to_rank[rname];
@@ -551,16 +549,16 @@ void Chromap<MappingRecord>::GenerateCustomizedRidRank(
 
   // we may have some rank without any rid associated with, this helps if
   // cutstom list contains rid not in the reference`
-  int k = rname_to_rank.size();
+  uint32_t k = rname_to_rank.size();
   // Put the remaining chrosomes
-  for (i = 0; i < ref_size; ++i) {
+  for (uint32_t i = 0; i < num_reference_sequences; ++i) {
     if (rid_rank[i] == -1) {
       rid_rank[i] = k;
       ++k;
     }
   }
 
-  if (k > ref_size) {
+  if (k > num_reference_sequences) {
     ExitWithMessage("Unknown chromsome names found in chromosome order file");
   }
 
@@ -590,12 +588,14 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
   uint32_t num_reference_sequences = reference.LoadAllSequences();
   if (mapping_parameters_.custom_rid_order_path.length() > 0) {
     GenerateCustomizedRidRank(mapping_parameters_.custom_rid_order_path,
-                              reference, custom_rid_rank_);
+                              num_reference_sequences, reference,
+                              custom_rid_rank_);
     reference.ReorderSequences(custom_rid_rank_);
   }
   if (mapping_parameters_.mapping_output_format == MAPPINGFORMAT_PAIRS) {
     GenerateCustomizedRidRank(mapping_parameters_.pairs_custom_rid_order_path,
-                              reference, pairs_custom_rid_rank_);
+                              num_reference_sequences, reference,
+                              pairs_custom_rid_rank_);
   }
 
   // Load index
@@ -1164,7 +1164,8 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
   uint32_t num_reference_sequences = reference.LoadAllSequences();
   if (mapping_parameters_.custom_rid_order_path.length() > 0) {
     GenerateCustomizedRidRank(mapping_parameters_.custom_rid_order_path,
-                              reference, custom_rid_rank_);
+                              num_reference_sequences, reference,
+                              custom_rid_rank_);
     reference.ReorderSequences(custom_rid_rank_);
   }
 

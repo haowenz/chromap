@@ -11,6 +11,7 @@
 #include "kseq.h"
 
 namespace chromap {
+
 class SequenceBatch {
  public:
   KSEQ_INIT(gzFile, gzread);
@@ -19,9 +20,10 @@ class SequenceBatch {
     effective_range_[1] = -1;
     effective_range_[2] = 1;
   }
+
+  // Construct once and use update sequences when loading each batch.
   SequenceBatch(uint32_t max_num_sequences)
       : max_num_sequences_(max_num_sequences) {
-    // Construct once and use update methods when loading each batch
     sequence_batch_.reserve(max_num_sequences_);
     for (uint32_t i = 0; i < max_num_sequences_; ++i) {
       sequence_batch_.emplace_back((kseq_t *)calloc(1, sizeof(kseq_t)));
@@ -32,6 +34,7 @@ class SequenceBatch {
     effective_range_[1] = -1;
     effective_range_[2] = 1;
   }
+
   ~SequenceBatch() {
     if (sequence_batch_.size() > 0) {
       for (uint32_t i = 0; i < sequence_batch_.size(); ++i) {
@@ -39,46 +42,58 @@ class SequenceBatch {
       }
     }
   }
+
   inline uint32_t GetMaxBatchSize() const { return max_num_sequences_; }
+
   inline uint64_t GetNumBases() const { return num_bases_; }
+
   inline std::vector<kseq_t *> &GetSequenceBatch() { return sequence_batch_; }
+
   inline std::vector<std::string> &GetNegativeSequenceBatch() {
     return negative_sequence_batch_;
   }
+
   inline const char *GetSequenceAt(uint32_t sequence_index) const {
     return sequence_batch_[sequence_index]->seq.s;
   }
+
   inline uint32_t GetSequenceLengthAt(uint32_t sequence_index) const {
     return sequence_batch_[sequence_index]->seq.l;
   }
+
   inline const char *GetSequenceNameAt(uint32_t sequence_index) const {
     return sequence_batch_[sequence_index]->name.s;
   }
+
   inline uint32_t GetSequenceNameLengthAt(uint32_t sequence_index) const {
     return sequence_batch_[sequence_index]->name.l;
   }
+
   inline const char *GetSequenceQualAt(uint32_t sequence_index) const {
     return sequence_batch_[sequence_index]->qual.s;
   }
   inline uint32_t GetSequenceIdAt(uint32_t sequence_index) const {
     return sequence_batch_[sequence_index]->id;
   }
+
   inline const std::string &GetNegativeSequenceAt(
       uint32_t sequence_index) const {
     return negative_sequence_batch_[sequence_index];
   }
-  inline int GetSequenceBatchSize() const { return sequence_batch_.size(); }
+
   inline void SetSeqEffectiveRange(int start, int end, int strand) {
     effective_range_[0] = start;
     effective_range_[1] = end;
     effective_range_[2] = strand;
   }
+
   //  inline char GetReverseComplementBaseOfSequenceAt(uint32_t sequence_index,
   //  uint32_t position) {
   //    kseq_t *sequence = sequence_batch_[sequence_index];
   //    return Uint8ToChar(((uint8_t)3) ^
   //    (CharToUint8((sequence->seq.s)[sequence->seq.l - position - 1])));
   //  }
+
   inline void PrepareNegativeSequenceAt(uint32_t sequence_index) {
     kseq_t *sequence = sequence_batch_[sequence_index];
     uint32_t sequence_length = sequence->seq.l;
@@ -91,6 +106,7 @@ class SequenceBatch {
           (CharToUint8((sequence->seq.s)[sequence_length - i - 1]))));
     }
   }
+
   inline void TrimSequenceAt(uint32_t sequence_index, int length_after_trim) {
     kseq_t *sequence = sequence_batch_[sequence_index];
     negative_sequence_batch_[sequence_index].erase(
@@ -102,17 +118,24 @@ class SequenceBatch {
     sequence->qual.l = length_after_trim;
     sequence->qual.s[sequence->qual.l] = '\0';
   }
+
   inline void SwapSequenceBatch(SequenceBatch &batch) {
     sequence_batch_.swap(batch.GetSequenceBatch());
     negative_sequence_batch_.swap(batch.GetNegativeSequenceBatch());
   }
+
   void InitializeLoading(const std::string &sequence_file_path);
+
   void FinalizeLoading();
+
   // Return the number of reads loaded into the batch
   // and return 0 if there is no more reads
   uint32_t LoadBatch();
+
   bool LoadOneSequenceAndSaveAt(uint32_t sequence_index);
+
   uint32_t LoadAllSequences();
+
   inline void CorrectBaseAt(uint32_t sequence_index, uint32_t base_position,
                             char correct_base) {
     kseq_t *sequence = sequence_batch_[sequence_index];
@@ -122,6 +145,7 @@ class SequenceBatch {
   inline static uint8_t CharToUint8(const char c) {
     return char_to_uint8_table_[(uint8_t)c];
   }
+
   inline static char Uint8ToChar(const uint8_t i) {
     return uint8_to_char_table_[i];
   }
@@ -175,28 +199,29 @@ class SequenceBatch {
     std::vector<kseq_t *> tmp_sequence_batch_ = sequence_batch_;
     std::vector<std::string> tmp_negative_sequence_batch_ =
         negative_sequence_batch_;
-    int i;
-    int sequence_size = sequence_batch_.size();
-    for (i = 0; i < sequence_size; ++i) {
+    for (size_t i = 0; i < sequence_batch_.size(); ++i) {
       sequence_batch_[rid_rank[i]] = tmp_sequence_batch_[i];
     }
+
     if (negative_sequence_batch_.size() > 0) {
-      for (i = 0; i < sequence_size; ++i) {
+      for (size_t i = 0; i < sequence_batch_.size(); ++i) {
         negative_sequence_batch_[rid_rank[i]] = tmp_negative_sequence_batch_[i];
       }
     }
   }
 
  protected:
+  void ReplaceByEffectiveRange(kstring_t &seq);
+
   uint32_t num_loaded_sequences_ = 0;
-  uint32_t max_num_sequences_;
-  uint64_t num_bases_;
-  std::string sequence_file_path_;
+  uint32_t max_num_sequences_ = 0;
+  uint64_t num_bases_ = 0;
   gzFile sequence_file_;
-  kseq_t *sequence_kseq_;
+  kseq_t *sequence_kseq_ = nullptr;
   std::vector<kseq_t *> sequence_batch_;
   std::vector<std::string> negative_sequence_batch_;
   int effective_range_[3] = {0, -1, 1};  // actual range within each sequence.
+
   static constexpr uint8_t char_to_uint8_table_[256] = {
       4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
       4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
@@ -211,32 +236,8 @@ class SequenceBatch {
       4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4};
   static constexpr char uint8_to_char_table_[8] = {'A', 'C', 'G', 'T',
                                                    'N', 'N', 'N', 'N'};
-  void ReplaceByEffectiveRange(kstring_t &seq) {
-    if (effective_range_[0] == 0 && effective_range_[1] == -1 &&
-        effective_range_[2] == 1) {
-      return;
-    }
-    int i, j;
-    int start = effective_range_[0];
-    int end = effective_range_[1];
-    if (effective_range_[1] == -1) end = seq.l - 1;
-    for (i = 0; i < end - start + 1; ++i) {
-      seq.s[i] = seq.s[start + i];
-    }
-    seq.s[i] = '\0';
-    seq.l = end - start + 1;
-    if (effective_range_[2] == -1) {
-      for (i = 0; i < (int)seq.l; ++i) {
-        seq.s[i] = Uint8ToChar(((uint8_t)3) ^ (CharToUint8(seq.s[i])));
-      }
-      for (i = 0, j = seq.l - 1; i < j; ++i, --j) {
-        char tmp = seq.s[i];
-        seq.s[i] = seq.s[j];
-        seq.s[j] = tmp;
-      }
-    }
-  }
 };
+
 }  // namespace chromap
 
 #endif  // SEQUENCEBATCH_H_

@@ -110,6 +110,7 @@ class Chromap {
                                    &mappings_on_diff_ref_seqs);
 
   void GenerateCustomizedRidRank(const std::string &rid_order_path,
+                                 uint32_t num_reference_sequences,
                                  const SequenceBatch &reference,
                                  std::vector<int> &rid_rank);
 
