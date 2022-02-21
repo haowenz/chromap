@@ -12,6 +12,7 @@
 
 #include "bed_mapping.h"
 #include "mapping.h"
+#include "mapping_parameters.h"
 #include "paf_mapping.h"
 #include "pairs_mapping.h"
 #include "sam_mapping.h"
@@ -32,14 +33,14 @@ template <typename MappingRecord>
 class MappingProcessor {
  public:
   MappingProcessor() = delete;
-  MappingProcessor(int min_unique_mapping_mapq,
-                   int multi_mapping_allocation_seed,
-                   int multi_mapping_allocation_distance,
-                   int max_num_best_mappings)
+  MappingProcessor(const MappingParameters &mapping_parameters,
+                   int min_unique_mapping_mapq)
       : min_unique_mapping_mapq_(min_unique_mapping_mapq),
-        multi_mapping_allocation_seed_(multi_mapping_allocation_seed),
-        multi_mapping_allocation_distance_(multi_mapping_allocation_distance),
-        max_num_best_mappings_(max_num_best_mappings) {}
+        multi_mapping_allocation_seed_(
+            mapping_parameters.multi_mapping_allocation_seed),
+        multi_mapping_allocation_distance_(
+            mapping_parameters.multi_mapping_allocation_distance),
+        max_num_best_mappings_(mapping_parameters.max_num_best_mappings) {}
 
   ~MappingProcessor() = default;
 

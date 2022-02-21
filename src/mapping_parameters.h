@@ -20,6 +20,8 @@ struct MappingParameters {
   std::vector<int> gap_extension_penalties = {1, 1};
   int min_num_seeds_required_for_mapping = 2;
   std::vector<int> max_seed_frequencies = {500, 1000};
+  // Read with # best mappings greater than it will have this number of best
+  // mappings reported.
   int max_num_best_mappings = 1;
   int max_insert_size = 1000;
   uint8_t mapq_threshold = 30;
@@ -29,6 +31,7 @@ struct MappingParameters {
   double barcode_correction_probability_threshold = 0.9;
   int multi_mapping_allocation_distance = 0;
   int multi_mapping_allocation_seed = 11;
+  // Read with more than this number of mappings will be dropped.
   int drop_repetitive_reads = 500000;
   bool trim_adapters = false;
   bool remove_pcr_duplicates = false;
@@ -55,10 +58,22 @@ struct MappingParameters {
   std::string read_format;
   std::string mapping_output_file_path;
   std::string matrix_output_prefix;
+  // The order for general sorting.
   std::string custom_rid_order_path;
+  // The order for pairs format flipping.
   std::string pairs_custom_rid_order_path;
-  std::string barcode_translate_table_path;
+  std::string barcode_translate_table_file_path;
   bool skip_barcode_check = false;
+
+  int GetNumVPULanes() const {
+    int NUM_VPU_LANES = 0;
+    if (error_threshold < 8) {
+      NUM_VPU_LANES = 8;
+    } else if (error_threshold < 16) {
+      NUM_VPU_LANES = 4;
+    }
+    return NUM_VPU_LANES;
+  }
 };
 
 }  // namespace chromap

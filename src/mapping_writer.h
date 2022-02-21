@@ -7,19 +7,19 @@
 #include <cstring>
 #include <functional>
 #include <iostream>
+#include <limits>
 #include <string>
 #include <vector>
-#include <limits>
 
 #include "barcode_translator.h"
 #include "bed_mapping.h"
 #include "mapping.h"
-#include "temp_mapping.h"
 #include "mapping_parameters.h"
 #include "paf_mapping.h"
 #include "pairs_mapping.h"
 #include "sam_mapping.h"
 #include "sequence_batch.h"
+#include "temp_mapping.h"
 #include "utils.h"
 
 namespace chromap {
@@ -29,29 +29,20 @@ class MappingWriter {
  public:
   MappingWriter() = delete;
 
-  MappingWriter(const std::string &mapping_output_file_path,
-                MappingOutputFormat &mapping_output_format,
-                uint32_t cell_barcode_length, uint8_t mapq_threshold,
-                bool Tn5_shift, bool remove_pcr_duplicates,
-                bool remove_pcr_duplicates_at_bulk_level, bool is_bulk_data,
-                const std::string *barcode_translate_table_file_path,
+  MappingWriter(const MappingParameters mapping_parameters,
+                const uint32_t cell_barcode_length,
                 const std::vector<int> *custom_rid_rank)
-      : mapping_output_file_path_(mapping_output_file_path),
-        mapping_output_format_(mapping_output_format),
+      : mapping_parameters_(mapping_parameters),
         cell_barcode_length_(cell_barcode_length),
-        mapq_threshold_(mapq_threshold),
-        Tn5_shift_(Tn5_shift),
-        remove_pcr_duplicates_(remove_pcr_duplicates),
-        remove_pcr_duplicates_at_bulk_level_(
-            remove_pcr_duplicates_at_bulk_level),
-        is_bulk_data_(is_bulk_data),
         custom_rid_rank_(custom_rid_rank != nullptr ? *custom_rid_rank
                                                     : std::vector<int>()) {
-    if (barcode_translate_table_file_path != nullptr) {
-      barcode_translator_.SetTranslateTable(*barcode_translate_table_file_path);
+    if (!mapping_parameters_.barcode_translate_table_file_path.empty()) {
+      barcode_translator_.SetTranslateTable(
+          mapping_parameters_.barcode_translate_table_file_path);
     }
 
-    mapping_output_file_ = fopen(mapping_output_file_path_.c_str(), "w");
+    mapping_output_file_ =
+        fopen(mapping_parameters_.mapping_output_file_path.c_str(), "w");
     assert(mapping_output_file_ != nullptr);
   }
 
@@ -114,16 +105,10 @@ class MappingWriter {
     fclose(temp_mapping_output_file);
   }
 
-  const std::string mapping_output_file_path_;
-  // TODO(Haowen): use this variable to decide output in BED or TagAlign. It
-  // should be removed later.
-  const MappingOutputFormat mapping_output_format_;
+  // TODO(Haowen): use mapping_output_format_ variable to decide output in BED
+  // or TagAlign. It should be removed later.
+  const MappingParameters mapping_parameters_;
   const uint32_t cell_barcode_length_;
-  const uint8_t mapq_threshold_;
-  const bool Tn5_shift_;
-  const bool remove_pcr_duplicates_;
-  const bool remove_pcr_duplicates_at_bulk_level_;
-  const bool is_bulk_data_;
   FILE *mapping_output_file_ = nullptr;
   BarcodeTranslator barcode_translator_;
   // for pairs
@@ -185,9 +170,9 @@ void MappingWriter<MappingRecord>::ProcessAndOutputMappingsInLowMemory(
 
   // Calculate block size and initialize
   uint64_t max_mem_size = 10 * ((uint64_t)1 << 30);
-  if (mapping_output_format_ == MAPPINGFORMAT_SAM ||
-      mapping_output_format_ == MAPPINGFORMAT_PAIRS ||
-      mapping_output_format_ == MAPPINGFORMAT_PAF) {
+  if (mapping_parameters_.mapping_output_format == MAPPINGFORMAT_SAM ||
+      mapping_parameters_.mapping_output_format == MAPPINGFORMAT_PAIRS ||
+      mapping_parameters_.mapping_output_format == MAPPINGFORMAT_PAF) {
     max_mem_size = (uint64_t)1 << 30;
   }
   for (size_t hi = 0; hi < temp_mapping_file_handles.size(); ++hi) {
@@ -211,8 +196,9 @@ void MappingWriter<MappingRecord>::ProcessAndOutputMappingsInLowMemory(
   temp_dups_for_bulk_level_dedup.reserve(255);
 
   const bool deduplicate_at_bulk_level_for_single_cell_data =
-      remove_pcr_duplicates_ && !is_bulk_data_ &&
-      remove_pcr_duplicates_at_bulk_level_;
+      mapping_parameters_.remove_pcr_duplicates &&
+      !mapping_parameters_.is_bulk_data &&
+      mapping_parameters_.remove_pcr_duplicates_at_bulk_level;
 
   while (true) {
     // Merge, dedupe and output.
@@ -259,7 +245,8 @@ void MappingWriter<MappingRecord>::ProcessAndOutputMappingsInLowMemory(
         last_rid == min_rid && (current_mapping_is_duplicated_at_cell_level ||
                                 current_mapping_is_duplicated_at_bulk_level);
 
-    if (remove_pcr_duplicates_ && current_mapping_is_duplicated) {
+    if (mapping_parameters_.remove_pcr_duplicates &&
+        current_mapping_is_duplicated) {
       ++num_last_mapping_dups;
       if (deduplicate_at_bulk_level_for_single_cell_data) {
         if (!temp_dups_for_bulk_level_dedup.empty() &&
@@ -282,11 +269,11 @@ void MappingWriter<MappingRecord>::ProcessAndOutputMappingsInLowMemory(
           temp_dups_for_bulk_level_dedup.clear();
         }
 
-        if (last_mapping.mapq_ >= mapq_threshold_) {
+        if (last_mapping.mapq_ >= mapping_parameters_.mapq_threshold) {
           last_mapping.num_dups_ =
               std::min((uint32_t)std::numeric_limits<uint8_t>::max(),
                        num_last_mapping_dups);
-          if (Tn5_shift_) {
+          if (mapping_parameters_.Tn5_shift) {
             last_mapping.Tn5Shift();
           }
           AppendMapping(last_rid, reference, last_mapping);
@@ -313,7 +300,7 @@ void MappingWriter<MappingRecord>::ProcessAndOutputMappingsInLowMemory(
     temp_mapping_file_handles[min_handle_index].Next(num_reference_sequences);
   }
 
-  if (last_mapping.mapq_ >= mapq_threshold_) {
+  if (last_mapping.mapq_ >= mapping_parameters_.mapq_threshold) {
     if (deduplicate_at_bulk_level_for_single_cell_data) {
       size_t best_mapping_index = FindBestMappingIndexFromDuplicates(
           barcode_whitelist_lookup_table, temp_dups_for_bulk_level_dedup);
@@ -324,7 +311,7 @@ void MappingWriter<MappingRecord>::ProcessAndOutputMappingsInLowMemory(
 
     last_mapping.num_dups_ = std::min(
         (uint32_t)std::numeric_limits<uint8_t>::max(), num_last_mapping_dups);
-    if (Tn5_shift_) {
+    if (mapping_parameters_.Tn5_shift) {
       last_mapping.Tn5Shift();
     }
     AppendMapping(last_rid, reference, last_mapping);
@@ -343,7 +330,7 @@ void MappingWriter<MappingRecord>::ProcessAndOutputMappingsInLowMemory(
     remove(temp_mapping_file_handles[hi].file_path.c_str());
   }
 
-  if (remove_pcr_duplicates_) {
+  if (mapping_parameters_.remove_pcr_duplicates) {
     std::cerr << "Sorted, deduped and outputed mappings in "
               << GetRealTime() - sort_and_dedupe_start_time << "s.\n";
   } else {
@@ -365,7 +352,7 @@ void MappingWriter<MappingRecord>::OutputTempMappings(
         &temp_mapping_file_handles) {
   TempMappingFileHandle<MappingRecord> temp_mapping_file_handle;
   temp_mapping_file_handle.file_path =
-      mapping_output_file_path_ + ".temp" +
+      mapping_parameters_.mapping_output_file_path + ".temp" +
       std::to_string(temp_mapping_file_handles.size());
   temp_mapping_file_handles.emplace_back(temp_mapping_file_handle);
 
@@ -406,8 +393,8 @@ void MappingWriter<MappingRecord>::OutputMappings(
     const std::vector<std::vector<MappingRecord>> &mappings) {
   // if (only_output_unique_mappings_ && mapq_threshold_ < 4)
   //  mapq_threshold_ = 4;
-  OutputMappingsInVector(mapq_threshold_, num_reference_sequences, reference,
-                         mappings);
+  OutputMappingsInVector(mapping_parameters_.mapq_threshold,
+                         num_reference_sequences, reference, mappings);
 }
 
 // Specialization for BED format.
