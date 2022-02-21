@@ -15,7 +15,6 @@ class CandidateProcessor;
 class PairedEndMappingMetadata;
 template <typename MappingRecord>
 class MappingGenerator;
-template <typename MappingRecord>
 class Chromap;
 
 class MappingMetadata {
@@ -135,7 +134,6 @@ class MappingMetadata {
   friend class PairedEndMappingMetadata;
   template <typename MappingRecord>
   friend class MappingGenerator;
-  template <typename MappingRecord>
   friend class Chromap;
 };
 

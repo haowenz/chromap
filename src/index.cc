@@ -5,7 +5,6 @@
 #include <algorithm>
 #include <iostream>
 
-#include "chromap.h"
 #include "utils.h"
 
 namespace chromap {

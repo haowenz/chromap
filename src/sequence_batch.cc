@@ -2,7 +2,6 @@
 
 #include <tuple>
 
-#include "chromap.h"
 #include "utils.h"
 
 namespace chromap {
