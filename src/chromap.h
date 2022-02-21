@@ -141,8 +141,8 @@ class Chromap {
  private:
   uint32_t SampleInputBarcodesAndExamineLength();
 
-  uint32_t LoadSingleEndReadsWithBarcodes(SequenceBatch *read_batch,
-                                          SequenceBatch *barcode_batch);
+  uint32_t LoadSingleEndReadsWithBarcodes(SequenceBatch &read_batch,
+                                          SequenceBatch &barcode_batch);
 
   uint32_t LoadPairedEndReadsWithBarcodes(SequenceBatch &read_batch1,
                                           SequenceBatch &read_batch2,

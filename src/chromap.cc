@@ -1266,7 +1266,7 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
 
     uint32_t num_loaded_reads_for_loading = 0;
     uint32_t num_loaded_reads = LoadSingleEndReadsWithBarcodes(
-        &read_batch_for_loading, &barcode_batch_for_loading);
+        read_batch_for_loading, barcode_batch_for_loading);
     read_batch_for_loading.SwapSequenceBatch(read_batch);
 
     if (!is_bulk_data_) {
@@ -1312,7 +1312,7 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
 #pragma omp task
           {
             num_loaded_reads_for_loading = LoadSingleEndReadsWithBarcodes(
-                &read_batch_for_loading, &barcode_batch_for_loading);
+                read_batch_for_loading, barcode_batch_for_loading);
           }  // end of openmp loading task
              // int grain_size = 10000;
 //#pragma omp taskloop grainsize(grain_size) //num_tasks(num_threads_* 50)
@@ -1532,18 +1532,18 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
 
 template <typename MappingRecord>
 uint32_t Chromap<MappingRecord>::LoadSingleEndReadsWithBarcodes(
-    SequenceBatch *read_batch, SequenceBatch *barcode_batch) {
+    SequenceBatch &read_batch, SequenceBatch &barcode_batch) {
   double real_start_time = GetRealTime();
   uint32_t num_loaded_reads = 0;
   while (num_loaded_reads < read_batch_size_) {
-    bool no_more_read = read_batch->LoadOneSequenceAndSaveAt(num_loaded_reads);
+    bool no_more_read = read_batch.LoadOneSequenceAndSaveAt(num_loaded_reads);
     bool no_more_barcode = no_more_read;
     if (!is_bulk_data_) {
       no_more_barcode =
-          barcode_batch->LoadOneSequenceAndSaveAt(num_loaded_reads);
+          barcode_batch.LoadOneSequenceAndSaveAt(num_loaded_reads);
     }
     if ((!no_more_read) && (!no_more_barcode)) {
-      if (read_batch->GetSequenceLengthAt(num_loaded_reads) <
+      if (read_batch.GetSequenceLengthAt(num_loaded_reads) <
           (uint32_t)min_read_length_) {
         continue;  // reads are too short, just drop.
       }
