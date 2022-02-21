@@ -11,7 +11,7 @@ template <>
 void MappingWriter<MappingWithBarcode>::AppendMapping(
     uint32_t rid, const SequenceBatch &reference,
     const MappingWithBarcode &mapping) {
-  if (mapping_output_format_ == MAPPINGFORMAT_BED) {
+  if (mapping_parameters_.mapping_output_format == MAPPINGFORMAT_BED) {
     std::string strand = mapping.IsPositiveStrand() ? "+" : "-";
     const char *reference_sequence_name = reference.GetSequenceNameAt(rid);
     uint32_t mapping_end_position = mapping.GetEndPosition();
@@ -42,7 +42,7 @@ template <>
 void MappingWriter<MappingWithoutBarcode>::AppendMapping(
     uint32_t rid, const SequenceBatch &reference,
     const MappingWithoutBarcode &mapping) {
-  if (mapping_output_format_ == MAPPINGFORMAT_BED) {
+  if (mapping_parameters_.mapping_output_format == MAPPINGFORMAT_BED) {
     std::string strand = mapping.IsPositiveStrand() ? "+" : "-";
     const char *reference_sequence_name = reference.GetSequenceNameAt(rid);
     uint32_t mapping_end_position = mapping.GetEndPosition();
@@ -72,7 +72,7 @@ template <>
 void MappingWriter<PairedEndMappingWithoutBarcode>::AppendMapping(
     uint32_t rid, const SequenceBatch &reference,
     const PairedEndMappingWithoutBarcode &mapping) {
-  if (mapping_output_format_ == MAPPINGFORMAT_BED) {
+  if (mapping_parameters_.mapping_output_format == MAPPINGFORMAT_BED) {
     std::string strand = mapping.IsPositiveStrand() ? "+" : "-";
     const char *reference_sequence_name = reference.GetSequenceNameAt(rid);
     uint32_t mapping_end_position = mapping.GetEndPosition();
@@ -122,7 +122,7 @@ template <>
 void MappingWriter<PairedEndMappingWithBarcode>::AppendMapping(
     uint32_t rid, const SequenceBatch &reference,
     const PairedEndMappingWithBarcode &mapping) {
-  if (mapping_output_format_ == MAPPINGFORMAT_BED) {
+  if (mapping_parameters_.mapping_output_format == MAPPINGFORMAT_BED) {
     std::string strand = mapping.IsPositiveStrand() ? "+" : "-";
     const char *reference_sequence_name = reference.GetSequenceNameAt(rid);
     uint32_t mapping_end_position = mapping.GetEndPosition();
