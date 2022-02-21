@@ -31,13 +31,6 @@
 
 namespace chromap {
 
-class ChromapDriver {
- public:
-  ChromapDriver() {}
-  ~ChromapDriver() {}
-  void ParseArgsAndRun(int argc, char *argv[]);
-};
-
 class Chromap {
  public:
   // For index construction

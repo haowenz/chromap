@@ -1926,7 +1926,8 @@ void MappingGenerator<MappingRecord>::EmplaceBackMappingRecord(
     std::vector<MappingRecord> *mappings_on_diff_ref_seqs) {}
 
 template <>
-void MappingGenerator<PairedEndMappingWithoutBarcode>::EmplaceBackMappingRecord(
+inline void
+MappingGenerator<PairedEndMappingWithoutBarcode>::EmplaceBackMappingRecord(
     uint32_t read_id, uint64_t barcode, uint32_t fragment_start_position,
     uint16_t fragment_length, uint8_t mapq, uint8_t direction,
     uint8_t is_unique, uint8_t num_dups, uint16_t positive_alignment_length,
@@ -1939,7 +1940,8 @@ void MappingGenerator<PairedEndMappingWithoutBarcode>::EmplaceBackMappingRecord(
 }
 
 template <>
-void MappingGenerator<PairedEndMappingWithBarcode>::EmplaceBackMappingRecord(
+inline void
+MappingGenerator<PairedEndMappingWithBarcode>::EmplaceBackMappingRecord(
     uint32_t read_id, uint64_t barcode, uint32_t fragment_start_position,
     uint16_t fragment_length, uint8_t mapq, uint8_t direction,
     uint8_t is_unique, uint8_t num_dups, uint16_t positive_alignment_length,
@@ -1961,7 +1963,7 @@ void MappingGenerator<MappingRecord>::EmplaceBackMappingRecord(
     std::vector<MappingRecord> *mappings_on_diff_ref_seqs) {}
 
 template <>
-void MappingGenerator<PairedPAFMapping>::EmplaceBackMappingRecord(
+inline void MappingGenerator<PairedPAFMapping>::EmplaceBackMappingRecord(
     uint32_t read_id, const char *read1_name, const char *read2_name,
     uint16_t read1_length, uint16_t read2_length, uint64_t barcode,
     uint32_t fragment_start_position, uint16_t fragment_length, uint8_t mapq1,
@@ -1984,7 +1986,7 @@ void MappingGenerator<MappingRecord>::EmplaceBackMappingRecord(
     std::vector<MappingRecord> *mappings_on_diff_ref_seqs) {}
 
 template <>
-void MappingGenerator<PairsMapping>::EmplaceBackMappingRecord(
+inline void MappingGenerator<PairsMapping>::EmplaceBackMappingRecord(
     uint32_t read_id, const char *read_name, uint64_t cell_barcode, int rid1,
     int rid2, uint32_t pos1, uint32_t pos2, int direction1, int direction2,
     uint8_t mapq, uint8_t is_unique, uint8_t num_dups,
@@ -2002,7 +2004,7 @@ void MappingGenerator<MappingRecord>::EmplaceBackMappingRecord(
     std::vector<MappingRecord> *mappings_on_diff_ref_seqs) {}
 
 template <>
-void MappingGenerator<MappingWithoutBarcode>::EmplaceBackMappingRecord(
+inline void MappingGenerator<MappingWithoutBarcode>::EmplaceBackMappingRecord(
     uint32_t read_id, uint64_t barcode, uint32_t fragment_start_position,
     uint16_t fragment_length, uint8_t mapq, uint8_t direction,
     uint8_t is_unique, uint8_t num_dups,
@@ -2013,7 +2015,7 @@ void MappingGenerator<MappingWithoutBarcode>::EmplaceBackMappingRecord(
 }
 
 template <>
-void MappingGenerator<MappingWithBarcode>::EmplaceBackMappingRecord(
+inline void MappingGenerator<MappingWithBarcode>::EmplaceBackMappingRecord(
     uint32_t read_id, uint64_t barcode, uint32_t fragment_start_position,
     uint16_t fragment_length, uint8_t mapq, uint8_t direction,
     uint8_t is_unique, uint8_t num_dups,
@@ -2032,7 +2034,7 @@ void MappingGenerator<MappingRecord>::EmplaceBackMappingRecord(
     std::vector<MappingRecord> *mappings_on_diff_ref_seqs) {}
 
 template <>
-void MappingGenerator<PAFMapping>::EmplaceBackMappingRecord(
+inline void MappingGenerator<PAFMapping>::EmplaceBackMappingRecord(
     uint32_t read_id, const char *read_name, uint16_t read_length,
     uint64_t barcode, uint32_t fragment_start_position,
     uint16_t fragment_length, uint8_t mapq, uint8_t direction,
@@ -2052,7 +2054,7 @@ void MappingGenerator<MappingRecord>::EmplaceBackMappingRecord(
     std::vector<MappingRecord> *mappings_on_diff_ref_seqs) {}
 
 template <>
-void MappingGenerator<SAMMapping>::EmplaceBackMappingRecord(
+inline void MappingGenerator<SAMMapping>::EmplaceBackMappingRecord(
     uint32_t read_id, const char *read_name, uint64_t cell_barcode,
     uint8_t num_dups, int64_t position, int rid, int flag, uint8_t direction,
     uint8_t is_unique, uint8_t mapq, uint32_t NM, int n_cigar, uint32_t *cigar,
