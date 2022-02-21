@@ -238,7 +238,6 @@ class Chromap {
   int read1_format_[3];
   int read2_format_[3];
   std::string mapping_output_file_path_;
-  FILE *mapping_output_file_;
   std::string matrix_output_prefix_;
   // The order for general sorting.
   std::string custom_rid_order_path_;
