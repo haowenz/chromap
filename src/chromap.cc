@@ -378,6 +378,9 @@ uint32_t Chromap<MappingRecord>::SampleInputBarcodesAndExamineLength() {
   uint32_t sample_batch_size = 1000;
   SequenceBatch barcode_batch(sample_batch_size);
 
+  barcode_batch.SetSeqEffectiveRange(barcode_format_[0], barcode_format_[1],
+                                     barcode_format_[2]);
+
   barcode_batch.InitializeLoading(barcode_file_paths_[0]);
 
   uint32_t num_loaded_barcodes = barcode_batch.LoadBatch();
