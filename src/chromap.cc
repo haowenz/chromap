@@ -1095,8 +1095,6 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
         num_mappings_in_mem, num_reference_sequences, reference,
         barcode_whitelist_lookup_table_, temp_mapping_file_handles);
   } else {
-    // OutputMappingStatistics(num_reference_sequences,
-    // mappings_on_diff_ref_seqs, mappings_on_diff_ref_seqs);
     if (mapping_parameters_.Tn5_shift) {
       mapping_processor.ApplyTn5ShiftOnMappings(num_reference_sequences,
                                                 mappings_on_diff_ref_seqs);
@@ -1106,7 +1104,7 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
       mapping_processor.RemovePCRDuplicate(num_reference_sequences,
                                            mappings_on_diff_ref_seqs);
       std::cerr << "After removing PCR duplications, ";
-      OutputMappingStatistics(num_reference_sequences,
+      mapping_processor.OutputMappingStatistics(num_reference_sequences,
                               mappings_on_diff_ref_seqs);
     } else {
       mapping_processor.SortOutputMappings(num_reference_sequences,
@@ -1121,7 +1119,7 @@ void Chromap<MappingRecord>::MapPairedEndReads() {
           mapping_parameters_.multi_mapping_allocation_distance,
           mappings_on_diff_ref_seqs);
       std::cerr << "After allocating multi-mappings, ";
-      OutputMappingStatistics(num_reference_sequences,
+      mapping_processor.OutputMappingStatistics(num_reference_sequences,
                               mappings_on_diff_ref_seqs);
       mapping_processor.SortOutputMappings(num_reference_sequences,
                                            mappings_on_diff_ref_seqs);
@@ -1496,7 +1494,7 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
       mapping_processor.RemovePCRDuplicate(num_reference_sequences,
                                            mappings_on_diff_ref_seqs);
       std::cerr << "After removing PCR duplications, ";
-      OutputMappingStatistics(num_reference_sequences,
+      mapping_processor.OutputMappingStatistics(num_reference_sequences,
                               mappings_on_diff_ref_seqs);
     } else {
       mapping_processor.SortOutputMappings(num_reference_sequences,
@@ -1511,7 +1509,7 @@ void Chromap<MappingRecord>::MapSingleEndReads() {
           mapping_parameters_.multi_mapping_allocation_distance,
           mappings_on_diff_ref_seqs);
       std::cerr << "After allocating multi-mappings, ";
-      OutputMappingStatistics(num_reference_sequences,
+      mapping_processor.OutputMappingStatistics(num_reference_sequences,
                               mappings_on_diff_ref_seqs);
       mapping_processor.SortOutputMappings(num_reference_sequences,
                                            mappings_on_diff_ref_seqs);
@@ -1602,26 +1600,6 @@ void Chromap<MappingRecord>::OutputMappingStatistics() {
             << ".\n";
   std::cerr << "Number of multi-mappings: "
             << num_mappings_ - num_uniquely_mapped_reads_ << ".\n";
-}
-
-template <typename MappingRecord>
-void Chromap<MappingRecord>::OutputMappingStatistics(
-    uint32_t num_reference_sequences,
-    const std::vector<std::vector<MappingRecord>> &mappings_on_diff_ref_seqs) {
-  uint64_t num_uni_mappings = 0;
-  uint64_t num_multi_mappings = 0;
-  for (auto &mappings_on_one_ref_seq : mappings_on_diff_ref_seqs) {
-    for (auto &mapping : mappings_on_one_ref_seq) {
-      if ((mapping.is_unique_) == 1) {
-        ++num_uni_mappings;
-      } else {
-        ++num_multi_mappings;
-      }
-    }
-  }
-  std::cerr << "# uni-mappings: " << num_uni_mappings
-            << ", # multi-mappings: " << num_multi_mappings
-            << ", total: " << num_uni_mappings + num_multi_mappings << ".\n";
 }
 
 template <typename MappingRecord>

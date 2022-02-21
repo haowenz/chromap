@@ -67,6 +67,10 @@ class MappingProcessor {
           &mappings_on_diff_ref_seqs_for_diff_threads_for_saving,
       std::vector<std::vector<MappingRecord>> &mappings_on_diff_ref_seqs);
 
+  void OutputMappingStatistics(
+      uint32_t num_reference_sequences,
+      const std::vector<std::vector<MappingRecord>> &mappings_on_diff_ref_seqs);
+
  private:
   void BuildAugmentedTree(
       uint32_t ref_id,
@@ -422,6 +426,26 @@ MappingProcessor<MappingRecord>::MoveMappingsInBuffersToMappingContainer(
   // std::cerr << "Moved mappings in " << Chromap<>::GetRealTime() -
   // real_start_time << "s.\n";
   return num_moved_mappings;
+}
+
+template <typename MappingRecord>
+void MappingProcessor<MappingRecord>::OutputMappingStatistics(
+    uint32_t num_reference_sequences,
+    const std::vector<std::vector<MappingRecord>> &mappings_on_diff_ref_seqs) {
+  uint64_t num_uni_mappings = 0;
+  uint64_t num_multi_mappings = 0;
+  for (auto &mappings_on_one_ref_seq : mappings_on_diff_ref_seqs) {
+    for (auto &mapping : mappings_on_one_ref_seq) {
+      if ((mapping.is_unique_) == 1) {
+        ++num_uni_mappings;
+      } else {
+        ++num_multi_mappings;
+      }
+    }
+  }
+  std::cerr << "# uni-mappings: " << num_uni_mappings
+            << ", # multi-mappings: " << num_multi_mappings
+            << ", total: " << num_uni_mappings + num_multi_mappings << ".\n";
 }
 
 }  // namespace chromap
