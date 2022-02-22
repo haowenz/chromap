@@ -31,11 +31,10 @@ class MappingWriter {
 
   MappingWriter(const MappingParameters mapping_parameters,
                 const uint32_t cell_barcode_length,
-                const std::vector<int> *custom_rid_rank)
+                const std::vector<int> &custom_rid_rank)
       : mapping_parameters_(mapping_parameters),
         cell_barcode_length_(cell_barcode_length),
-        custom_rid_rank_(custom_rid_rank != nullptr ? *custom_rid_rank
-                                                    : std::vector<int>()) {
+        custom_rid_rank_(custom_rid_rank) {
     if (!mapping_parameters_.barcode_translate_table_file_path.empty()) {
       barcode_translator_.SetTranslateTable(
           mapping_parameters_.barcode_translate_table_file_path);

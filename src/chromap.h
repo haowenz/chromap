@@ -219,7 +219,7 @@ void Chromap::MapSingleEndReads() {
 
   MappingWriter<MappingRecord> mapping_writer(mapping_parameters_,
                                               barcode_length_,
-                                              /*custom_rid_rank=*/nullptr);
+                                              pairs_custom_rid_rank_);
 
   mapping_writer.OutputHeader(num_reference_sequences, reference);
 
@@ -609,9 +609,7 @@ void Chromap::MapPairedEndReads() {
 
   MappingWriter<MappingRecord> mapping_writer(
       mapping_parameters_, barcode_length_,
-      mapping_parameters_.mapping_output_format == MAPPINGFORMAT_PAIRS
-          ? &pairs_custom_rid_rank_
-          : nullptr);
+      pairs_custom_rid_rank_);
   mapping_writer.OutputHeader(num_reference_sequences, reference);
 
   uint32_t num_mappings_in_mem = 0;
