@@ -29,6 +29,7 @@ template <typename MappingRecord>
 class MappingGenerator {
  public:
   MappingGenerator() = delete;
+
   MappingGenerator(const MappingParameters &mapping_parameters,
                    const std::vector<int> &pairs_custom_rid_rank)
       : mapping_parameters_(mapping_parameters),
@@ -199,19 +200,7 @@ class MappingGenerator {
       int force_mapq, uint8_t &mapq1, uint8_t &mapq2);
 
   const MappingParameters mapping_parameters_;
-  // const int error_threshold_;
   const int NUM_VPU_LANES_;
-  // const int match_score_;
-  // const int mismatch_penalty_;
-  // const std::vector<int> gap_open_penalties_;
-  // const std::vector<int> gap_extension_penalties_;
-  // const int max_num_best_mappings_;
-  // const int max_insert_size_;
-  // const int min_read_length_;
-  // const int drop_repetitive_reads_;
-  // const bool is_bulk_data_;
-  // const bool split_alignment_;
-  // const MappingOutputFormat mapping_output_format_;
   const std::vector<int> pairs_custom_rid_rank_;
 };
 
