@@ -18,7 +18,7 @@ void Chromap::ConstructIndex() {
   // TODO(Haowen): Need a faster algorithm
   // Load all sequences in the reference into one batch
   SequenceBatch reference;
-  reference.InitializeLoading(mapping_parameters_.reference_file_path);
+  reference.InitializeLoading(index_parameters_.reference_file_path);
   uint32_t num_sequences = reference.LoadAllSequences();
   Index index(index_parameters_.kmer_size, index_parameters_.window_size,
               index_parameters_.num_threads,
