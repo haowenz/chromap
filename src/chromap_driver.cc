@@ -105,14 +105,18 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
       // cxxopts::value<std::string>(), "FILE")
       ("output-mappings-not-in-whitelist",
        "Output mappings with barcode not in the whitelist")(
-          "chr-order", "custom chromsome order", cxxopts::value<std::string>(),
+          "chr-order",
+          "Custom chromosome order file. If not specified, the order of "
+          "reference sequences will be used",
+          cxxopts::value<std::string>(),
           "FILE")("BED", "Output mappings in BED/BEDPE format")(
           "TagAlign", "Output mappings in TagAlign/PairedTagAlign format")(
           "SAM", "Output mappings in SAM format")(
           "pairs",
           "Output mappings in pairs format (defined by 4DN for HiC data)")(
           "pairs-natural-chr-order",
-          "natural chromosome order for pairs flipping",
+          "Custom chromosome order file for pairs flipping. If not specified, "
+          "the custom chromosome order will be used",
           cxxopts::value<std::string>(),
           "FILE")("barcode-translate",
                   "Convert barcode to the specified sequences during output",
