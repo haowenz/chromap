@@ -717,46 +717,45 @@ void Chromap::ParseReadFormat(const std::string &read_format) {
     memcpy(barcode_format_, fields, sizeof(fields));
 }
 
-void Chromap::GenerateCustomizedRidRank(const std::string &rid_order_path,
-                                        uint32_t num_reference_sequences,
-                                        const SequenceBatch &reference,
-                                        std::vector<int> &rid_rank) {
-  rid_rank.resize(num_reference_sequences);
+void Chromap::GenerateCustomRidRanks(
+    const std::string &custom_rid_order_file_path,
+    uint32_t num_reference_sequences, const SequenceBatch &reference,
+    std::vector<int> &rid_ranks) {
   for (uint32_t i = 0; i < num_reference_sequences; ++i) {
-    rid_rank[i] = i;
+    rid_ranks.emplace_back(i);
   }
 
-  if (rid_order_path.length() == 0) {
+  if (custom_rid_order_file_path.empty()) {
     return;
   }
 
-  std::unordered_map<std::string, int> rname_to_rank;
-  std::ifstream file_stream(rid_order_path);
-  std::string line;
-  uint32_t i = 0;
-  while (getline(file_stream, line)) {
-    rname_to_rank[line] = i;
-    i += 1;
+  std::unordered_map<std::string, int> ref_name_to_rank;
+  std::ifstream custom_rid_order_file_stream(custom_rid_order_file_path);
+  std::string ref_name;
+  uint32_t ref_rank = 0;
+  while (getline(custom_rid_order_file_stream, ref_name)) {
+    ref_name_to_rank[ref_name] = ref_rank;
+    ref_rank += 1;
   }
-  file_stream.close();
+  custom_rid_order_file_stream.close();
 
-  // First put the chrosomes in the list provided by user.
+  // First, rank the chromosomes in the custom order provided by users.
   for (uint32_t i = 0; i < num_reference_sequences; ++i) {
-    std::string rname(reference.GetSequenceNameAt(i));
-    if (rname_to_rank.find(rname) != rname_to_rank.end()) {
-      rid_rank[i] = rname_to_rank[rname];
+    std::string ref_name(reference.GetSequenceNameAt(i));
+    if (ref_name_to_rank.find(ref_name) != ref_name_to_rank.end()) {
+      rid_ranks[i] = ref_name_to_rank[ref_name];
     } else {
-      rid_rank[i] = -1;
+      rid_ranks[i] = -1;
     }
   }
 
-  // There might be some rank without any rid associated with. This helps if
-  // cutstom list contains rid not in the reference.
-  uint32_t k = rname_to_rank.size();
-  // Put the remaining chrosomes
+  // There might be some rids without any custom order. We just order them based
+  // on their original order in the reference file.
+  uint32_t k = ref_name_to_rank.size();
+  // Rank the remaining chromosomes.
   for (uint32_t i = 0; i < num_reference_sequences; ++i) {
-    if (rid_rank[i] == -1) {
-      rid_rank[i] = k;
+    if (rid_ranks[i] == -1) {
+      rid_ranks[i] = k;
       ++k;
     }
   }
