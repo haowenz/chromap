@@ -32,6 +32,8 @@ namespace chromap {
 
 class Chromap {
  public:
+  Chromap() = delete;
+
   // For index construction
   Chromap(const IndexParameters &index_parameters)
       : index_parameters_(index_parameters) {
