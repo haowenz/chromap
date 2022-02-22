@@ -9,7 +9,6 @@
 #include <tuple>
 #include <vector>
 
-#include "alignment.h"
 #include "candidate_processor.h"
 #include "cxxopts.hpp"
 #include "feature_barcode_matrix.h"
@@ -27,7 +26,7 @@
 #include "temp_mapping.h"
 #include "utils.h"
 
-#define CHROMAP_VERSION "0.1.6-r310"
+#define CHROMAP_VERSION "0.1.6-r346"
 
 namespace chromap {
 
@@ -73,8 +72,6 @@ class Chromap {
   void MapPairedEndReads();
 
  private:
-  uint32_t SampleInputBarcodesAndExamineLength();
-
   uint32_t LoadSingleEndReadsWithBarcodes(SequenceBatch &read_batch,
                                           SequenceBatch &barcode_batch);
 
@@ -91,6 +88,8 @@ class Chromap {
                                            const SequenceBatch &read_batch1,
                                            const SequenceBatch &read_batch2);
 
+  uint32_t SampleInputBarcodesAndExamineLength();
+
   void LoadBarcodeWhitelist();
 
   void ComputeBarcodeAbundance(uint64_t max_num_sample_barcodes);
@@ -106,6 +105,8 @@ class Chromap {
 
   void OutputMappingStatistics();
 
+  void ParseReadFormat(const std::string &read_format);
+
   void GenerateCustomizedRidRank(const std::string &rid_order_path,
                                  uint32_t num_reference_sequences,
                                  const SequenceBatch &reference,
@@ -114,40 +115,46 @@ class Chromap {
   // TODO: generate reranked candidates directly.
   void RerankCandidatesRid(std::vector<Candidate> &candidates);
 
-  void ParseReadFormat(const std::string &read_format);
-
   // Parameters
   const IndexParameters index_parameters_;
   const MappingParameters mapping_parameters_;
+
   // Default batch size, # reads for single-end reads, # read pairs for
   // paired-end reads.
   const uint32_t read_batch_size_ = 500000;
+
   // 0-start, 1-end (includsive), 2-strand(-1:minus, 1:plus)
   int barcode_format_[3];
   int read1_format_[3];
   int read2_format_[3];
+
   std::vector<int> custom_rid_rank_;
   std::vector<int> pairs_custom_rid_rank_;
+
   khash_t(k64_seq) * barcode_whitelist_lookup_table_;
+
   // For identical read dedupe
   khash_t(k64_seq) * barcode_lookup_table_;
   std::vector<khash_t(k128) *> read_lookup_tables_;
-  // For mapping
+
+  // For mapping.
   const int min_unique_mapping_mapq_ = 4;
+
   // For mapping stats.
   uint64_t num_candidates_ = 0;
   uint64_t num_mappings_ = 0;
   uint64_t num_mapped_reads_ = 0;
   uint64_t num_uniquely_mapped_reads_ = 0;
   uint64_t num_reads_ = 0;
-  uint64_t num_duplicated_reads_ = 0;  // # identical reads
-  // For barcode stats
+  // # identical reads.
+  uint64_t num_duplicated_reads_ = 0;
+
+  // For barcode stats.
   const uint64_t initial_num_sample_barcodes_ = 20000000;
   uint64_t num_sample_barcodes_ = 0;
   uint64_t num_barcode_in_whitelist_ = 0;
   uint64_t num_corrected_barcode_ = 0;
   uint32_t barcode_length_ = 0;
-  bool skip_barcode_check_ = false;
 };
 
 template <typename MappingRecord>

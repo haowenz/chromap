@@ -10,8 +10,102 @@
 #include <random>
 #include <sstream>
 #include <type_traits>
+#include <unordered_map>
 
 namespace chromap {
+
+void Chromap::ConstructIndex() {
+  // TODO(Haowen): Need a faster algorithm
+  // Load all sequences in the reference into one batch
+  SequenceBatch reference;
+  reference.InitializeLoading(mapping_parameters_.reference_file_path);
+  uint32_t num_sequences = reference.LoadAllSequences();
+  Index index(index_parameters_.kmer_size, index_parameters_.window_size,
+              index_parameters_.num_threads,
+              index_parameters_.index_output_file_path);
+  index.Construct(num_sequences, reference);
+  index.Statistics(num_sequences, reference);
+  index.Save();
+  reference.FinalizeLoading();
+}
+
+uint32_t Chromap::LoadSingleEndReadsWithBarcodes(SequenceBatch &read_batch,
+                                                 SequenceBatch &barcode_batch) {
+  double real_start_time = GetRealTime();
+  uint32_t num_loaded_reads = 0;
+  while (num_loaded_reads < read_batch_size_) {
+    bool no_more_read = read_batch.LoadOneSequenceAndSaveAt(num_loaded_reads);
+    bool no_more_barcode = no_more_read;
+    if (!mapping_parameters_.is_bulk_data) {
+      no_more_barcode =
+          barcode_batch.LoadOneSequenceAndSaveAt(num_loaded_reads);
+    }
+    if ((!no_more_read) && (!no_more_barcode)) {
+      if (read_batch.GetSequenceLengthAt(num_loaded_reads) <
+          (uint32_t)mapping_parameters_.min_read_length) {
+        continue;  // reads are too short, just drop.
+      }
+      // if (PairedEndReadWithBarcodeIsDuplicate(num_loaded_pairs,
+      // (*barcode_batch), (*read_batch1), (*read_batch2))) {
+      //  num_duplicated_reads_ += 2;
+      //  continue;
+      //}
+    } else if (no_more_read && no_more_barcode) {
+      break;
+    } else {
+      ExitWithMessage("Numbers of reads and barcodes don't match!");
+    }
+    ++num_loaded_reads;
+  }
+  if (num_loaded_reads > 0) {
+    std::cerr << "Loaded " << num_loaded_reads << " reads in "
+              << GetRealTime() - real_start_time << "s.\n";
+  } else {
+    std::cerr << "No more reads.\n";
+  }
+  return num_loaded_reads;
+}
+
+uint32_t Chromap::LoadPairedEndReadsWithBarcodes(SequenceBatch &read_batch1,
+                                                 SequenceBatch &read_batch2,
+                                                 SequenceBatch &barcode_batch) {
+  // double real_start_time = Chromap<>::GetRealTime();
+  uint32_t num_loaded_pairs = 0;
+  while (num_loaded_pairs < read_batch_size_) {
+    bool no_more_read1 = read_batch1.LoadOneSequenceAndSaveAt(num_loaded_pairs);
+    bool no_more_read2 = read_batch2.LoadOneSequenceAndSaveAt(num_loaded_pairs);
+    bool no_more_barcode = no_more_read2;
+    if (!mapping_parameters_.is_bulk_data) {
+      no_more_barcode =
+          barcode_batch.LoadOneSequenceAndSaveAt(num_loaded_pairs);
+    }
+    if ((!no_more_read1) && (!no_more_read2) && (!no_more_barcode)) {
+      if (read_batch1.GetSequenceLengthAt(num_loaded_pairs) <
+              (uint32_t)mapping_parameters_.min_read_length ||
+          read_batch2.GetSequenceLengthAt(num_loaded_pairs) <
+              (uint32_t)mapping_parameters_.min_read_length) {
+        continue;  // reads are too short, just drop.
+      }
+      // if (PairedEndReadWithBarcodeIsDuplicate(num_loaded_pairs,
+      // (*barcode_batch), (*read_batch1), (*read_batch2))) {
+      //  num_duplicated_reads_ += 2;
+      //  continue;
+      //}
+    } else if (no_more_read1 && no_more_read2 && no_more_barcode) {
+      break;
+    } else {
+      ExitWithMessage("Numbers of reads and barcodes don't match!");
+    }
+    ++num_loaded_pairs;
+  }
+  // if (num_loaded_pairs > 0) {
+  //  std::cerr << "Loaded " << num_loaded_pairs << " pairs in "<<
+  //  Chromap<>::GetRealTime() - real_start_time << "s. ";
+  //} else {
+  //  std::cerr << "No more reads.\n";
+  //}
+  return num_loaded_pairs;
+}
 
 void Chromap::TrimAdapterForPairedEndRead(uint32_t pair_index,
                                           SequenceBatch &read_batch1,
@@ -145,6 +239,170 @@ bool Chromap::PairedEndReadWithBarcodeIsDuplicate(
     // std::cerr << "No barcode, no read.\n";
     return false;
   }
+}
+
+uint32_t Chromap::SampleInputBarcodesAndExamineLength() {
+  if (mapping_parameters_.is_bulk_data) {
+    return 0;
+  }
+
+  uint32_t sample_batch_size = 1000;
+  SequenceBatch barcode_batch(sample_batch_size);
+
+  barcode_batch.SetSeqEffectiveRange(barcode_format_[0], barcode_format_[1],
+                                     barcode_format_[2]);
+
+  barcode_batch.InitializeLoading(mapping_parameters_.barcode_file_paths[0]);
+
+  uint32_t num_loaded_barcodes = barcode_batch.LoadBatch();
+
+  uint32_t cell_barcode_length = barcode_batch.GetSequenceLengthAt(0);
+  for (uint32_t i = 1; i < num_loaded_barcodes; ++i) {
+    if (barcode_batch.GetSequenceLengthAt(i) != cell_barcode_length) {
+      ExitWithMessage("ERROR: barcode lengths are not equal in the sample!");
+    }
+  }
+
+  barcode_batch.FinalizeLoading();
+
+  return cell_barcode_length;
+}
+
+void Chromap::LoadBarcodeWhitelist() {
+  double real_start_time = GetRealTime();
+  int num_barcodes = 0;
+  std::ifstream barcode_whitelist_file_stream(
+      mapping_parameters_.barcode_whitelist_file_path);
+  std::string barcode_whitelist_file_line;
+  // bool first_line = true;
+  while (getline(barcode_whitelist_file_stream, barcode_whitelist_file_line)) {
+    std::stringstream barcode_whitelist_file_line_string_stream(
+        barcode_whitelist_file_line);
+    //// skip the header
+    // if (barcode_whitelist_file_line[0] == '#' ||
+    // barcode_whitelist_file_line.find("kmer") == 0) {
+    //  continue;
+    //}
+    std::string barcode;
+    barcode_whitelist_file_line_string_stream >> barcode;
+    size_t barcode_length = barcode.length();
+    if (barcode_length > 32) {
+      ExitWithMessage("ERROR: barcode length is greater than 32!");
+    }
+
+    if (barcode_length != barcode_length_) {
+      if (num_barcodes == 0) {
+        ExitWithMessage(
+            "ERROR: whitelist and input barcode lengths are not equal!");
+      } else {
+        ExitWithMessage(
+            "ERROR: barcode lengths are not equal in the whitelist!");
+      }
+    }
+
+    // if (first_line) {
+    //  //size_t barcode_length = kmer.length();
+    //  // Allocate memory to save pore model parameters
+    //  //size_t num_pore_models = 1 << (kmer_size_ * 2);
+    //  //pore_models_.assign(num_pore_models, PoreModelParameters());
+    //  //first_line = false;
+    //}
+    // assert(kmer.length() == (size_t)kmer_size_);
+    uint64_t barcode_key = SequenceBatch::GenerateSeedFromSequence(
+        barcode.data(), barcode_length, 0, barcode_length);
+    // PoreModelParameters &pore_model_parameters =
+    // pore_models_[kmer_hash_value]; barcode_whitelist_file_line_string_stream
+    // >> pore_model_parameters.level_mean >> pore_model_parameters.level_stdv
+    // >> pore_model_parameters.sd_mean >> pore_model_parameters.sd_stdv;
+    int khash_return_code;
+    khiter_t barcode_whitelist_lookup_table_iterator =
+        kh_put(k64_seq, barcode_whitelist_lookup_table_, barcode_key,
+               &khash_return_code);
+    kh_value(barcode_whitelist_lookup_table_,
+             barcode_whitelist_lookup_table_iterator) = 0;
+    assert(khash_return_code != -1 && khash_return_code != 0);
+    ++num_barcodes;
+  }
+  barcode_whitelist_file_stream.close();
+  std::cerr << "Loaded " << num_barcodes << " barcodes in "
+            << GetRealTime() - real_start_time << "s.\n";
+}
+
+void Chromap::ComputeBarcodeAbundance(uint64_t max_num_sample_barcodes) {
+  double real_start_time = GetRealTime();
+  SequenceBatch barcode_batch(read_batch_size_);
+  barcode_batch.SetSeqEffectiveRange(barcode_format_[0], barcode_format_[1],
+                                     barcode_format_[2]);
+  for (size_t read_file_index = 0;
+       read_file_index < mapping_parameters_.read_file1_paths.size();
+       ++read_file_index) {
+    barcode_batch.InitializeLoading(
+        mapping_parameters_.barcode_file_paths[read_file_index]);
+    uint32_t num_loaded_barcodes = barcode_batch.LoadBatch();
+    while (num_loaded_barcodes > 0) {
+      for (uint32_t barcode_index = 0; barcode_index < num_loaded_barcodes;
+           ++barcode_index) {
+        uint32_t barcode_length =
+            barcode_batch.GetSequenceLengthAt(barcode_index);
+        uint64_t barcode_key = barcode_batch.GenerateSeedFromSequenceAt(
+            barcode_index, 0, barcode_length);
+        khiter_t barcode_whitelist_lookup_table_iterator =
+            kh_get(k64_seq, barcode_whitelist_lookup_table_, barcode_key);
+        if (barcode_whitelist_lookup_table_iterator !=
+            kh_end(barcode_whitelist_lookup_table_)) {
+          // Correct barcode
+          kh_value(barcode_whitelist_lookup_table_,
+                   barcode_whitelist_lookup_table_iterator) += 1;
+          ++num_sample_barcodes_;
+        }
+      }
+      if (!mapping_parameters_.skip_barcode_check &&
+          num_sample_barcodes_ * 20 < num_loaded_barcodes) {
+        // Since num_loaded_pairs is a constant, this if is actuaclly only
+        // effective in the first iteration
+        ExitWithMessage(
+            "Less than 5\% barcodes can be found or corrected based on the "
+            "barcode whitelist.\nPlease check whether the barcode whitelist "
+            "matches the data, e.g. length, reverse-complement. If this is a "
+            "false warning, please run Chromap with the option "
+            "--skip-barcode-check.");
+      }
+
+      if (num_sample_barcodes_ >= max_num_sample_barcodes) {
+        break;
+      }
+      num_loaded_barcodes = barcode_batch.LoadBatch();
+    }
+    barcode_batch.FinalizeLoading();
+    if (num_sample_barcodes_ >= max_num_sample_barcodes) {
+      break;
+    }
+  }
+
+  std::cerr << "Compute barcode abundance using " << num_sample_barcodes_
+            << " in " << GetRealTime() - real_start_time << "s.\n";
+}
+
+void Chromap::UpdateBarcodeAbundance(uint32_t num_loaded_barcodes,
+                                     const SequenceBatch &barcode_batch) {
+  double real_start_time = GetRealTime();
+  for (uint32_t barcode_index = 0; barcode_index < num_loaded_barcodes;
+       ++barcode_index) {
+    uint32_t barcode_length = barcode_batch.GetSequenceLengthAt(barcode_index);
+    uint64_t barcode_key = barcode_batch.GenerateSeedFromSequenceAt(
+        barcode_index, 0, barcode_length);
+    khiter_t barcode_whitelist_lookup_table_iterator =
+        kh_get(k64_seq, barcode_whitelist_lookup_table_, barcode_key);
+    if (barcode_whitelist_lookup_table_iterator !=
+        kh_end(barcode_whitelist_lookup_table_)) {
+      // Correct barcode
+      kh_value(barcode_whitelist_lookup_table_,
+               barcode_whitelist_lookup_table_iterator) += 1;
+      ++num_sample_barcodes_;
+    }
+  }
+  std::cerr << "Update barcode abundance using " << num_sample_barcodes_
+            << " in " << GetRealTime() - real_start_time << "s.\n";
 }
 
 bool Chromap::CorrectBarcodeAt(uint32_t barcode_index,
@@ -354,265 +612,6 @@ bool Chromap::CorrectBarcodeAt(uint32_t barcode_index,
   }
 }
 
-uint32_t Chromap::SampleInputBarcodesAndExamineLength() {
-  if (mapping_parameters_.is_bulk_data) {
-    return 0;
-  }
-
-  uint32_t sample_batch_size = 1000;
-  SequenceBatch barcode_batch(sample_batch_size);
-
-  barcode_batch.SetSeqEffectiveRange(barcode_format_[0], barcode_format_[1],
-                                     barcode_format_[2]);
-
-  barcode_batch.InitializeLoading(mapping_parameters_.barcode_file_paths[0]);
-
-  uint32_t num_loaded_barcodes = barcode_batch.LoadBatch();
-
-  uint32_t cell_barcode_length = barcode_batch.GetSequenceLengthAt(0);
-  for (uint32_t i = 1; i < num_loaded_barcodes; ++i) {
-    if (barcode_batch.GetSequenceLengthAt(i) != cell_barcode_length) {
-      ExitWithMessage("ERROR: barcode lengths are not equal in the sample!");
-    }
-  }
-
-  barcode_batch.FinalizeLoading();
-
-  return cell_barcode_length;
-}
-
-uint32_t Chromap::LoadPairedEndReadsWithBarcodes(SequenceBatch &read_batch1,
-                                                 SequenceBatch &read_batch2,
-                                                 SequenceBatch &barcode_batch) {
-  // double real_start_time = Chromap<>::GetRealTime();
-  uint32_t num_loaded_pairs = 0;
-  while (num_loaded_pairs < read_batch_size_) {
-    bool no_more_read1 = read_batch1.LoadOneSequenceAndSaveAt(num_loaded_pairs);
-    bool no_more_read2 = read_batch2.LoadOneSequenceAndSaveAt(num_loaded_pairs);
-    bool no_more_barcode = no_more_read2;
-    if (!mapping_parameters_.is_bulk_data) {
-      no_more_barcode =
-          barcode_batch.LoadOneSequenceAndSaveAt(num_loaded_pairs);
-    }
-    if ((!no_more_read1) && (!no_more_read2) && (!no_more_barcode)) {
-      if (read_batch1.GetSequenceLengthAt(num_loaded_pairs) <
-              (uint32_t)mapping_parameters_.min_read_length ||
-          read_batch2.GetSequenceLengthAt(num_loaded_pairs) <
-              (uint32_t)mapping_parameters_.min_read_length) {
-        continue;  // reads are too short, just drop.
-      }
-      // if (PairedEndReadWithBarcodeIsDuplicate(num_loaded_pairs,
-      // (*barcode_batch), (*read_batch1), (*read_batch2))) {
-      //  num_duplicated_reads_ += 2;
-      //  continue;
-      //}
-    } else if (no_more_read1 && no_more_read2 && no_more_barcode) {
-      break;
-    } else {
-      ExitWithMessage("Numbers of reads and barcodes don't match!");
-    }
-    ++num_loaded_pairs;
-  }
-  // if (num_loaded_pairs > 0) {
-  //  std::cerr << "Loaded " << num_loaded_pairs << " pairs in "<<
-  //  Chromap<>::GetRealTime() - real_start_time << "s. ";
-  //} else {
-  //  std::cerr << "No more reads.\n";
-  //}
-  return num_loaded_pairs;
-}
-
-void Chromap::ComputeBarcodeAbundance(uint64_t max_num_sample_barcodes) {
-  double real_start_time = GetRealTime();
-  SequenceBatch barcode_batch(read_batch_size_);
-  barcode_batch.SetSeqEffectiveRange(barcode_format_[0], barcode_format_[1],
-                                     barcode_format_[2]);
-  for (size_t read_file_index = 0;
-       read_file_index < mapping_parameters_.read_file1_paths.size();
-       ++read_file_index) {
-    barcode_batch.InitializeLoading(
-        mapping_parameters_.barcode_file_paths[read_file_index]);
-    uint32_t num_loaded_barcodes = barcode_batch.LoadBatch();
-    while (num_loaded_barcodes > 0) {
-      for (uint32_t barcode_index = 0; barcode_index < num_loaded_barcodes;
-           ++barcode_index) {
-        uint32_t barcode_length =
-            barcode_batch.GetSequenceLengthAt(barcode_index);
-        uint64_t barcode_key = barcode_batch.GenerateSeedFromSequenceAt(
-            barcode_index, 0, barcode_length);
-        khiter_t barcode_whitelist_lookup_table_iterator =
-            kh_get(k64_seq, barcode_whitelist_lookup_table_, barcode_key);
-        if (barcode_whitelist_lookup_table_iterator !=
-            kh_end(barcode_whitelist_lookup_table_)) {
-          // Correct barcode
-          kh_value(barcode_whitelist_lookup_table_,
-                   barcode_whitelist_lookup_table_iterator) += 1;
-          ++num_sample_barcodes_;
-        }
-      }
-      if (!skip_barcode_check_ &&
-          num_sample_barcodes_ * 20 < num_loaded_barcodes) {
-        // Since num_loaded_pairs is a constant, this if is actuaclly only
-        // effective in the first iteration
-        ExitWithMessage(
-            "Less than 5\% barcodes can be found or corrected based on the "
-            "barcode whitelist.\nPlease check whether the barcode whitelist "
-            "matches the data, e.g. length, reverse-complement. If this is a "
-            "false warning, please run Chromap with the option "
-            "--skip-barcode-check.");
-      }
-
-      if (num_sample_barcodes_ >= max_num_sample_barcodes) {
-        break;
-      }
-      num_loaded_barcodes = barcode_batch.LoadBatch();
-    }
-    barcode_batch.FinalizeLoading();
-    if (num_sample_barcodes_ >= max_num_sample_barcodes) {
-      break;
-    }
-  }
-
-  std::cerr << "Compute barcode abundance using " << num_sample_barcodes_
-            << " in " << GetRealTime() - real_start_time << "s.\n";
-}
-
-void Chromap::UpdateBarcodeAbundance(uint32_t num_loaded_barcodes,
-                                     const SequenceBatch &barcode_batch) {
-  double real_start_time = GetRealTime();
-  for (uint32_t barcode_index = 0; barcode_index < num_loaded_barcodes;
-       ++barcode_index) {
-    uint32_t barcode_length = barcode_batch.GetSequenceLengthAt(barcode_index);
-    uint64_t barcode_key = barcode_batch.GenerateSeedFromSequenceAt(
-        barcode_index, 0, barcode_length);
-    khiter_t barcode_whitelist_lookup_table_iterator =
-        kh_get(k64_seq, barcode_whitelist_lookup_table_, barcode_key);
-    if (barcode_whitelist_lookup_table_iterator !=
-        kh_end(barcode_whitelist_lookup_table_)) {
-      // Correct barcode
-      kh_value(barcode_whitelist_lookup_table_,
-               barcode_whitelist_lookup_table_iterator) += 1;
-      ++num_sample_barcodes_;
-    }
-  }
-  std::cerr << "Update barcode abundance using " << num_sample_barcodes_
-            << " in " << GetRealTime() - real_start_time << "s.\n";
-}
-
-void Chromap::GenerateCustomizedRidRank(const std::string &rid_order_path,
-                                        uint32_t num_reference_sequences,
-                                        const SequenceBatch &reference,
-                                        std::vector<int> &rid_rank) {
-  rid_rank.resize(num_reference_sequences);
-  for (uint32_t i = 0; i < num_reference_sequences; ++i) {
-    rid_rank[i] = i;
-  }
-
-  if (rid_order_path.length() == 0) {
-    return;
-  }
-
-  std::map<std::string, int> rname_to_rank;
-  std::ifstream file_stream(rid_order_path);
-  std::string line;
-  uint32_t i = 0;
-  while (getline(file_stream, line)) {
-    rname_to_rank[line] = i;
-    i += 1;
-  }
-  file_stream.close();
-
-  // First put the chrosomes in the list provided by user
-  for (uint32_t i = 0; i < num_reference_sequences; ++i) {
-    std::string rname(reference.GetSequenceNameAt(i));
-    if (rname_to_rank.find(rname) != rname_to_rank.end()) {
-      rid_rank[i] = rname_to_rank[rname];
-    } else {
-      rid_rank[i] = -1;
-    }
-  }
-
-  // we may have some rank without any rid associated with, this helps if
-  // cutstom list contains rid not in the reference`
-  uint32_t k = rname_to_rank.size();
-  // Put the remaining chrosomes
-  for (uint32_t i = 0; i < num_reference_sequences; ++i) {
-    if (rid_rank[i] == -1) {
-      rid_rank[i] = k;
-      ++k;
-    }
-  }
-
-  if (k > num_reference_sequences) {
-    ExitWithMessage("Unknown chromsome names found in chromosome order file");
-  }
-
-  /*for (i = 0 ; i < ref_size; ++i) {
-          std::cerr<<rid_rank_[i]<<"\n";
-  }*/
-}
-
-void Chromap::RerankCandidatesRid(std::vector<Candidate> &candidates) {
-  for (size_t i = 0; i < candidates.size(); ++i) {
-    uint64_t rid = (uint32_t)(candidates[i].position >> 32);
-    rid = custom_rid_rank_[rid];
-    candidates[i].position =
-        (candidates[i].position & (uint64_t)0xffffffff) | (rid << 32);
-  }
-}
-
-uint32_t Chromap::LoadSingleEndReadsWithBarcodes(SequenceBatch &read_batch,
-                                                 SequenceBatch &barcode_batch) {
-  double real_start_time = GetRealTime();
-  uint32_t num_loaded_reads = 0;
-  while (num_loaded_reads < read_batch_size_) {
-    bool no_more_read = read_batch.LoadOneSequenceAndSaveAt(num_loaded_reads);
-    bool no_more_barcode = no_more_read;
-    if (!mapping_parameters_.is_bulk_data) {
-      no_more_barcode =
-          barcode_batch.LoadOneSequenceAndSaveAt(num_loaded_reads);
-    }
-    if ((!no_more_read) && (!no_more_barcode)) {
-      if (read_batch.GetSequenceLengthAt(num_loaded_reads) <
-          (uint32_t)mapping_parameters_.min_read_length) {
-        continue;  // reads are too short, just drop.
-      }
-      // if (PairedEndReadWithBarcodeIsDuplicate(num_loaded_pairs,
-      // (*barcode_batch), (*read_batch1), (*read_batch2))) {
-      //  num_duplicated_reads_ += 2;
-      //  continue;
-      //}
-    } else if (no_more_read && no_more_barcode) {
-      break;
-    } else {
-      ExitWithMessage("Numbers of reads and barcodes don't match!");
-    }
-    ++num_loaded_reads;
-  }
-  if (num_loaded_reads > 0) {
-    std::cerr << "Loaded " << num_loaded_reads << " reads in "
-              << GetRealTime() - real_start_time << "s.\n";
-  } else {
-    std::cerr << "No more reads.\n";
-  }
-  return num_loaded_reads;
-}
-
-void Chromap::ConstructIndex() {
-  // TODO(Haowen): Need a faster algorithm
-  // Load all sequences in the reference into one batch
-  SequenceBatch reference;
-  reference.InitializeLoading(mapping_parameters_.reference_file_path);
-  uint32_t num_sequences = reference.LoadAllSequences();
-  Index index(index_parameters_.kmer_size, index_parameters_.window_size,
-              index_parameters_.num_threads,
-              index_parameters_.index_output_file_path);
-  index.Construct(num_sequences, reference);
-  index.Statistics(num_sequences, reference);
-  index.Save();
-  reference.FinalizeLoading();
-}
-
 void Chromap::OutputBarcodeStatistics() {
   std::cerr << "Number of barcodes in whitelist: " << num_barcode_in_whitelist_
             << ".\n";
@@ -635,66 +634,6 @@ void Chromap::OutputMappingStatistics() {
             << ".\n";
   std::cerr << "Number of multi-mappings: "
             << num_mappings_ - num_uniquely_mapped_reads_ << ".\n";
-}
-
-void Chromap::LoadBarcodeWhitelist() {
-  double real_start_time = GetRealTime();
-  int num_barcodes = 0;
-  std::ifstream barcode_whitelist_file_stream(
-      mapping_parameters_.barcode_whitelist_file_path);
-  std::string barcode_whitelist_file_line;
-  // bool first_line = true;
-  while (getline(barcode_whitelist_file_stream, barcode_whitelist_file_line)) {
-    std::stringstream barcode_whitelist_file_line_string_stream(
-        barcode_whitelist_file_line);
-    //// skip the header
-    // if (barcode_whitelist_file_line[0] == '#' ||
-    // barcode_whitelist_file_line.find("kmer") == 0) {
-    //  continue;
-    //}
-    std::string barcode;
-    barcode_whitelist_file_line_string_stream >> barcode;
-    size_t barcode_length = barcode.length();
-    if (barcode_length > 32) {
-      ExitWithMessage("ERROR: barcode length is greater than 32!");
-    }
-
-    if (barcode_length != barcode_length_) {
-      if (num_barcodes == 0) {
-        ExitWithMessage(
-            "ERROR: whitelist and input barcode lengths are not equal!");
-      } else {
-        ExitWithMessage(
-            "ERROR: barcode lengths are not equal in the whitelist!");
-      }
-    }
-
-    // if (first_line) {
-    //  //size_t barcode_length = kmer.length();
-    //  // Allocate memory to save pore model parameters
-    //  //size_t num_pore_models = 1 << (kmer_size_ * 2);
-    //  //pore_models_.assign(num_pore_models, PoreModelParameters());
-    //  //first_line = false;
-    //}
-    // assert(kmer.length() == (size_t)kmer_size_);
-    uint64_t barcode_key = SequenceBatch::GenerateSeedFromSequence(
-        barcode.data(), barcode_length, 0, barcode_length);
-    // PoreModelParameters &pore_model_parameters =
-    // pore_models_[kmer_hash_value]; barcode_whitelist_file_line_string_stream
-    // >> pore_model_parameters.level_mean >> pore_model_parameters.level_stdv
-    // >> pore_model_parameters.sd_mean >> pore_model_parameters.sd_stdv;
-    int khash_return_code;
-    khiter_t barcode_whitelist_lookup_table_iterator =
-        kh_put(k64_seq, barcode_whitelist_lookup_table_, barcode_key,
-               &khash_return_code);
-    kh_value(barcode_whitelist_lookup_table_,
-             barcode_whitelist_lookup_table_iterator) = 0;
-    assert(khash_return_code != -1 && khash_return_code != 0);
-    ++num_barcodes;
-  }
-  barcode_whitelist_file_stream.close();
-  std::cerr << "Loaded " << num_barcodes << " barcodes in "
-            << GetRealTime() - real_start_time << "s.\n";
 }
 
 void Chromap::ParseReadFormat(const std::string &read_format) {
@@ -776,6 +715,65 @@ void Chromap::ParseReadFormat(const std::string &read_format) {
     memcpy(read2_format_, fields, sizeof(fields));
   else
     memcpy(barcode_format_, fields, sizeof(fields));
+}
+
+void Chromap::GenerateCustomizedRidRank(const std::string &rid_order_path,
+                                        uint32_t num_reference_sequences,
+                                        const SequenceBatch &reference,
+                                        std::vector<int> &rid_rank) {
+  rid_rank.resize(num_reference_sequences);
+  for (uint32_t i = 0; i < num_reference_sequences; ++i) {
+    rid_rank[i] = i;
+  }
+
+  if (rid_order_path.length() == 0) {
+    return;
+  }
+
+  std::unordered_map<std::string, int> rname_to_rank;
+  std::ifstream file_stream(rid_order_path);
+  std::string line;
+  uint32_t i = 0;
+  while (getline(file_stream, line)) {
+    rname_to_rank[line] = i;
+    i += 1;
+  }
+  file_stream.close();
+
+  // First put the chrosomes in the list provided by user.
+  for (uint32_t i = 0; i < num_reference_sequences; ++i) {
+    std::string rname(reference.GetSequenceNameAt(i));
+    if (rname_to_rank.find(rname) != rname_to_rank.end()) {
+      rid_rank[i] = rname_to_rank[rname];
+    } else {
+      rid_rank[i] = -1;
+    }
+  }
+
+  // There might be some rank without any rid associated with. This helps if
+  // cutstom list contains rid not in the reference.
+  uint32_t k = rname_to_rank.size();
+  // Put the remaining chrosomes
+  for (uint32_t i = 0; i < num_reference_sequences; ++i) {
+    if (rid_rank[i] == -1) {
+      rid_rank[i] = k;
+      ++k;
+    }
+  }
+
+  if (k > num_reference_sequences) {
+    ExitWithMessage(
+        "ERROR: unknown chromsome names found in chromosome order file.");
+  }
+}
+
+void Chromap::RerankCandidatesRid(std::vector<Candidate> &candidates) {
+  for (size_t i = 0; i < candidates.size(); ++i) {
+    uint64_t rid = (uint32_t)(candidates[i].position >> 32);
+    rid = custom_rid_rank_[rid];
+    candidates[i].position =
+        (candidates[i].position & (uint64_t)0xffffffff) | (rid << 32);
+  }
 }
 
 }  // namespace chromap
