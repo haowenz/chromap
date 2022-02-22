@@ -411,12 +411,12 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
     }
 
     if (result.count("chr-order")) {
-      mapping_parameters.custom_rid_order_path =
+      mapping_parameters.custom_rid_order_file_path =
           result["chr-order"].as<std::string>();
     }
 
     if (result.count("pairs-natural-chr-order")) {
-      mapping_parameters.pairs_custom_rid_order_path =
+      mapping_parameters.pairs_flipping_custom_rid_order_file_path =
           result["pairs-natural-chr-order"].as<std::string>();
     }
 
