@@ -59,9 +59,9 @@ struct MappingParameters {
   std::string mapping_output_file_path;
   std::string matrix_output_prefix;
   // The order for general sorting.
-  std::string custom_rid_order_path;
+  std::string custom_rid_order_file_path;
   // The order for pairs format flipping.
-  std::string pairs_custom_rid_order_path;
+  std::string pairs_flipping_custom_rid_order_file_path;
   std::string barcode_translate_table_file_path;
   bool skip_barcode_check = false;
 

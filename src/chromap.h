@@ -172,8 +172,8 @@ void Chromap::MapSingleEndReads() {
   SequenceBatch reference;
   reference.InitializeLoading(mapping_parameters_.reference_file_path);
   uint32_t num_reference_sequences = reference.LoadAllSequences();
-  if (mapping_parameters_.custom_rid_order_path.length() > 0) {
-    GenerateCustomRidRanks(mapping_parameters_.custom_rid_order_path,
+  if (mapping_parameters_.custom_rid_order_file_path.length() > 0) {
+    GenerateCustomRidRanks(mapping_parameters_.custom_rid_order_file_path,
                            num_reference_sequences, reference,
                            custom_rid_rank_);
     reference.ReorderSequences(custom_rid_rank_);
@@ -340,7 +340,7 @@ void Chromap::MapSingleEndReads() {
                                           mapping_metadata.minimizers_);
 
             if (mapping_metadata.minimizers_.size() > 0) {
-              if (mapping_parameters_.custom_rid_order_path.length() > 0) {
+              if (mapping_parameters_.custom_rid_order_file_path.length() > 0) {
                 RerankCandidatesRid(mapping_metadata.positive_candidates_);
                 RerankCandidatesRid(mapping_metadata.negative_candidates_);
               }
@@ -541,16 +541,16 @@ void Chromap::MapPairedEndReads() {
   SequenceBatch reference;
   reference.InitializeLoading(mapping_parameters_.reference_file_path);
   uint32_t num_reference_sequences = reference.LoadAllSequences();
-  if (mapping_parameters_.custom_rid_order_path.length() > 0) {
-    GenerateCustomRidRanks(mapping_parameters_.custom_rid_order_path,
+  if (mapping_parameters_.custom_rid_order_file_path.length() > 0) {
+    GenerateCustomRidRanks(mapping_parameters_.custom_rid_order_file_path,
                            num_reference_sequences, reference,
                            custom_rid_rank_);
     reference.ReorderSequences(custom_rid_rank_);
   }
   if (mapping_parameters_.mapping_output_format == MAPPINGFORMAT_PAIRS) {
-    GenerateCustomRidRanks(mapping_parameters_.pairs_custom_rid_order_path,
-                           num_reference_sequences, reference,
-                           pairs_custom_rid_rank_);
+    GenerateCustomRidRanks(
+        mapping_parameters_.pairs_flipping_custom_rid_order_file_path,
+        num_reference_sequences, reference, pairs_custom_rid_rank_);
   }
 
   // Load index
@@ -844,7 +844,8 @@ void Chromap::MapPairedEndReads() {
                   thread_num_candidates +=
                       current_num_candidates1 + current_num_candidates2;
 
-                  if (mapping_parameters_.custom_rid_order_path.length() > 0) {
+                  if (mapping_parameters_.custom_rid_order_file_path.length() >
+                      0) {
                     RerankCandidatesRid(
                         paired_end_mapping_metadata.mapping_metadata1_
                             .positive_candidates_);
