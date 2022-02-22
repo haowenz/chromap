@@ -109,10 +109,16 @@ class Chromap {
 
   void ParseReadFormat(const std::string &read_format);
 
-  void GenerateCustomizedRidRank(const std::string &rid_order_path,
-                                 uint32_t num_reference_sequences,
-                                 const SequenceBatch &reference,
-                                 std::vector<int> &rid_rank);
+  // User custom rid order file contains a column of reference sequence names
+  // and there is one name on each row. The reference sequence name on the ith
+  // row means the rank of this sequence is i. This function loads the custom
+  // rid order file and generates a mapping from the original rids to their
+  // custom ranks, e.g., rid_ranks[i] is the custom rank of the ith rid in the
+  // reference.
+  void GenerateCustomRidRanks(const std::string &custom_rid_order_file_path,
+                              uint32_t num_reference_sequences,
+                              const SequenceBatch &reference,
+                              std::vector<int> &rid_ranks);
 
   // TODO: generate reranked candidates directly.
   void RerankCandidatesRid(std::vector<Candidate> &candidates);
@@ -167,9 +173,9 @@ void Chromap::MapSingleEndReads() {
   reference.InitializeLoading(mapping_parameters_.reference_file_path);
   uint32_t num_reference_sequences = reference.LoadAllSequences();
   if (mapping_parameters_.custom_rid_order_path.length() > 0) {
-    GenerateCustomizedRidRank(mapping_parameters_.custom_rid_order_path,
-                              num_reference_sequences, reference,
-                              custom_rid_rank_);
+    GenerateCustomRidRanks(mapping_parameters_.custom_rid_order_path,
+                           num_reference_sequences, reference,
+                           custom_rid_rank_);
     reference.ReorderSequences(custom_rid_rank_);
   }
 
@@ -217,9 +223,8 @@ void Chromap::MapSingleEndReads() {
   MappingGenerator<MappingRecord> mapping_generator(mapping_parameters_,
                                                     pairs_custom_rid_rank_);
 
-  MappingWriter<MappingRecord> mapping_writer(mapping_parameters_,
-                                              barcode_length_,
-                                              pairs_custom_rid_rank_);
+  MappingWriter<MappingRecord> mapping_writer(
+      mapping_parameters_, barcode_length_, pairs_custom_rid_rank_);
 
   mapping_writer.OutputHeader(num_reference_sequences, reference);
 
@@ -537,15 +542,15 @@ void Chromap::MapPairedEndReads() {
   reference.InitializeLoading(mapping_parameters_.reference_file_path);
   uint32_t num_reference_sequences = reference.LoadAllSequences();
   if (mapping_parameters_.custom_rid_order_path.length() > 0) {
-    GenerateCustomizedRidRank(mapping_parameters_.custom_rid_order_path,
-                              num_reference_sequences, reference,
-                              custom_rid_rank_);
+    GenerateCustomRidRanks(mapping_parameters_.custom_rid_order_path,
+                           num_reference_sequences, reference,
+                           custom_rid_rank_);
     reference.ReorderSequences(custom_rid_rank_);
   }
   if (mapping_parameters_.mapping_output_format == MAPPINGFORMAT_PAIRS) {
-    GenerateCustomizedRidRank(mapping_parameters_.pairs_custom_rid_order_path,
-                              num_reference_sequences, reference,
-                              pairs_custom_rid_rank_);
+    GenerateCustomRidRanks(mapping_parameters_.pairs_custom_rid_order_path,
+                           num_reference_sequences, reference,
+                           pairs_custom_rid_rank_);
   }
 
   // Load index
@@ -608,8 +613,7 @@ void Chromap::MapPairedEndReads() {
                                                     pairs_custom_rid_rank_);
 
   MappingWriter<MappingRecord> mapping_writer(
-      mapping_parameters_, barcode_length_,
-      pairs_custom_rid_rank_);
+      mapping_parameters_, barcode_length_, pairs_custom_rid_rank_);
   mapping_writer.OutputHeader(num_reference_sequences, reference);
 
   uint32_t num_mappings_in_mem = 0;
