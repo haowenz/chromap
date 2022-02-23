@@ -17,6 +17,8 @@ KHASH_INIT(k64, uint64_t, uint64_t, 1, KHashFunctionForIndex, KHashEqForIndex);
 
 class Index {
  public:
+  Index() = delete;
+
   // For read mapping.
   Index(const std::string &index_file_path)
       : index_file_path_(index_file_path) {
