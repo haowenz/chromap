@@ -31,10 +31,10 @@ class MappingWriter {
 
   MappingWriter(const MappingParameters mapping_parameters,
                 const uint32_t cell_barcode_length,
-                const std::vector<int> &custom_rid_rank)
+                const std::vector<int> &pairs_custom_rid_rank)
       : mapping_parameters_(mapping_parameters),
         cell_barcode_length_(cell_barcode_length),
-        custom_rid_rank_(custom_rid_rank) {
+        pairs_custom_rid_rank_(pairs_custom_rid_rank) {
     if (!mapping_parameters_.barcode_translate_table_file_path.empty()) {
       barcode_translator_.SetTranslateTable(
           mapping_parameters_.barcode_translate_table_file_path);
@@ -111,7 +111,7 @@ class MappingWriter {
   FILE *mapping_output_file_ = nullptr;
   BarcodeTranslator barcode_translator_;
   // for pairs
-  const std::vector<int> custom_rid_rank_;
+  const std::vector<int> pairs_custom_rid_rank_;
 };
 
 template <typename MappingRecord>
