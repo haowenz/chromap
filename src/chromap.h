@@ -26,7 +26,7 @@
 #include "temp_mapping.h"
 #include "utils.h"
 
-#define CHROMAP_VERSION "0.2.0-r355"
+#define CHROMAP_VERSION "0.2.0-r356-no-cache"
 
 namespace chromap {
 
@@ -181,7 +181,7 @@ void Chromap::MapSingleEndReads() {
 
   Index index(mapping_parameters_.index_file_path);
   index.Load();
-  int kmer_size = index.GetKmerSize();
+  //int kmer_size = index.GetKmerSize();
   // index.Statistics(num_sequences, reference);
 
   SequenceBatch read_batch(read_batch_size_);
@@ -237,9 +237,9 @@ void Chromap::MapSingleEndReads() {
     max_num_mappings_in_mem = 1 * ((uint64_t)1 << 29) / sizeof(MappingRecord);
   }
 
-  mm_cache mm_to_candidates_cache(2000003);
-  mm_to_candidates_cache.SetKmerLength(kmer_size);
-  struct _mm_history *mm_history = new struct _mm_history[read_batch_size_];
+  //mm_cache mm_to_candidates_cache(2000003);
+  //mm_to_candidates_cache.SetKmerLength(kmer_size);
+  //struct _mm_history *mm_history = new struct _mm_history[read_batch_size_];
   static uint64_t thread_num_candidates = 0;
   static uint64_t thread_num_mappings = 0;
   static uint64_t thread_num_mapped_reads = 0;
@@ -295,7 +295,8 @@ void Chromap::MapSingleEndReads() {
             mapping_parameters_.num_threads / num_reference_sequences);
       }
     }
-#pragma omp parallel shared(num_reads_, mm_history, reference, index, read_batch, barcode_batch, read_batch_for_loading, barcode_batch_for_loading, std::cerr, num_loaded_reads_for_loading, num_loaded_reads, num_reference_sequences, mappings_on_diff_ref_seqs_for_diff_threads, mappings_on_diff_ref_seqs_for_diff_threads_for_saving, mappings_on_diff_ref_seqs, temp_mapping_file_handles, mm_to_candidates_cache, mapping_writer, candidate_processor, mapping_processor, mapping_generator, num_mappings_in_mem, max_num_mappings_in_mem) num_threads(mapping_parameters_.num_threads) reduction(+:num_candidates_, num_mappings_, num_mapped_reads_, num_uniquely_mapped_reads_, num_barcode_in_whitelist_, num_corrected_barcode_)
+//#pragma omp parallel shared(num_reads_, mm_history, reference, index, read_batch, barcode_batch, read_batch_for_loading, barcode_batch_for_loading, std::cerr, num_loaded_reads_for_loading, num_loaded_reads, num_reference_sequences, mappings_on_diff_ref_seqs_for_diff_threads, mappings_on_diff_ref_seqs_for_diff_threads_for_saving, mappings_on_diff_ref_seqs, temp_mapping_file_handles, mm_to_candidates_cache, mapping_writer, candidate_processor, mapping_processor, mapping_generator, num_mappings_in_mem, max_num_mappings_in_mem) num_threads(mapping_parameters_.num_threads) reduction(+:num_candidates_, num_mappings_, num_mapped_reads_, num_uniquely_mapped_reads_, num_barcode_in_whitelist_, num_corrected_barcode_)
+#pragma omp parallel shared(num_reads_, reference, index, read_batch, barcode_batch, read_batch_for_loading, barcode_batch_for_loading, std::cerr, num_loaded_reads_for_loading, num_loaded_reads, num_reference_sequences, mappings_on_diff_ref_seqs_for_diff_threads, mappings_on_diff_ref_seqs_for_diff_threads_for_saving, mappings_on_diff_ref_seqs, temp_mapping_file_handles, mapping_writer, candidate_processor, mapping_processor, mapping_generator, num_mappings_in_mem, max_num_mappings_in_mem) num_threads(mapping_parameters_.num_threads) reduction(+:num_candidates_, num_mappings_, num_mapped_reads_, num_uniquely_mapped_reads_, num_barcode_in_whitelist_, num_corrected_barcode_)
     {
       thread_num_candidates = 0;
       thread_num_mappings = 0;
@@ -345,28 +346,28 @@ void Chromap::MapSingleEndReads() {
                 RerankCandidatesRid(mapping_metadata.negative_candidates_);
               }
 
-              if (mm_to_candidates_cache.Query(
-                      mapping_metadata,
-                      read_batch.GetSequenceLengthAt(read_index)) == -1) {
+              //if (mm_to_candidates_cache.Query(
+              //        mapping_metadata,
+              //        read_batch.GetSequenceLengthAt(read_index)) == -1) {
                 candidate_processor.GenerateCandidates(
                     mapping_parameters_.error_threshold, index,
                     mapping_metadata);
-              }
+              //}
 
-              if (read_index < num_loaded_reads &&
-                  (read_index <
-                       num_loaded_reads / mapping_parameters_.num_threads ||
-                   num_reads_ <= 2500000)) {
-                mm_history[read_index].timestamp = num_reads_;
-                mm_history[read_index].minimizers =
-                    mapping_metadata.minimizers_;
-                mm_history[read_index].positive_candidates =
-                    mapping_metadata.positive_candidates_;
-                mm_history[read_index].negative_candidates =
-                    mapping_metadata.negative_candidates_;
-                mm_history[read_index].repetitive_seed_length =
-                    mapping_metadata.repetitive_seed_length_;
-              }
+              //if (read_index < num_loaded_reads &&
+              //    (read_index <
+              //         num_loaded_reads / mapping_parameters_.num_threads ||
+              //     num_reads_ <= 2500000)) {
+              //  mm_history[read_index].timestamp = num_reads_;
+              //  mm_history[read_index].minimizers =
+              //      mapping_metadata.minimizers_;
+              //  mm_history[read_index].positive_candidates =
+              //      mapping_metadata.positive_candidates_;
+              //  mm_history[read_index].negative_candidates =
+              //      mapping_metadata.negative_candidates_;
+              //  mm_history[read_index].repetitive_seed_length =
+              //      mapping_metadata.repetitive_seed_length_;
+              //}
 
               size_t current_num_candidates =
                   mapping_metadata.GetNumCandidates();
@@ -399,30 +400,30 @@ void Chromap::MapSingleEndReads() {
             }
           }
 #pragma omp taskwait
-          for (uint32_t read_index = 0; read_index < num_loaded_reads;
-               ++read_index) {
-            if (num_reads_ > 2500000 &&
-                read_index >=
-                    num_loaded_reads / mapping_parameters_.num_threads) {
-              break;
-            }
-            if (mm_history[read_index].timestamp != num_reads_) continue;
-            mm_to_candidates_cache.Update(
-                mm_history[read_index].minimizers,
-                mm_history[read_index].positive_candidates,
-                mm_history[read_index].negative_candidates,
-                mm_history[read_index].repetitive_seed_length);
-            if (mm_history[read_index].positive_candidates.size() <
-                mm_history[read_index].positive_candidates.capacity() / 2) {
-              std::vector<Candidate>().swap(
-                  mm_history[read_index].positive_candidates);
-            }
-            if (mm_history[read_index].negative_candidates.size() <
-                mm_history[read_index].negative_candidates.capacity() / 2) {
-              std::vector<Candidate>().swap(
-                  mm_history[read_index].negative_candidates);
-            }
-          }
+          //for (uint32_t read_index = 0; read_index < num_loaded_reads;
+          //     ++read_index) {
+          //  if (num_reads_ > 2500000 &&
+          //      read_index >=
+          //          num_loaded_reads / mapping_parameters_.num_threads) {
+          //    break;
+          //  }
+          //  if (mm_history[read_index].timestamp != num_reads_) continue;
+          //  mm_to_candidates_cache.Update(
+          //      mm_history[read_index].minimizers,
+          //      mm_history[read_index].positive_candidates,
+          //      mm_history[read_index].negative_candidates,
+          //      mm_history[read_index].repetitive_seed_length);
+          //  if (mm_history[read_index].positive_candidates.size() <
+          //      mm_history[read_index].positive_candidates.capacity() / 2) {
+          //    std::vector<Candidate>().swap(
+          //        mm_history[read_index].positive_candidates);
+          //  }
+          //  if (mm_history[read_index].negative_candidates.size() <
+          //      mm_history[read_index].negative_candidates.capacity() / 2) {
+          //    std::vector<Candidate>().swap(
+          //        mm_history[read_index].negative_candidates);
+          //  }
+          //}
           // std::cerr<<"cache memusage: " <<
           // mm_to_candidates_cache.GetMemoryBytes() <<"\n" ;
           num_loaded_reads = num_loaded_reads_for_loading;
@@ -470,7 +471,7 @@ void Chromap::MapSingleEndReads() {
   std::cerr << "Mapped all reads in " << GetRealTime() - real_start_mapping_time
             << "s.\n";
 
-  delete[] mm_history;
+  //delete[] mm_history;
 
   OutputMappingStatistics();
   if (!mapping_parameters_.is_bulk_data) {
@@ -556,7 +557,7 @@ void Chromap::MapPairedEndReads() {
   // Load index
   Index index(mapping_parameters_.index_file_path);
   index.Load();
-  int kmer_size = index.GetKmerSize();
+  //int kmer_size = index.GetKmerSize();
   // index.Statistics(num_sequences, reference);
 
   // Initialize read batches
@@ -579,10 +580,10 @@ void Chromap::MapPairedEndReads() {
       barcode_format_[0], barcode_format_[1], barcode_format_[2]);
 
   // Initialize cache
-  mm_cache mm_to_candidates_cache(2000003);
-  mm_to_candidates_cache.SetKmerLength(kmer_size);
-  struct _mm_history *mm_history1 = new struct _mm_history[read_batch_size_];
-  struct _mm_history *mm_history2 = new struct _mm_history[read_batch_size_];
+  //mm_cache mm_to_candidates_cache(2000003);
+  //mm_to_candidates_cache.SetKmerLength(kmer_size);
+  //struct _mm_history *mm_history1 = new struct _mm_history[read_batch_size_];
+  //struct _mm_history *mm_history2 = new struct _mm_history[read_batch_size_];
 
   std::vector<std::vector<MappingRecord>> mappings_on_diff_ref_seqs;
   // Initialize mapping container
@@ -686,7 +687,8 @@ void Chromap::MapPairedEndReads() {
       }
     }
 
-#pragma omp parallel shared(num_reads_, num_reference_sequences, reference, index, read_batch1, read_batch2, barcode_batch, read_batch1_for_loading, read_batch2_for_loading, barcode_batch_for_loading, candidate_processor, mapping_processor, mapping_generator, mapping_writer, std::cerr, num_loaded_pairs_for_loading, num_loaded_pairs, mappings_on_diff_ref_seqs_for_diff_threads, mappings_on_diff_ref_seqs_for_diff_threads_for_saving, mappings_on_diff_ref_seqs, num_mappings_in_mem, max_num_mappings_in_mem, temp_mapping_file_handles, mm_to_candidates_cache, mm_history1, mm_history2) num_threads(mapping_parameters_.num_threads) reduction(+:num_candidates_, num_mappings_, num_mapped_reads_, num_uniquely_mapped_reads_, num_barcode_in_whitelist_, num_corrected_barcode_)
+//#pragma omp parallel shared(num_reads_, num_reference_sequences, reference, index, read_batch1, read_batch2, barcode_batch, read_batch1_for_loading, read_batch2_for_loading, barcode_batch_for_loading, candidate_processor, mapping_processor, mapping_generator, mapping_writer, std::cerr, num_loaded_pairs_for_loading, num_loaded_pairs, mappings_on_diff_ref_seqs_for_diff_threads, mappings_on_diff_ref_seqs_for_diff_threads_for_saving, mappings_on_diff_ref_seqs, num_mappings_in_mem, max_num_mappings_in_mem, temp_mapping_file_handles, mm_to_candidates_cache, mm_history1, mm_history2) num_threads(mapping_parameters_.num_threads) reduction(+:num_candidates_, num_mappings_, num_mapped_reads_, num_uniquely_mapped_reads_, num_barcode_in_whitelist_, num_corrected_barcode_)
+#pragma omp parallel shared(num_reads_, num_reference_sequences, reference, index, read_batch1, read_batch2, barcode_batch, read_batch1_for_loading, read_batch2_for_loading, barcode_batch_for_loading, candidate_processor, mapping_processor, mapping_generator, mapping_writer, std::cerr, num_loaded_pairs_for_loading, num_loaded_pairs, mappings_on_diff_ref_seqs_for_diff_threads, mappings_on_diff_ref_seqs_for_diff_threads_for_saving, mappings_on_diff_ref_seqs, num_mappings_in_mem, max_num_mappings_in_mem, temp_mapping_file_handles) num_threads(mapping_parameters_.num_threads) reduction(+:num_candidates_, num_mappings_, num_mapped_reads_, num_uniquely_mapped_reads_, num_barcode_in_whitelist_, num_corrected_barcode_)
     {
       thread_num_candidates = 0;
       thread_num_mappings = 0;
@@ -746,61 +748,61 @@ void Chromap::MapPairedEndReads() {
 
               if (paired_end_mapping_metadata.BothEndsHaveMinimizers()) {
                 // Generate candidates
-                if (mm_to_candidates_cache.Query(
-                        paired_end_mapping_metadata.mapping_metadata1_,
-                        read_batch1.GetSequenceLengthAt(pair_index)) == -1) {
+                //if (mm_to_candidates_cache.Query(
+                //        paired_end_mapping_metadata.mapping_metadata1_,
+                //        read_batch1.GetSequenceLengthAt(pair_index)) == -1) {
                   candidate_processor.GenerateCandidates(
                       mapping_parameters_.error_threshold, index,
                       paired_end_mapping_metadata.mapping_metadata1_);
-                }
+                //}
 
                 size_t current_num_candidates1 =
                     paired_end_mapping_metadata.mapping_metadata1_
                         .GetNumCandidates();
 
-                if (mm_to_candidates_cache.Query(
-                        paired_end_mapping_metadata.mapping_metadata2_,
-                        read_batch2.GetSequenceLengthAt(pair_index)) == -1) {
+                //if (mm_to_candidates_cache.Query(
+                //        paired_end_mapping_metadata.mapping_metadata2_,
+                //        read_batch2.GetSequenceLengthAt(pair_index)) == -1) {
                   candidate_processor.GenerateCandidates(
                       mapping_parameters_.error_threshold, index,
                       paired_end_mapping_metadata.mapping_metadata2_);
-                }
+                //}
 
                 size_t current_num_candidates2 =
                     paired_end_mapping_metadata.mapping_metadata2_
                         .GetNumCandidates();
 
-                if (pair_index < num_loaded_pairs &&
-                    (pair_index <
-                         num_loaded_pairs / mapping_parameters_.num_threads ||
-                     num_reads_ <= 5000000)) {
-                  mm_history1[pair_index].timestamp =
-                      mm_history2[pair_index].timestamp = num_reads_;
-                  mm_history1[pair_index].minimizers =
-                      paired_end_mapping_metadata.mapping_metadata1_
-                          .minimizers_;
-                  mm_history1[pair_index].positive_candidates =
-                      paired_end_mapping_metadata.mapping_metadata1_
-                          .positive_candidates_;
-                  mm_history1[pair_index].negative_candidates =
-                      paired_end_mapping_metadata.mapping_metadata1_
-                          .negative_candidates_;
-                  mm_history1[pair_index].repetitive_seed_length =
-                      paired_end_mapping_metadata.mapping_metadata1_
-                          .repetitive_seed_length_;
-                  mm_history2[pair_index].minimizers =
-                      paired_end_mapping_metadata.mapping_metadata2_
-                          .minimizers_;
-                  mm_history2[pair_index].positive_candidates =
-                      paired_end_mapping_metadata.mapping_metadata2_
-                          .positive_candidates_;
-                  mm_history2[pair_index].negative_candidates =
-                      paired_end_mapping_metadata.mapping_metadata2_
-                          .negative_candidates_;
-                  mm_history2[pair_index].repetitive_seed_length =
-                      paired_end_mapping_metadata.mapping_metadata2_
-                          .repetitive_seed_length_;
-                }
+                //if (pair_index < num_loaded_pairs &&
+                //    (pair_index <
+                //         num_loaded_pairs / mapping_parameters_.num_threads ||
+                //     num_reads_ <= 5000000)) {
+                //  mm_history1[pair_index].timestamp =
+                //      mm_history2[pair_index].timestamp = num_reads_;
+                //  mm_history1[pair_index].minimizers =
+                //      paired_end_mapping_metadata.mapping_metadata1_
+                //          .minimizers_;
+                //  mm_history1[pair_index].positive_candidates =
+                //      paired_end_mapping_metadata.mapping_metadata1_
+                //          .positive_candidates_;
+                //  mm_history1[pair_index].negative_candidates =
+                //      paired_end_mapping_metadata.mapping_metadata1_
+                //          .negative_candidates_;
+                //  mm_history1[pair_index].repetitive_seed_length =
+                //      paired_end_mapping_metadata.mapping_metadata1_
+                //          .repetitive_seed_length_;
+                //  mm_history2[pair_index].minimizers =
+                //      paired_end_mapping_metadata.mapping_metadata2_
+                //          .minimizers_;
+                //  mm_history2[pair_index].positive_candidates =
+                //      paired_end_mapping_metadata.mapping_metadata2_
+                //          .positive_candidates_;
+                //  mm_history2[pair_index].negative_candidates =
+                //      paired_end_mapping_metadata.mapping_metadata2_
+                //          .negative_candidates_;
+                //  mm_history2[pair_index].repetitive_seed_length =
+                //      paired_end_mapping_metadata.mapping_metadata2_
+                //          .repetitive_seed_length_;
+                //}
 
                 // Test whether we need to augment the candidate list with mate
                 // information.
@@ -931,43 +933,43 @@ void Chromap::MapPairedEndReads() {
           //}
 #pragma omp taskwait
           // Update cache
-          for (uint32_t pair_index = 0; pair_index < num_loaded_pairs;
-               ++pair_index) {
-            if (num_reads_ > 5000000 &&
-                pair_index >=
-                    num_loaded_pairs / mapping_parameters_.num_threads) {
-              break;
-            }
-            if (mm_history1[pair_index].timestamp != num_reads_) continue;
+          //for (uint32_t pair_index = 0; pair_index < num_loaded_pairs;
+          //     ++pair_index) {
+          //  if (num_reads_ > 5000000 &&
+          //      pair_index >=
+          //          num_loaded_pairs / mapping_parameters_.num_threads) {
+          //    break;
+          //  }
+          //  if (mm_history1[pair_index].timestamp != num_reads_) continue;
 
-            mm_to_candidates_cache.Update(
-                mm_history1[pair_index].minimizers,
-                mm_history1[pair_index].positive_candidates,
-                mm_history1[pair_index].negative_candidates,
-                mm_history1[pair_index].repetitive_seed_length);
-            mm_to_candidates_cache.Update(
-                mm_history2[pair_index].minimizers,
-                mm_history2[pair_index].positive_candidates,
-                mm_history2[pair_index].negative_candidates,
-                mm_history2[pair_index].repetitive_seed_length);
+          //  mm_to_candidates_cache.Update(
+          //      mm_history1[pair_index].minimizers,
+          //      mm_history1[pair_index].positive_candidates,
+          //      mm_history1[pair_index].negative_candidates,
+          //      mm_history1[pair_index].repetitive_seed_length);
+          //  mm_to_candidates_cache.Update(
+          //      mm_history2[pair_index].minimizers,
+          //      mm_history2[pair_index].positive_candidates,
+          //      mm_history2[pair_index].negative_candidates,
+          //      mm_history2[pair_index].repetitive_seed_length);
 
-            if (mm_history1[pair_index].positive_candidates.size() > 50) {
-              std::vector<Candidate>().swap(
-                  mm_history1[pair_index].positive_candidates);
-            }
-            if (mm_history1[pair_index].negative_candidates.size() > 50) {
-              std::vector<Candidate>().swap(
-                  mm_history1[pair_index].negative_candidates);
-            }
-            if (mm_history2[pair_index].positive_candidates.size() > 50) {
-              std::vector<Candidate>().swap(
-                  mm_history2[pair_index].positive_candidates);
-            }
-            if (mm_history2[pair_index].negative_candidates.size() > 50) {
-              std::vector<Candidate>().swap(
-                  mm_history2[pair_index].negative_candidates);
-            }
-          }
+          //  if (mm_history1[pair_index].positive_candidates.size() > 50) {
+          //    std::vector<Candidate>().swap(
+          //        mm_history1[pair_index].positive_candidates);
+          //  }
+          //  if (mm_history1[pair_index].negative_candidates.size() > 50) {
+          //    std::vector<Candidate>().swap(
+          //        mm_history1[pair_index].negative_candidates);
+          //  }
+          //  if (mm_history2[pair_index].positive_candidates.size() > 50) {
+          //    std::vector<Candidate>().swap(
+          //        mm_history2[pair_index].positive_candidates);
+          //  }
+          //  if (mm_history2[pair_index].negative_candidates.size() > 50) {
+          //    std::vector<Candidate>().swap(
+          //        mm_history2[pair_index].negative_candidates);
+          //  }
+          //}
 
           std::cerr << "Mapped " << num_loaded_pairs << " read pairs in "
                     << GetRealTime() - real_batch_start_time << "s.\n";
@@ -1021,8 +1023,8 @@ void Chromap::MapPairedEndReads() {
   std::cerr << "Mapped all reads in " << GetRealTime() - real_start_mapping_time
             << "s.\n";
 
-  delete[] mm_history1;
-  delete[] mm_history2;
+  //delete[] mm_history1;
+  //delete[] mm_history2;
 
   OutputMappingStatistics();
   if (!mapping_parameters_.is_bulk_data) {
