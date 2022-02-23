@@ -26,7 +26,7 @@
 #include "temp_mapping.h"
 #include "utils.h"
 
-#define CHROMAP_VERSION "0.2-r353"
+#define CHROMAP_VERSION "0.2-r354"
 
 namespace chromap {
 
