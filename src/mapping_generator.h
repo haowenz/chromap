@@ -48,6 +48,9 @@ class MappingGenerator {
       MappingMetadata &mapping_metadata,
       std::vector<std::vector<MappingRecord>> &mappings_on_diff_ref_seqs);
 
+  // When the number of supplemented candidates is greater than 0, the
+  // force_mapq will be 0, and thereby setting the mapq to 0 (not mapq1 or
+  // mapq2). Split alignment won't run candidate supplement.
   void GenerateBestMappingsForPairedEndRead(
       uint32_t pair_index, const SequenceBatch &read_batch1,
       const SequenceBatch &read_batch2, const SequenceBatch &barcode_batch,
@@ -2092,7 +2095,7 @@ uint8_t MappingGenerator<MappingRecord>::GetMAPQForPairedEndRead(
       << " #bm:" << paired_end_mapping_metadata.num_best_mappings_
       << " sme:" << paired_end_mapping_metadata.second_min_sum_errors_
       << " #sbm:" << paired_end_mapping_metadata.num_second_best_mappings_
-      << " ne1:" << num_errors1 << " ne2:" << num_errors2 << " me1:"
+      << " ne1:" << read1_num_errors << " ne2:" << read2_num_errors << " me1:"
       << paired_end_mapping_metadata.mapping_metadata1_.min_num_errors_
       << " me2:"
       << paired_end_mapping_metadata.mapping_metadata2_.min_num_errors_
