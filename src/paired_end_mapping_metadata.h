@@ -60,6 +60,39 @@ class PairedEndMappingMetadata {
     return num_second_best_mappings_;
   }
 
+  // TODO: think how to deal with the code copy.
+  inline const std::vector<std::pair<uint32_t, uint32_t>> &GetBestMappings(
+      Direction first_mapping_direction,
+      Direction second_mapping_direction) const {
+    if (first_mapping_direction == kPositive) {
+      if (second_mapping_direction == kPositive) {
+        return F1F2_best_mappings_;
+      }
+      return F1R2_best_mappings_;
+    } else {
+      if (second_mapping_direction == kPositive) {
+        return F2R1_best_mappings_;
+      }
+      return R1R2_best_mappings_;
+    }
+  }
+
+  inline std::vector<std::pair<uint32_t, uint32_t>> &GetBestMappings(
+      Direction first_mapping_direction,
+      Direction second_mapping_direction) {
+    if (first_mapping_direction == kPositive) {
+      if (second_mapping_direction == kPositive) {
+        return F1F2_best_mappings_;
+      }
+      return F1R2_best_mappings_;
+    } else {
+      if (second_mapping_direction == kPositive) {
+        return F2R1_best_mappings_;
+      }
+      return R1R2_best_mappings_;
+    }
+  }
+
   inline void SetMinSumErrors(int min_sum_errors) {
     min_sum_errors_ = min_sum_errors;
   }
