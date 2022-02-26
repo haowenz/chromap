@@ -61,21 +61,15 @@ class MappingGenerator {
 
  private:
   void VerifyCandidatesOnOneDirectionUsingSIMD(
-      Direction candidate_direction, const SequenceBatch &read_batch,
-      uint32_t read_index, const SequenceBatch &reference,
-      const std::vector<Candidate> &candidates,
-      std::vector<std::pair<int, uint64_t>> &mappings, int &min_num_errors,
-      int &num_best_mappings, int &second_min_num_errors,
-      int &num_second_best_mappings);
+      Direction candidate_direction, uint32_t read_index,
+      const SequenceBatch &read_batch, const SequenceBatch &reference,
+      MappingMetadata &mapping_metadata);
 
-  void VerifyCandidatesOnOneDirection(
-      Direction candidate_direction, const SequenceBatch &read_batch,
-      uint32_t read_index, const SequenceBatch &reference,
-      const std::vector<Candidate> &candidates,
-      std::vector<std::pair<int, uint64_t>> &mappings,
-      std::vector<int> &split_sites, int &min_num_errors,
-      int &num_best_mappings, int &second_min_num_errors,
-      int &num_second_best_mappings);
+  void VerifyCandidatesOnOneDirection(Direction candidate_direction,
+                                      uint32_t read_index,
+                                      const SequenceBatch &read_batch,
+                                      const SequenceBatch &reference,
+                                      MappingMetadata &mapping_metadata);
 
   void ProcessBestMappingsForSingleEndRead(
       Direction mapping_direction, uint32_t read_index,
@@ -193,10 +187,7 @@ void MappingGenerator<MappingRecord>::VerifyCandidates(
       mapping_metadata.positive_mappings_;
   std::vector<std::pair<int, uint64_t>> &negative_mappings =
       mapping_metadata.negative_mappings_;
-  std::vector<int> &positive_split_sites =
-      mapping_metadata.positive_split_sites_;
-  std::vector<int> &negative_split_sites =
-      mapping_metadata.negative_split_sites_;
+
   int &min_num_errors = mapping_metadata.min_num_errors_;
   int &num_best_mappings = mapping_metadata.num_best_mappings_;
   int &second_min_num_errors = mapping_metadata.second_min_num_errors_;
@@ -207,8 +198,9 @@ void MappingGenerator<MappingRecord>::VerifyCandidates(
   second_min_num_errors = mapping_parameters_.error_threshold + 1;
   num_second_best_mappings = 0;
 
+  // Directly obtain the non-split mapping in ideal case and return without
+  // running actual verification.
   if (!mapping_parameters_.split_alignment) {
-    // Directly obtain the mapping in ideal case.
     uint32_t i;
     int maxCnt = 0;
     int maxTag = 0;
@@ -225,6 +217,7 @@ void MappingGenerator<MappingRecord>::VerifyCandidates(
         ++maxCnt;
       }
     }
+
     for (i = 0; i < negative_candidates.size(); ++i) {
 #ifdef LI_DEBUG
       printf("%s - %u %u %d:%d\n", __func__, i, negative_candidates[i].count,
@@ -236,6 +229,7 @@ void MappingGenerator<MappingRecord>::VerifyCandidates(
         ++maxCnt;
       }
     }
+
     if (maxCnt == 1 &&
         positive_candidates.size() + negative_candidates.size() == 1) {
       Direction candidate_direction = (maxTag & 1) ? kNegative : kPositive;
@@ -254,6 +248,7 @@ void MappingGenerator<MappingRecord>::VerifyCandidates(
         rid = negative_candidates[ci].position >> 32;
         position = (uint32_t)negative_candidates[ci].position - read_length + 1;
       }
+
       bool flag = true;
       if (position < (uint32_t)mapping_parameters_.error_threshold ||
           position >= reference.GetSequenceLengthAt(rid) ||
@@ -261,6 +256,7 @@ void MappingGenerator<MappingRecord>::VerifyCandidates(
               reference.GetSequenceLengthAt(rid)) {
         flag = false;
       }
+
       if (flag) {
         if (candidate_direction == kPositive) {
           positive_mappings.emplace_back(
@@ -277,75 +273,59 @@ void MappingGenerator<MappingRecord>::VerifyCandidates(
   // printf("Notsaved %d\n", positive_candidates.size() +
   // negative_candidates.size()) ;
 
-  // Use more sophicated approach to obtain the mapping
-  if (mapping_parameters_.split_alignment) {
-    std::vector<Candidate> sorted_candidates(positive_candidates);
-    std::sort(sorted_candidates.begin(), sorted_candidates.end());
-    VerifyCandidatesOnOneDirection(
-        kPositive, read_batch, read_index, reference, sorted_candidates,
-        positive_mappings, positive_split_sites, min_num_errors,
-        num_best_mappings, second_min_num_errors, num_second_best_mappings);
+  // Use more sophicated approach to obtain the mapping.
+  // Sort the candidates by their count in descending order.
+  // TODO: check if this sorting is necessary.
+  mapping_metadata.SortCandidates();
 
-    sorted_candidates = negative_candidates;
-    std::sort(sorted_candidates.begin(), sorted_candidates.end());
-    VerifyCandidatesOnOneDirection(
-        kNegative, read_batch, read_index, reference, sorted_candidates,
-        negative_mappings, negative_split_sites, min_num_errors,
-        num_best_mappings, second_min_num_errors, num_second_best_mappings);
+  // For split alignments, SIMD cannot be used.
+  if (mapping_parameters_.split_alignment) {
+    VerifyCandidatesOnOneDirection(kPositive, read_index, read_batch, reference,
+                                   mapping_metadata);
+
+    VerifyCandidatesOnOneDirection(kNegative, read_index, read_batch, reference,
+                                   mapping_metadata);
+    return;
+  }
+
+  // For non-split alignments, use SIMD when possible.
+  if (positive_candidates.size() < (size_t)NUM_VPU_LANES_) {
+    VerifyCandidatesOnOneDirection(kPositive, read_index, read_batch, reference,
+                                   mapping_metadata);
   } else {
-    if (positive_candidates.size() < (size_t)NUM_VPU_LANES_) {
-      VerifyCandidatesOnOneDirection(
-          kPositive, read_batch, read_index, reference, positive_candidates,
-          positive_mappings, positive_split_sites, min_num_errors,
-          num_best_mappings, second_min_num_errors, num_second_best_mappings);
-    } else {
-      std::vector<Candidate> sorted_candidates(positive_candidates);
-      std::sort(sorted_candidates.begin(), sorted_candidates.end());
-      // std::cerr << "best: " << sorted_candidates[0].count << " " << "second
-      // best: " << sorted_candidates[1].count << "\n";
-      VerifyCandidatesOnOneDirectionUsingSIMD(
-          kPositive, read_batch, read_index, reference, sorted_candidates,
-          positive_mappings, min_num_errors, num_best_mappings,
-          second_min_num_errors, num_second_best_mappings);
-      // VerifyCandidatesOnOneDirectionUsingSIMD(kPositive, read_batch,
-      // read_index, reference, positive_candidates, positive_mappings,
-      // min_num_errors, num_best_mappings, second_min_num_errors,
-      // num_second_best_mappings);
-    }
-    if (negative_candidates.size() < (size_t)NUM_VPU_LANES_) {
-      VerifyCandidatesOnOneDirection(
-          kNegative, read_batch, read_index, reference, negative_candidates,
-          negative_mappings, negative_split_sites, min_num_errors,
-          num_best_mappings, second_min_num_errors, num_second_best_mappings);
-    } else {
-      std::vector<Candidate> sorted_candidates(negative_candidates);
-      std::sort(sorted_candidates.begin(), sorted_candidates.end());
-      // std::cerr << "best: " << sorted_candidates[0].count << " " << "second
-      // best: " << sorted_candidates[1].count << "\n";
-      VerifyCandidatesOnOneDirectionUsingSIMD(
-          kNegative, read_batch, read_index, reference, sorted_candidates,
-          negative_mappings, min_num_errors, num_best_mappings,
-          second_min_num_errors, num_second_best_mappings);
-      // VerifyCandidatesOnOneDirectionUsingSIMD(kNegative, read_batch,
-      // read_index, reference, negative_candidates, negative_mappings,
-      // min_num_errors, num_best_mappings, second_min_num_errors,
-      // num_second_best_mappings);
-    }
+    VerifyCandidatesOnOneDirectionUsingSIMD(kPositive, read_index, read_batch,
+                                            reference, mapping_metadata);
+  }
+
+  if (negative_candidates.size() < (size_t)NUM_VPU_LANES_) {
+    VerifyCandidatesOnOneDirection(kNegative, read_index, read_batch, reference,
+                                   mapping_metadata);
+  } else {
+    VerifyCandidatesOnOneDirectionUsingSIMD(kNegative, read_index, read_batch,
+                                            reference, mapping_metadata);
   }
 }
 
 template <typename MappingRecord>
 void MappingGenerator<MappingRecord>::VerifyCandidatesOnOneDirectionUsingSIMD(
-    Direction candidate_direction, const SequenceBatch &read_batch,
-    uint32_t read_index, const SequenceBatch &reference,
-    const std::vector<Candidate> &candidates,
-    std::vector<std::pair<int, uint64_t>> &mappings, int &min_num_errors,
-    int &num_best_mappings, int &second_min_num_errors,
-    int &num_second_best_mappings) {
+    Direction candidate_direction, uint32_t read_index,
+    const SequenceBatch &read_batch, const SequenceBatch &reference,
+    MappingMetadata &mapping_metadata) {
   const char *read = read_batch.GetSequenceAt(read_index);
   uint32_t read_length = read_batch.GetSequenceLengthAt(read_index);
   const std::string &negative_read =
       read_batch.GetNegativeSequenceAt(read_index);
+
+  const std::vector<Candidate> &candidates =
+      candidate_direction == kPositive ? mapping_metadata.positive_candidates_
+                                       : mapping_metadata.negative_candidates_;
+  std::vector<std::pair<int, uint64_t>> &mappings =
+      candidate_direction == kPositive ? mapping_metadata.positive_mappings_
+                                       : mapping_metadata.negative_mappings_;
+  int &min_num_errors = mapping_metadata.min_num_errors_;
+  int &num_best_mappings = mapping_metadata.num_best_mappings_;
+  int &second_min_num_errors = mapping_metadata.second_min_num_errors_;
+  int &num_second_best_mappings = mapping_metadata.num_second_best_mappings_;
 
   size_t num_candidates = candidates.size();
   Candidate valid_candidates[NUM_VPU_LANES_];
@@ -545,16 +525,28 @@ void MappingGenerator<MappingRecord>::VerifyCandidatesOnOneDirectionUsingSIMD(
 
 template <typename MappingRecord>
 void MappingGenerator<MappingRecord>::VerifyCandidatesOnOneDirection(
-    Direction candidate_direction, const SequenceBatch &read_batch,
-    uint32_t read_index, const SequenceBatch &reference,
-    const std::vector<Candidate> &candidates,
-    std::vector<std::pair<int, uint64_t>> &mappings,
-    std::vector<int> &split_sites, int &min_num_errors, int &num_best_mappings,
-    int &second_min_num_errors, int &num_second_best_mappings) {
+    Direction candidate_direction, uint32_t read_index,
+    const SequenceBatch &read_batch, const SequenceBatch &reference,
+    MappingMetadata &mapping_metadata) {
   const char *read = read_batch.GetSequenceAt(read_index);
   uint32_t read_length = read_batch.GetSequenceLengthAt(read_index);
   const std::string &negative_read =
       read_batch.GetNegativeSequenceAt(read_index);
+
+  const std::vector<Candidate> &candidates =
+      candidate_direction == kPositive ? mapping_metadata.positive_candidates_
+                                       : mapping_metadata.negative_candidates_;
+  std::vector<std::pair<int, uint64_t>> &mappings =
+      candidate_direction == kPositive ? mapping_metadata.positive_mappings_
+                                       : mapping_metadata.negative_mappings_;
+  std::vector<int> &split_sites = candidate_direction == kPositive
+                                      ? mapping_metadata.positive_split_sites_
+                                      : mapping_metadata.negative_split_sites_;
+  int &min_num_errors = mapping_metadata.min_num_errors_;
+  int &num_best_mappings = mapping_metadata.num_best_mappings_;
+  int &second_min_num_errors = mapping_metadata.second_min_num_errors_;
+  int &num_second_best_mappings = mapping_metadata.num_second_best_mappings_;
+
   uint32_t candidate_count_threshold = 0;
 
   for (uint32_t ci = 0; ci < candidates.size(); ++ci) {
@@ -564,12 +556,14 @@ void MappingGenerator<MappingRecord>::VerifyCandidatesOnOneDirection(
     if (candidate_direction == kNegative) {
       position = position - read_length + 1;
     }
+
     if (position < (uint32_t)mapping_parameters_.error_threshold ||
         position >= reference.GetSequenceLengthAt(rid) ||
         position + read_length + mapping_parameters_.error_threshold >=
             reference.GetSequenceLengthAt(rid)) {
       continue;
     }
+
     int mapping_end_position = read_length;
     int gap_beginning = 0;
     int num_errors;
@@ -606,11 +600,11 @@ void MappingGenerator<MappingRecord>::VerifyCandidatesOnOneDirection(
             read_mapping_length = backup_read_mapping_length;
           } else {
             gap_beginning = allow_gap_beginning;
-            mapping_end_position +=
-                gap_beginning;  // realign the mapping end position as it is the
-                                // alignment from the whole read
+            // Realign the mapping end position as it is the alignment from the
+            // whole read.
+            mapping_end_position += gap_beginning;
             // I use this adjustment since "position" is based on the whole
-            // read, and it will be more consistent with no gap beginning case
+            // read, and it will be more consistent with no gap beginning case.
             read_mapping_length += gap_beginning;
           }
         }
@@ -644,14 +638,7 @@ void MappingGenerator<MappingRecord>::VerifyCandidatesOnOneDirection(
         }
       }
       // std::cerr << "ne1: " << num_errors << " " << mapping_end_position <<
-      // "\n"; if (num_errors > 2 * mapping_parameters_.error_threshold) {
-      //  if (mapping_end_position - mapping_parameters_.error_threshold -
-      //  num_errors >= mapping_length_threshold) {
-      //    mapping_end_position -= num_errors;
-      //    num_errors = -(mapping_end_position -
-      //    mapping_parameters_.error_threshold);
-      //  }
-      //} else {
+      // "\n";
       if (mapping_end_position + 1 - mapping_parameters_.error_threshold -
               num_errors - gap_beginning >=
           mapping_length_threshold) {
@@ -674,7 +661,6 @@ void MappingGenerator<MappingRecord>::VerifyCandidatesOnOneDirection(
         num_errors = mapping_parameters_.error_threshold + 1;
         actual_num_errors = mapping_parameters_.error_threshold + 1;
       }
-      //}
       // std::cerr << "ne2: " << num_errors << " " << mapping_end_position <<
       // "\n";
     } else {
@@ -718,15 +704,13 @@ void MappingGenerator<MappingRecord>::VerifyCandidatesOnOneDirection(
         best_mapping_longest_match = longest_match;
       } else if (num_errors == min_num_errors) {
         num_best_mappings++;
-        /*if (mapping_parameters_.split_alignment && candidates.size() > 50) {
-                candidate_count_threshold = candidates[ci].count + 1;
-        }*/
       } else if (num_errors == second_min_num_errors) {
         num_second_best_mappings++;
       } else if (num_errors < second_min_num_errors) {
         num_second_best_mappings = 1;
         second_min_num_errors = num_errors;
       }
+
       if (candidate_direction == kPositive) {
         mappings.emplace_back(num_errors,
                               candidates[ci].position -
@@ -735,10 +719,6 @@ void MappingGenerator<MappingRecord>::VerifyCandidatesOnOneDirection(
       } else {
         if (mapping_parameters_.split_alignment &&
             mapping_parameters_.mapping_output_format != MAPPINGFORMAT_SAM) {
-          // mappings->emplace_back(num_errors, candidates[ci].position +
-          // mapping_parameters_.error_threshold - 1 - mapping_end_position
-          //					+ read_mapping_length - 1 -
-          // gap_beginning);
           mappings.emplace_back(num_errors,
                                 candidates[ci].position - gap_beginning);
         } else {
@@ -752,21 +732,8 @@ void MappingGenerator<MappingRecord>::VerifyCandidatesOnOneDirection(
                                     mapping_end_position);
         }
       }
+
       if (mapping_parameters_.split_alignment) {
-        /*if (mapping_end_position - mapping_parameters_.error_threshold < 0 ||
-           mapping_end_position - mapping_parameters_.error_threshold > 200 ||
-           mapping_end_position
-           - mapping_parameters_.error_threshold < 20) { printf("ERROR! %d %d %d
-           %d %d\n", mapping_end_position, mapping_parameters_.error_threshold,
-           read_length,(int)candidates[ci].position, gap_beginning);
-                }*/
-        /*if (num_errors < *min_num_errors + mapping_parameters_.error_threshold
-        / 2 && num_errors > *min_num_errors
-                        && longest_match > best_mapping_longest_match &&
-        candidates.size() > 200) {
-                (*num_second_best_mappings)++;
-                *second_min_num_errors = *min_num_errors;
-        }*/
         split_sites.emplace_back(((actual_num_errors & 0xff) << 24) |
                                  ((gap_beginning & 0xff) << 16) |
                                  (read_mapping_length & 0xffff));

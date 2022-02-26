@@ -54,6 +54,11 @@ class MappingMetadata {
     Update(negative_candidates_);
   }
 
+  inline void SortCandidates() {
+    std::sort(positive_candidates_.begin(), positive_candidates_.end());
+    std::sort(negative_candidates_.begin(), negative_candidates_.end());
+  }
+
   inline void SortMappingsByPositions() {
     auto compare_function = [](const std::pair<int, uint64_t> &a,
                                const std::pair<int, uint64_t> &b) {
@@ -130,6 +135,7 @@ class MappingMetadata {
   std::vector<Candidate> positive_candidates_buffer_;
   std::vector<Candidate> negative_candidates_buffer_;
 
+  // The first element is ed, and the second element is position.
   std::vector<std::pair<int, uint64_t>> positive_mappings_;
   std::vector<std::pair<int, uint64_t>> negative_mappings_;
 
