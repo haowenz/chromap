@@ -251,7 +251,11 @@ if (cache[hidx].finger_print_cnt_sum <= 5)
       int size = cache[hidx].positive_candidates.size();
       int shift = (int)minimizers[0].second >> 1;
       for (i = 0; i < size; ++i)
-        cache[hidx].positive_candidates[i].position += shift;
+      {
+        int rid = (int)(cache[hidx].positive_candidates[i].position >> 32);
+        int rpos = (int)cache[hidx].positive_candidates[i].position;
+        cache[hidx].positive_candidates[i].position = ((uint64_t)rid << 32) + rpos + shift;
+      }
       size = cache[hidx].negative_candidates.size();
       for (i = 0; i < size; ++i)
         cache[hidx].negative_candidates[i].position -= shift;
