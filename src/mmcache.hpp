@@ -133,7 +133,11 @@ class mm_cache {
       repetitive_seed_length = cache[hidx].repetitive_seed_length;
       int size = pos_candidates.size();
       int shift = (int)minimizers[0].second >> 1;
-      for (i = 0; i < size; ++i) pos_candidates[i].position -= shift;
+      for (i = 0; i < size; ++i) {
+        uint64_t rid = pos_candidates[i].position >> 32;
+        int rpos = (int)pos_candidates[i].position;
+        pos_candidates[i].position = (rid << 32) + (uint32_t)(rpos - shift);
+      }
       size = neg_candidates.size();
       for (i = 0; i < size; ++i) neg_candidates[i].position += shift;
       return hidx;
@@ -146,9 +150,11 @@ class mm_cache {
                   kmer_length - 1;
 
       pos_candidates = cache[hidx].negative_candidates;
-      for (i = 0; i < size; ++i)
-        pos_candidates[i].position =
-            cache[hidx].negative_candidates[i].position + shift - read_len + 1;
+      for (i = 0; i < size; ++i) {
+        uint64_t rid = cache[hidx].negative_candidates[i].position >> 32;
+        int rpos = (int)cache[hidx].negative_candidates[i].position;
+        pos_candidates[i].position = (rid << 32) + (uint32_t)(rpos + shift - read_len + 1);
+      }
       size = cache[hidx].positive_candidates.size();
       neg_candidates = cache[hidx].positive_candidates;
       for (i = 0; i < size; ++i)
@@ -250,16 +256,15 @@ if (cache[hidx].finger_print_cnt_sum <= 5)
       // adjust the candidate position.
       int size = cache[hidx].positive_candidates.size();
       int shift = (int)minimizers[0].second >> 1;
-      for (i = 0; i < size; ++i)
-      {
-        int rid = (int)(cache[hidx].positive_candidates[i].position >> 32);
+      for (i = 0; i < size; ++i) {
+        uint64_t rid = (int)(cache[hidx].positive_candidates[i].position >> 32);
         int rpos = (int)cache[hidx].positive_candidates[i].position;
-        cache[hidx].positive_candidates[i].position = ((uint64_t)rid << 32) + rpos + shift;
+        cache[hidx].positive_candidates[i].position = (rid << 32) + (uint32_t)(rpos + shift);
       }
       size = cache[hidx].negative_candidates.size();
       for (i = 0; i < size; ++i)
         cache[hidx].negative_candidates[i].position -= shift;
-
+      
       // Update head mm array
       head_mm[(minimizers[0].first >> 6) & HEAD_MM_ARRAY_MASK] |=
           (1ull << (minimizers[0].first & 0x3f));
