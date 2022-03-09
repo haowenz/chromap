@@ -352,11 +352,8 @@ void Chromap::MapSingleEndReads() {
                     mapping_parameters_.error_threshold, index,
                     mapping_metadata);
               }
-
-              if (read_index < num_loaded_reads &&
-                  (read_index <
-                       num_loaded_reads / mapping_parameters_.num_threads ||
-                   num_reads_ <= 2500000)) {
+              
+              if (read_index < mm_to_candidates_cache.GetUpdateThreshold(num_loaded_reads, num_reads_, false)) {
                 mm_history[read_index].timestamp = num_reads_;
                 mm_history[read_index].minimizers =
                     mapping_metadata.minimizers_;
@@ -399,13 +396,9 @@ void Chromap::MapSingleEndReads() {
             }
           }
 #pragma omp taskwait
-          for (uint32_t read_index = 0; read_index < num_loaded_reads;
+          for (uint32_t read_index = 0; 
+              read_index < mm_to_candidates_cache.GetUpdateThreshold(num_loaded_reads, num_reads_, false);
                ++read_index) {
-            if (num_reads_ > 2500000 &&
-                read_index >=
-                    num_loaded_reads / mapping_parameters_.num_threads) {
-              break;
-            }
             if (mm_history[read_index].timestamp != num_reads_) continue;
             mm_to_candidates_cache.Update(
                 mm_history[read_index].minimizers,
@@ -770,10 +763,7 @@ void Chromap::MapPairedEndReads() {
                     paired_end_mapping_metadata.mapping_metadata2_
                         .GetNumCandidates();
 
-                if (pair_index < num_loaded_pairs &&
-                    (pair_index <
-                         num_loaded_pairs / mapping_parameters_.num_threads ||
-                     num_reads_ <= 5000000)) {
+                if (pair_index < mm_to_candidates_cache.GetUpdateThreshold(num_loaded_pairs, num_reads_, true)) {
                   mm_history1[pair_index].timestamp =
                       mm_history2[pair_index].timestamp = num_reads_;
                   mm_history1[pair_index].minimizers =
@@ -931,13 +921,9 @@ void Chromap::MapPairedEndReads() {
           //}
 #pragma omp taskwait
           // Update cache
-          for (uint32_t pair_index = 0; pair_index < num_loaded_pairs;
+          for (uint32_t pair_index = 0; 
+              pair_index < mm_to_candidates_cache.GetUpdateThreshold(num_loaded_pairs, num_reads_, true);
                ++pair_index) {
-            if (num_reads_ > 5000000 &&
-                pair_index >=
-                    num_loaded_pairs / mapping_parameters_.num_threads) {
-              break;
-            }
             if (mm_history1[pair_index].timestamp != num_reads_) continue;
 
             mm_to_candidates_cache.Update(
