@@ -161,6 +161,7 @@ class mm_cache {
         neg_candidates[i].position =
             cache[hidx].positive_candidates[i].position - shift + read_len - 1;
       repetitive_seed_length = cache[hidx].repetitive_seed_length;
+
       return hidx;
     } else {
       return -1;
@@ -236,7 +237,25 @@ if (cache[hidx].finger_print_cnt_sum <= 5)
         cache[hidx].strands.resize(0);
         return;
       }
-
+      int size = pos_candidates.size();
+      int shift = (int)minimizers[0].second >> 1;
+      // Do not cache if it is too near the start.
+      for (i = 0; i < size; ++i) 
+        if ((int)pos_candidates[i].position < 0) {
+          cache[hidx].offsets.resize(0);
+          cache[hidx].strands.resize(0);
+          cache[hidx].minimizers.resize(0);
+          return;
+        }
+      size = neg_candidates.size();
+      for (i = 0; i < size; ++i)
+        if ((int)neg_candidates[i].position - ((int)minimizers[msize - 1].second>>1)
+            < kmer_length + shift) {
+          cache[hidx].offsets.resize(0);
+          cache[hidx].strands.resize(0);
+          cache[hidx].minimizers.resize(0);
+          return;
+        }
       cache[hidx].offsets.resize(msize - 1);
       cache[hidx].strands.resize(msize);
       for (i = 0; i < msize; ++i) {
@@ -254,13 +273,9 @@ if (cache[hidx].finger_print_cnt_sum <= 5)
       cache[hidx].repetitive_seed_length = repetitive_seed_length;
 
       // adjust the candidate position.
-      int size = cache[hidx].positive_candidates.size();
-      int shift = (int)minimizers[0].second >> 1;
-      for (i = 0; i < size; ++i) {
-        uint64_t rid = (int)(cache[hidx].positive_candidates[i].position >> 32);
-        int rpos = (int)cache[hidx].positive_candidates[i].position;
-        cache[hidx].positive_candidates[i].position = (rid << 32) + (uint32_t)(rpos + shift);
-      }
+      size = cache[hidx].positive_candidates.size();
+      for (i = 0; i < size; ++i) 
+        cache[hidx].positive_candidates[i].position += shift;
       size = cache[hidx].negative_candidates.size();
       for (i = 0; i < size; ++i)
         cache[hidx].negative_candidates[i].position -= shift;
@@ -286,6 +301,16 @@ if (cache[hidx].finger_print_cnt_sum <= 5)
              cache[i].negative_candidates.capacity() * sizeof(Candidate);
     }
     return ret;
+  }
+
+  // How many reads from a batch we want to use to update the cache. 
+  // paired end data has twice the amount reads, so the threshold is lower
+  uint32_t GetUpdateThreshold(uint32_t num_loaded_reads, uint64_t num_reads, bool paired) {
+    const uint32_t block = paired ? 2500000 : 5000000;
+    if (num_reads <= block)
+      return num_loaded_reads;
+    else
+      return num_loaded_reads / (8 * (num_reads / block));  
   }
 
   void PrintStats() {
