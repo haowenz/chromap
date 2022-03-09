@@ -122,9 +122,9 @@ void Chromap::TrimAdapterForPairedEndRead(uint32_t pair_index,
     size_t seed_start_position =
         negative_read2.find(read1 + si * seed_length, 0, seed_length);
     while (seed_start_position != std::string::npos &&
-           read2_length - seed_start_position + seed_length * si >=
-               (uint32_t)min_overlap_length &&
-           seed_start_position >= si * seed_length) {
+           (int)(read2_length - seed_start_position + seed_length * si) >=
+               min_overlap_length &&
+           seed_start_position >= (size_t)(si * seed_length)) {
       bool can_merge = true;
       int num_errors = 0;
       for (int i = 0; i < seed_length * si; ++i) {
