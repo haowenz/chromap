@@ -155,7 +155,7 @@ class Chromap {
   uint64_t num_uniquely_mapped_reads_ = 0;
   uint64_t num_reads_ = 0;
   // # identical reads.
-  uint64_t num_duplicated_reads_ = 0;
+  // uint64_t num_duplicated_reads_ = 0;
 
   // For barcode stats.
   const uint64_t initial_num_sample_barcodes_ = 20000000;
