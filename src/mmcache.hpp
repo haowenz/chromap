@@ -310,7 +310,7 @@ if (cache[hidx].finger_print_cnt_sum <= 5)
     if (num_reads <= block)
       return num_loaded_reads;
     else
-      return num_loaded_reads / (8 * (num_reads / block));  
+      return num_loaded_reads / (1 + (num_reads / block));  
   }
 
   void PrintStats() {
