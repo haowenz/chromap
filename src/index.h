@@ -1,6 +1,7 @@
 #ifndef INDEX_H_
 #define INDEX_H_
 
+#include <limits>
 #include <queue>
 #include <string>
 #include <vector>
