@@ -48,11 +48,7 @@ struct mmHit {
 
   bool operator<(const mmHit &h) const {
     // the inversed direction is to make a min-heap
-    //return position > h.position;
-    if (int(position>>32) != int(h.position>>32))
-      return position > h.position;
-    else
-      return (int)position > (int)h.position;
+    return position > h.position;
   }
 };
 

@@ -241,7 +241,7 @@ if (cache[hidx].finger_print_cnt_sum <= 5)
       int shift = (int)minimizers[0].second >> 1;
       // Do not cache if it is too near the start.
       for (i = 0; i < size; ++i) 
-        if ((int)pos_candidates[i].position < 0) {
+        if ((int)pos_candidates[i].position < kmer_length + shift) {
           cache[hidx].offsets.resize(0);
           cache[hidx].strands.resize(0);
           cache[hidx].minimizers.resize(0);

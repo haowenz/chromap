@@ -449,7 +449,7 @@ int Index::CollectSeedHits(
       if (mm_positive_hits[mi].size() == 0) continue;
       // only the positive part may have the underflow issue
       if (heap_resort)
-        std::sort(mm_positive_hits[mi].begin(), mm_positive_hits[mi].end(), CompSortHits);
+        std::sort(mm_positive_hits[mi].begin(), mm_positive_hits[mi].end());
       struct mmHit nh;
       nh.mi = mi;
       nh.position = mm_positive_hits[mi][0];
@@ -495,7 +495,7 @@ int Index::CollectSeedHits(
     delete[] mm_negative_hits;
     delete[] mm_pos;
   } else {
-    std::sort(positive_hits.begin(), positive_hits.end(), CompSortHits);
+    std::sort(positive_hits.begin(), positive_hits.end());
     std::sort(negative_hits.begin(), negative_hits.end());
   }
   /*for (uint32_t mi = 0 ; mi < positive_hits->size() ; ++mi)

@@ -92,13 +92,6 @@ class Index {
     return key;
   }
 
-  inline static bool CompSortHits(const uint64_t &a, const uint64_t &b) {
-    if (int(a>>32) != int(b>>32))
-      return a < b;
-    else
-      return (int)a < int(b);
-  }
-
  protected:
   int kmer_size_;
   int window_size_;
