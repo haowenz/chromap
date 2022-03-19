@@ -233,8 +233,8 @@ if (cache[hidx].finger_print_cnt_sum <= 5)
       cache[hidx].weight = 1;
       cache[hidx].minimizers.resize(msize);
       if (msize == 0) {
-        cache[hidx].offsets.resize(0);
-        cache[hidx].strands.resize(0);
+        cache[hidx].offsets.clear();
+        cache[hidx].strands.clear();
         return;
       }
       int size = pos_candidates.size();
@@ -242,18 +242,18 @@ if (cache[hidx].finger_print_cnt_sum <= 5)
       // Do not cache if it is too near the start.
       for (i = 0; i < size; ++i) 
         if ((int)pos_candidates[i].position < kmer_length + shift) {
-          cache[hidx].offsets.resize(0);
-          cache[hidx].strands.resize(0);
-          cache[hidx].minimizers.resize(0);
+          cache[hidx].offsets.clear();
+          cache[hidx].strands.clear();
+          cache[hidx].minimizers.clear();
           return;
         }
       size = neg_candidates.size();
       for (i = 0; i < size; ++i)
         if ((int)neg_candidates[i].position - ((int)minimizers[msize - 1].second>>1)
             < kmer_length + shift) {
-          cache[hidx].offsets.resize(0);
-          cache[hidx].strands.resize(0);
-          cache[hidx].minimizers.resize(0);
+          cache[hidx].offsets.clear();
+          cache[hidx].strands.clear();
+          cache[hidx].minimizers.clear();
           return;
         }
       cache[hidx].offsets.resize(msize - 1);
