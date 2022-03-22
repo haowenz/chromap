@@ -6,9 +6,9 @@
 #include <string>
 #include <vector>
 
+#include "index_parameters.h"
 #include "khash.h"
 #include "mapping_metadata.h"
-#include "index_parameters.h"
 #include "sequence_batch.h"
 #include "utils.h"
 
@@ -40,9 +40,9 @@ class Index {
   ~Index() { Destroy(); }
 
   void Destroy() {
-    if (lookup_table_ != NULL) {
+    if (lookup_table_ != nullptr) {
       kh_destroy(k64, lookup_table_);
-      lookup_table_ = NULL;
+      lookup_table_ = nullptr;
     }
 
     std::vector<uint64_t>().swap(occurrence_table_);
@@ -54,16 +54,23 @@ class Index {
 
   void Load();
 
+  // Output index stats.
   void Statistics(uint32_t num_sequences, const SequenceBatch &reference) const;
 
+  // Check the index for some reference genome. Only for debug.
   void CheckIndex(uint32_t num_sequences, const SequenceBatch &reference) const;
 
+  // Return the number of repetitive seeds.
   int CollectSeedHits(
       int max_seed_frequency, int repetitive_seed_frequency,
       const std::vector<std::pair<uint64_t, uint64_t> > &minimizers,
       uint32_t &repetitive_seed_length, std::vector<uint64_t> &positive_hits,
       std::vector<uint64_t> &negative_hits, bool use_heap) const;
 
+  // Input a search range, for each best mate candidate, serach for minimizer
+  // hits. Return the minimizer count of the best candidate, if it finishes
+  // normally or return a negative value if it stops early due to too many
+  // candidates with low minimizer count.
   int CollectSeedHitsFromRepetitiveReadWithMateInfo(
       int error_threshold,
       const std::vector<std::pair<uint64_t, uint64_t> > &minimizers,
@@ -79,6 +86,7 @@ class Index {
   uint32_t GetLookupTableSize() const { return kh_size(lookup_table_); }
 
   // TODO(Haowen): move this out to form a minimizer class or struct.
+  // One should always reserve space for minimizers in other functions.
   void GenerateMinimizerSketch(
       const SequenceBatch &sequence_batch, uint32_t sequence_index,
       std::vector<std::pair<uint64_t, uint64_t> > &minimizers) const;
