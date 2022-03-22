@@ -20,9 +20,7 @@ void Chromap::ConstructIndex() {
   SequenceBatch reference;
   reference.InitializeLoading(index_parameters_.reference_file_path);
   uint32_t num_sequences = reference.LoadAllSequences();
-  Index index(index_parameters_.kmer_size, index_parameters_.window_size,
-              index_parameters_.num_threads,
-              index_parameters_.index_output_file_path);
+  Index index(index_parameters_);
   index.Construct(num_sequences, reference);
   index.Statistics(num_sequences, reference);
   index.Save();
