@@ -8,10 +8,12 @@
 
 #include "khash.h"
 #include "mapping_metadata.h"
+#include "index_parameters.h"
 #include "sequence_batch.h"
 #include "utils.h"
 
 namespace chromap {
+
 #define KHashFunctionForIndex(a) ((a) >> 1)
 #define KHashEqForIndex(a, b) ((a) >> 1 == (b) >> 1)
 KHASH_INIT(k64, uint64_t, uint64_t, 1, KHashFunctionForIndex, KHashEqForIndex);
@@ -27,12 +29,11 @@ class Index {
   }
 
   // For index construction.
-  Index(int kmer_size, int window_size, int num_threads,
-        const std::string &index_file_path)
-      : kmer_size_(kmer_size),
-        window_size_(window_size),
-        num_threads_(num_threads),
-        index_file_path_(index_file_path) {
+  Index(const IndexParameters &index_parameters)
+      : kmer_size_(index_parameters.kmer_size),
+        window_size_(index_parameters.window_size),
+        num_threads_(index_parameters.num_threads),
+        index_file_path_(index_parameters.index_output_file_path) {
     lookup_table_ = kh_init(k64);
   }
 
@@ -94,12 +95,12 @@ class Index {
   }
 
  protected:
-  int kmer_size_;
-  int window_size_;
+  int kmer_size_ = 0;
+  int window_size_ = 0;
   // Number of threads to build the index, which is not used right now.
-  int num_threads_;
+  int num_threads_ = 1;
   const std::string index_file_path_;
-  khash_t(k64) *lookup_table_ = NULL;
+  khash_t(k64) *lookup_table_ = nullptr;
   std::vector<uint64_t> occurrence_table_;
 };
 
