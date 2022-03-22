@@ -12,7 +12,7 @@ namespace chromap {
 void Index::Construct(uint32_t num_sequences, const SequenceBatch &reference) {
   double real_start_time = GetRealTime();
   // tmp_table stores (minimizer, position).
-  std::vector<std::pair<uint64_t, uint64_t> > tmp_table;
+  std::vector<std::pair<uint64_t, uint64_t>> tmp_table;
   tmp_table.reserve(reference.GetNumBases() / window_size_ * 2);
 
   for (uint32_t sequence_index = 0; sequence_index < num_sequences;
@@ -184,7 +184,7 @@ void Index::Statistics(uint32_t num_sequences,
 
 void Index::CheckIndex(uint32_t num_sequences,
                        const SequenceBatch &reference) const {
-  std::vector<std::pair<uint64_t, uint64_t> > tmp_table;
+  std::vector<std::pair<uint64_t, uint64_t>> tmp_table;
   tmp_table.reserve(reference.GetNumBases() / window_size_ * 2);
   for (uint32_t sequence_index = 0; sequence_index < num_sequences;
        ++sequence_index) {
@@ -218,22 +218,29 @@ void Index::CheckIndex(uint32_t num_sequences,
 
 int Index::CollectSeedHits(
     int max_seed_frequency, int repetitive_seed_frequency,
-    const std::vector<std::pair<uint64_t, uint64_t> > &minimizers,
+    const std::vector<std::pair<uint64_t, uint64_t>> &minimizers,
     uint32_t &repetitive_seed_length, std::vector<uint64_t> &positive_hits,
     std::vector<uint64_t> &negative_hits, bool use_heap) const {
-  uint32_t num_minimizers = minimizers.size();
-  int repetitive_seed_count = 0;
-  std::vector<uint64_t> *mm_positive_hits = NULL, *mm_negative_hits = NULL;
-  bool heap_resort = false;  // need to sort the elements of heap first
+  const uint32_t num_minimizers = minimizers.size();
+  std::vector<std::vector<uint64_t>> mm_positive_hits;
+  std::vector<std::vector<uint64_t>> mm_negative_hits;
   if (use_heap) {
-    mm_positive_hits = new std::vector<uint64_t>[num_minimizers];
-    mm_negative_hits = new std::vector<uint64_t>[num_minimizers];
+    for (uint32_t i = 0; i < num_minimizers; ++i) {
+      mm_positive_hits.emplace_back(std::vector<uint64_t>());
+      mm_negative_hits.emplace_back(std::vector<uint64_t>());
+    }
   }
+
+  bool heap_resort = false;  // need to sort the elements of heap first
+
   positive_hits.reserve(max_seed_frequency * 2);
   negative_hits.reserve(max_seed_frequency * 2);
 
   uint32_t previous_repetitive_seed_position =
       std::numeric_limits<uint32_t>::max();
+
+  int repetitive_seed_count = 0;
+
   for (uint32_t mi = 0; mi < num_minimizers; ++mi) {
     khiter_t khash_iterator =
         kh_get(k64, lookup_table_, minimizers[mi].first << 1);
@@ -328,7 +335,7 @@ int Index::CollectSeedHits(
 
   if (use_heap) {
     std::priority_queue<struct mmHit> heap;
-    unsigned int *mm_pos = new unsigned int[num_minimizers];
+    std::vector<uint32_t> mm_pos(num_minimizers);
     positive_hits.clear();
     for (uint32_t mi = 0; mi < num_minimizers; ++mi) {
       if (mm_positive_hits[mi].size() == 0) continue;
@@ -377,10 +384,6 @@ int Index::CollectSeedHits(
         heap.push(nh);
       }
     }
-
-    delete[] mm_positive_hits;
-    delete[] mm_negative_hits;
-    delete[] mm_pos;
   } else {
     std::sort(positive_hits.begin(), positive_hits.end());
     std::sort(negative_hits.begin(), negative_hits.end());
@@ -401,7 +404,7 @@ int Index::CollectSeedHits(
 
 int Index::CollectSeedHitsFromRepetitiveReadWithMateInfo(
     int error_threshold,
-    const std::vector<std::pair<uint64_t, uint64_t> > &minimizers,
+    const std::vector<std::pair<uint64_t, uint64_t>> &minimizers,
     uint32_t &repetitive_seed_length, std::vector<uint64_t> &hits,
     const std::vector<Candidate> &mate_candidates, const Direction direction,
     uint32_t search_range, int min_num_seeds_required_for_mapping,
@@ -432,7 +435,7 @@ int Index::CollectSeedHitsFromRepetitiveReadWithMateInfo(
     return -max_minimizer_count;
   }
 
-  std::vector<std::pair<uint64_t, uint64_t> > boundaries;
+  std::vector<std::pair<uint64_t, uint64_t>> boundaries;
   boundaries.reserve(300);
 
   for (uint32_t ci = 0; ci < mate_candidates_size; ++ci) {
@@ -580,7 +583,7 @@ int Index::CollectSeedHitsFromRepetitiveReadWithMateInfo(
 
 void Index::GenerateMinimizerSketch(
     const SequenceBatch &sequence_batch, uint32_t sequence_index,
-    std::vector<std::pair<uint64_t, uint64_t> > &minimizers) const {
+    std::vector<std::pair<uint64_t, uint64_t>> &minimizers) const {
   uint64_t num_shifted_bits = 2 * (kmer_size_ - 1);
   uint64_t mask = (((uint64_t)1) << (2 * kmer_size_)) - 1;
   uint64_t seeds_in_two_strands[2] = {0, 0};
