@@ -68,8 +68,8 @@ class Index {
       std::vector<uint64_t> &negative_hits, bool use_heap) const;
 
   // Input a search range, for each best mate candidate, serach for minimizer
-  // hits. Return the minimizer count of the best candidate, if it finishes
-  // normally or return a negative value if it stops early due to too many
+  // hits. Return the minimizer count of the best candidate if it finishes
+  // normally. Or return a negative value if it stops early due to too many
   // candidates with low minimizer count.
   int CollectSeedHitsFromRepetitiveReadWithMateInfo(
       int error_threshold,
@@ -91,6 +91,7 @@ class Index {
       const SequenceBatch &sequence_batch, uint32_t sequence_index,
       std::vector<std::pair<uint64_t, uint64_t> > &minimizers) const;
 
+ protected:
   inline static uint64_t Hash64(uint64_t key, const uint64_t mask) {
     key = (~key + (key << 21)) & mask;  // key = (key << 21) - key - 1;
     key = key ^ key >> 24;
@@ -102,7 +103,6 @@ class Index {
     return key;
   }
 
- protected:
   int kmer_size_ = 0;
   int window_size_ = 0;
   // Number of threads to build the index, which is not used right now.

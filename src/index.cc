@@ -10,7 +10,7 @@
 namespace chromap {
 
 void Index::Construct(uint32_t num_sequences, const SequenceBatch &reference) {
-  double real_start_time = GetRealTime();
+  const double real_start_time = GetRealTime();
   // tmp_table stores (minimizer, position).
   std::vector<std::pair<uint64_t, uint64_t>> tmp_table;
   tmp_table.reserve(reference.GetNumBases() / window_size_ * 2);
@@ -24,7 +24,7 @@ void Index::Construct(uint32_t num_sequences, const SequenceBatch &reference) {
   std::stable_sort(tmp_table.begin(), tmp_table.end());
   std::cerr << "Sorted minimizers.\n";
 
-  uint32_t num_minimizers = tmp_table.size();
+  const uint32_t num_minimizers = tmp_table.size();
 
   // Here I make sure the # minimizers is less than the limit of signed int32,
   // so that I can use int to store position later.
@@ -39,10 +39,11 @@ void Index::Construct(uint32_t num_sequences, const SequenceBatch &reference) {
   for (uint32_t ti = 0; ti < num_minimizers; ++ti) {
     uint64_t current_key = tmp_table[ti].first;
     if (current_key != previous_key) {
-      int khash_return_code;
+      int khash_return_code = 0;
       khiter_t khash_iterator =
           kh_put(k64, lookup_table_, previous_key << 1, &khash_return_code);
       assert(khash_return_code != -1 && khash_return_code != 0);
+
       if (num_previous_minimizer_occurrences == 1) {  // singleton
         kh_key(lookup_table_, khash_iterator) |= 1;
         kh_value(lookup_table_, khash_iterator) = occurrence_table_.back();
@@ -57,11 +58,12 @@ void Index::Construct(uint32_t num_sequences, const SequenceBatch &reference) {
     } else {
       num_previous_minimizer_occurrences++;
     }
+
     occurrence_table_.push_back(tmp_table[ti].second);
     previous_key = current_key;
   }
 
-  int khash_return_code;
+  int khash_return_code = 0;
   khiter_t khash_iterator =
       kh_put(k64, lookup_table_, previous_key << 1, &khash_return_code);
   assert(khash_return_code != -1 && khash_return_code != 0);
@@ -76,6 +78,7 @@ void Index::Construct(uint32_t num_sequences, const SequenceBatch &reference) {
         (num_nonsingletons << 32) | num_previous_minimizer_occurrences;
     num_nonsingletons += num_previous_minimizer_occurrences;
   }
+
   assert(num_nonsingletons + num_singletons == num_minimizers);
 
   std::cerr << "Kmer size: " << kmer_size_ << ", window size: " << window_size_
@@ -89,62 +92,77 @@ void Index::Construct(uint32_t num_sequences, const SequenceBatch &reference) {
 }
 
 void Index::Save() const {
-  double real_start_time = GetRealTime();
+  const double real_start_time = GetRealTime();
   FILE *index_file = fopen(index_file_path_.c_str(), "wb");
   assert(index_file != nullptr);
+
   uint64_t num_bytes = 0;
   int err = 0;
+
   err = fwrite(&kmer_size_, sizeof(int), 1, index_file);
   num_bytes += sizeof(int);
   assert(err != 0);
+
   err = fwrite(&window_size_, sizeof(int), 1, index_file);
   num_bytes += sizeof(int);
   assert(err != 0);
-  uint32_t lookup_table_size = kh_size(lookup_table_);
+
+  const uint32_t lookup_table_size = kh_size(lookup_table_);
   err = fwrite(&lookup_table_size, sizeof(uint32_t), 1, index_file);
   num_bytes += sizeof(uint32_t);
   assert(err != 0);
+
   kh_save(k64, lookup_table_, index_file);
   num_bytes += sizeof(uint64_t) * 2 * lookup_table_size;
-  uint32_t occurrence_table_size = occurrence_table_.size();
+
+  const uint32_t occurrence_table_size = occurrence_table_.size();
   err = fwrite(&occurrence_table_size, sizeof(uint32_t), 1, index_file);
   num_bytes += sizeof(uint32_t);
   assert(err != 0);
+
   if (occurrence_table_size > 0) {
     err = fwrite(occurrence_table_.data(), sizeof(uint64_t),
                  occurrence_table_size, index_file);
     num_bytes += sizeof(uint64_t) * occurrence_table_size;
     assert(err != 0);
   }
+
   fclose(index_file);
   // std::cerr << "Index size: " << num_bytes / (1024.0 * 1024 * 1024) << "GB,
-  // saved in " << Chromap<>::GetRealTime() - real_start_time << "s.\n";
   std::cerr << "Saved in " << GetRealTime() - real_start_time << "s.\n";
 }
 
 void Index::Load() {
-  double real_start_time = GetRealTime();
+  const double real_start_time = GetRealTime();
   FILE *index_file = fopen(index_file_path_.c_str(), "rb");
   assert(index_file != nullptr);
+
   int err = 0;
   err = fread(&kmer_size_, sizeof(int), 1, index_file);
   assert(err != 0);
+
   err = fread(&window_size_, sizeof(int), 1, index_file);
   assert(err != 0);
+
   uint32_t lookup_table_size = 0;
   err = fread(&lookup_table_size, sizeof(uint32_t), 1, index_file);
   assert(err != 0);
+
   kh_load(k64, lookup_table_, index_file);
+
   uint32_t occurrence_table_size = 0;
   err = fread(&occurrence_table_size, sizeof(uint32_t), 1, index_file);
   assert(err != 0);
+
   if (occurrence_table_size > 0) {
     occurrence_table_.resize(occurrence_table_size);
     err = fread(occurrence_table_.data(), sizeof(uint64_t),
                 occurrence_table_size, index_file);
     assert(err != 0);
   }
+
   fclose(index_file);
+
   std::cerr << "Kmer size: " << kmer_size_ << ", window size: " << window_size_
             << ".\n";
   std::cerr << "Lookup table size: " << kh_size(lookup_table_)
@@ -222,8 +240,10 @@ int Index::CollectSeedHits(
     uint32_t &repetitive_seed_length, std::vector<uint64_t> &positive_hits,
     std::vector<uint64_t> &negative_hits, bool use_heap) const {
   const uint32_t num_minimizers = minimizers.size();
+
   std::vector<std::vector<uint64_t>> mm_positive_hits;
   std::vector<std::vector<uint64_t>> mm_negative_hits;
+
   if (use_heap) {
     for (uint32_t i = 0; i < num_minimizers; ++i) {
       mm_positive_hits.emplace_back(std::vector<uint64_t>());
@@ -251,17 +271,18 @@ int Index::CollectSeedHits(
 
     uint64_t value = kh_value(lookup_table_, khash_iterator);
     uint32_t read_position = minimizers[mi].second >> 1;
+
     if (kh_key(lookup_table_, khash_iterator) & 1) {  // singleton
       uint64_t reference_id = value >> 33;
       uint32_t reference_position = value >> 1;
       // Check whether the strands of reference minimizer and read minimizer are
-      // the same Later, we can play some tricks with 0,1 here to make it
+      // the same. Later, we can play some tricks with 0,1 here to make it
       // faster.
       if (((minimizers[mi].second & 1) ^ (value & 1)) == 0) {  // same
         uint32_t candidate_position =
             reference_position -
             read_position;  // > 0 ? reference_position - read_position : 0;
-        // ok, for now we can't see the reference here. So let us don't do the
+        // Ok, for now we can't see the reference here. So let us don't do the
         // check. Instead, we do it later some time when we check the
         // candidates.
         uint64_t candidate = (reference_id << 32) | candidate_position;
@@ -315,8 +336,8 @@ int Index::CollectSeedHits(
       }
 
       if (num_occurrences >= (uint32_t)repetitive_seed_frequency) {
-        if (previous_repetitive_seed_position >
-            read_position) {  // first minimizer
+        if (previous_repetitive_seed_position > read_position) {
+          // First minimizer.
           repetitive_seed_length += kmer_size_;
         } else {
           if (read_position < previous_repetitive_seed_position + kmer_size_ +
@@ -410,8 +431,10 @@ int Index::CollectSeedHitsFromRepetitiveReadWithMateInfo(
     uint32_t search_range, int min_num_seeds_required_for_mapping,
     int max_seed_frequency0) const {
   const uint32_t mate_candidates_size = mate_candidates.size();
+
   int max_minimizer_count = 0;
   int best_candidate_num = 0;
+
   for (uint32_t i = 0; i < mate_candidates_size; ++i) {
     int count = mate_candidates[i].count;
     if (count > max_minimizer_count) {
@@ -469,7 +492,9 @@ int Index::CollectSeedHitsFromRepetitiveReadWithMateInfo(
 
   uint32_t previous_repetitive_seed_position =
       std::numeric_limits<uint32_t>::max();
+
   repetitive_seed_length = 0;
+
   for (uint32_t mi = 0; mi < minimizers.size(); ++mi) {
     khiter_t khash_iterator =
         kh_get(k64, lookup_table_, minimizers[mi].first << 1);
@@ -484,14 +509,14 @@ int Index::CollectSeedHitsFromRepetitiveReadWithMateInfo(
       uint64_t reference_id = value >> 33;
       uint32_t reference_position = value >> 1;
       // Check whether the strands of reference minimizer and read minimizer are
-      // the same Later, we can play some tricks with 0,1 here to make it
+      // the same. Later, we can play some tricks with 0,1 here to make it
       // faster.
       if (((minimizers[mi].second & 1) ^ (value & 1)) == 0) {  // same
         if (direction == kPositive) {
           uint32_t candidate_position =
               reference_position -
               read_position;  // > 0 ? reference_position - read_position : 0;
-          // ok, for now we can't see the reference here. So let us don't do the
+          // Ok, for now we can't see the reference here. So let us don't do the
           // check. Instead, we do it later some time when we check the
           // candidates.
           uint64_t candidate = (reference_id << 32) | candidate_position;
@@ -514,11 +539,9 @@ int Index::CollectSeedHitsFromRepetitiveReadWithMateInfo(
         uint64_t boundary = boundaries[bi].first;
         while (l <= r) {
           m = (l + r) / 2;
+
           uint64_t value = (occurrence_table_[offset + m]) >> 1;
-          // std::cerr << "l: " << l << ", r: " << r << ", m: " << m << ", val:
-          // " << (value >> 32) << ", " << (uint32_t)value << ", bd: " <<
-          // (boundary >> 32) << ", " << (uint32_t)(boundary) << "\n"; if (value
-          // <= boundary)
+
           if (value < boundary) {
             l = m + 1;
           } else if (value > boundary) {
@@ -529,8 +552,6 @@ int Index::CollectSeedHitsFromRepetitiveReadWithMateInfo(
         }
 
         prev_l = m;
-        // printf("%s: %d %d: %d %d\n", __func__, m, num_occurrences,
-        // (int)(boundary>>32), (int)boundary) ;
         for (uint32_t oi = m; oi < num_occurrences; ++oi) {
           uint64_t value = occurrence_table_[offset + oi];
           if ((value >> 1) > boundaries[bi].second) break;
@@ -552,8 +573,8 @@ int Index::CollectSeedHitsFromRepetitiveReadWithMateInfo(
       }  // for bi
 
       if (num_occurrences >= (uint32_t)max_seed_frequency0) {
-        if (previous_repetitive_seed_position >
-            read_position) {  // first minimizer
+        if (previous_repetitive_seed_position > read_position) {
+          // First minimizer.
           repetitive_seed_length += kmer_size_;
         } else {
           if (read_position < previous_repetitive_seed_position + kmer_size_ +
