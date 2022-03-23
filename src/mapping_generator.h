@@ -85,21 +85,6 @@ class MappingGenerator {
       const SequenceBatch &read_batch2, const SequenceBatch &reference,
       PairedEndMappingMetadata &paired_end_mapping_metadata);
 
-  void RecalibrateBestMappingsForPairedEndReadOnOneDirection(
-      Direction first_read_direction, uint32_t pair_index, int min_sum_errors,
-      int second_min_sum_errors, int min_num_errors1, int num_best_mappings1,
-      int second_min_num_errors1, int num_second_best_mappings1,
-      const SequenceBatch &read_batch1,
-      const std::vector<std::pair<int, uint64_t>> &mappings1,
-      int min_num_errors2, int num_best_mappings2, int second_min_num_errors2,
-      int num_second_best_mappings2, const SequenceBatch &read_batch2,
-      const SequenceBatch &reference,
-      const std::vector<std::pair<int, uint64_t>> &mappings2,
-      const std::vector<std::pair<uint32_t, uint32_t>> &edit_best_mappings,
-      std::vector<std::pair<uint32_t, uint32_t>> *best_mappings,
-      int *best_alignment_score, int *num_best_mappings,
-      int *second_best_alignment_score, int *num_second_best_mappings);
-
   void ProcessBestMappingsForPairedEndReadOnOneDirection(
       Direction first_read_direction, Direction second_read_direction,
       uint32_t pair_index, const SequenceBatch &read_batch1,
@@ -456,13 +441,6 @@ void MappingGenerator<MappingRecord>::VerifyCandidatesOnOneDirectionUsingSIMD(
         }
       }
       valid_candidate_index = 0;
-      // Check whether we should stop early. Assuming the candidates are sorted
-      // if (GetMAPQForSingleEndRead(mapping_parameters_.error_threshold,
-      // num_candidates, 0, read_length + mapping_parameters_.error_threshold,
-      // *min_num_errors, *num_best_mappings, *second_min_num_errors,
-      // *num_second_best_mappings) == 0 && candidate_count_threshold + 1 <
-      // candidates[candidate_index].count)
-      //  candidate_count_threshold = candidates[candidate_index].count - 1 ;
     }
     ++candidate_index;
   }
@@ -637,8 +615,7 @@ void MappingGenerator<MappingRecord>::VerifyCandidatesOnOneDirection(
           }
         }
       }
-      // std::cerr << "ne1: " << num_errors << " " << mapping_end_position <<
-      // "\n";
+
       if (mapping_end_position + 1 - mapping_parameters_.error_threshold -
               num_errors - gap_beginning >=
           mapping_length_threshold) {
@@ -661,8 +638,6 @@ void MappingGenerator<MappingRecord>::VerifyCandidatesOnOneDirection(
         num_errors = mapping_parameters_.error_threshold + 1;
         actual_num_errors = mapping_parameters_.error_threshold + 1;
       }
-      // std::cerr << "ne2: " << num_errors << " " << mapping_end_position <<
-      // "\n";
     } else {
       if (candidate_direction == kPositive) {
         num_errors =
@@ -679,9 +654,6 @@ void MappingGenerator<MappingRecord>::VerifyCandidatesOnOneDirection(
       }
     }
 
-    // std::cerr << "ne3: " << num_errors << " " << mapping_end_position << " "
-    // << actual_num_errors << " "<< reference.GetSequenceNameAt(rid) <<" " <<
-    // (int)candidates[ci].position << " " << position<<"\n";
     if (num_errors <= mapping_parameters_.error_threshold) {
       if (num_errors < min_num_errors) {
         second_min_num_errors = min_num_errors;
@@ -750,7 +722,7 @@ void MappingGenerator<MappingRecord>::GenerateBestMappingsForSingleEndRead(
     std::vector<std::vector<MappingRecord>> &mappings_on_diff_ref_seqs) {
   int num_best_mappings = mapping_metadata.num_best_mappings_;
 
-  // we will use reservoir sampling
+  // We will use reservoir sampling.
   std::vector<int> best_mapping_indices(
       mapping_parameters_.max_num_best_mappings);
   std::iota(best_mapping_indices.begin(), best_mapping_indices.end(), 0);
@@ -821,34 +793,8 @@ void MappingGenerator<MappingRecord>::GenerateBestMappingsForPairedEndRead(
         paired_end_mapping_metadata);
   }
 
-  // int best_alignment_score, second_best_alignment_score;
-  // best_alignment_score = -1;
-  //*num_best_mappings = 0;
-  // second_best_alignment_score = best_alignment_score;
-  //*num_second_best_mappings = 0;
-  // std::vector<std::pair<uint32_t, uint32_t> > edit_F1R2_best_mappings,
-  // edit_F2R1_best_mappings; edit_F1R2_best_mappings.swap(*F1R2_best_mappings);
-  // edit_F2R1_best_mappings.swap(*F2R1_best_mappings);
-  // RecalibrateBestMappingsForPairedEndReadOnOneDirection(kPositive,
-  // pair_index, *min_sum_errors, *second_min_sum_errors, min_num_errors1,
-  // num_best_mappings1, second_min_num_errors1, num_second_best_mappings1,
-  // read_batch1, positive_mappings1, min_num_errors2, num_best_mappings2,
-  // second_min_num_errors2, num_second_best_mappings2, read_batch2, reference,
-  // negative_mappings2, edit_F1R2_best_mappings, F1R2_best_mappings,
-  // &best_alignment_score, num_best_mappings, &second_best_alignment_score,
-  // num_second_best_mappings);
-  // RecalibrateBestMappingsForPairedEndReadOnOneDirection(kNegative,
-  // pair_index, *min_sum_errors, *second_min_sum_errors, min_num_errors1,
-  // num_best_mappings1, second_min_num_errors1, num_second_best_mappings1,
-  // read_batch1, negative_mappings1, min_num_errors2, num_best_mappings2,
-  // second_min_num_errors2, num_second_best_mappings2, read_batch2, reference,
-  // positive_mappings2, edit_F2R1_best_mappings, F2R1_best_mappings,
-  // &best_alignment_score, num_best_mappings, &second_best_alignment_score,
-  // num_second_best_mappings); uint8_t mapq = GetMAPQ(*num_best_mappings,
-  // *num_second_best_mappings);
-
   if (num_best_mappings <= mapping_parameters_.drop_repetitive_reads) {
-    // we will use reservoir sampling
+    // We will use reservoir sampling.
     // std::vector<int>
     // best_mapping_indices(mapping_parameters_.max_num_best_mappings);
     std::iota(best_mapping_indices.begin(), best_mapping_indices.end(), 0);
@@ -856,8 +802,8 @@ void MappingGenerator<MappingRecord>::GenerateBestMappingsForPairedEndRead(
       // std::mt19937 generator(11);
       for (int i = mapping_parameters_.max_num_best_mappings;
            i < num_best_mappings; ++i) {
-        std::uniform_int_distribution<int> distribution(
-            0, i);  // important: inclusive range
+        // Important: inclusive range.
+        std::uniform_int_distribution<int> distribution(0, i);
         int j = distribution(generator);
         // int j = distribution(tmp_generator);
         if (j < mapping_parameters_.max_num_best_mappings) {
@@ -1139,134 +1085,6 @@ void MappingGenerator<MappingRecord>::
         ++current_i2;
       }
       ++i1;
-    }
-  }
-}
-
-template <typename MappingRecord>
-void MappingGenerator<MappingRecord>::
-    RecalibrateBestMappingsForPairedEndReadOnOneDirection(
-        Direction first_read_direction, uint32_t pair_index, int min_sum_errors,
-        int second_min_sum_errors, int min_num_errors1, int num_best_mappings1,
-        int second_min_num_errors1, int num_second_best_mappings1,
-        const SequenceBatch &read_batch1,
-        const std::vector<std::pair<int, uint64_t>> &mappings1,
-        int min_num_errors2, int num_best_mappings2, int second_min_num_errors2,
-        int num_second_best_mappings2, const SequenceBatch &read_batch2,
-        const SequenceBatch &reference,
-        const std::vector<std::pair<int, uint64_t>> &mappings2,
-        const std::vector<std::pair<uint32_t, uint32_t>> &edit_best_mappings,
-        std::vector<std::pair<uint32_t, uint32_t>> *best_mappings,
-        int *best_alignment_score, int *num_best_mappings,
-        int *second_best_alignment_score, int *num_second_best_mappings) {
-  int8_t mat[25];
-  int i, j, k;
-  for (i = k = 0; i < 4; ++i) {
-    for (j = 0; j < 4; ++j)
-      mat[k++] = i == j ? mapping_parameters_.match_score
-                        : -mapping_parameters_.mismatch_penalty;
-    mat[k++] = 0;  // ambiguous base
-  }
-  for (j = 0; j < 5; ++j) mat[k++] = 0;
-  best_mappings->reserve(*num_best_mappings);
-  const char *read1 = read_batch1.GetSequenceAt(pair_index);
-  const char *read2 = read_batch2.GetSequenceAt(pair_index);
-  uint32_t read1_length = read_batch1.GetSequenceLengthAt(pair_index);
-  uint32_t read2_length = read_batch2.GetSequenceLengthAt(pair_index);
-  const std::string &negative_read1 =
-      read_batch1.GetNegativeSequenceAt(pair_index);
-  const std::string &negative_read2 =
-      read_batch2.GetNegativeSequenceAt(pair_index);
-  // uint32_t read_id = read_batch1.GetSequenceIdAt(pair_index);
-  for (uint32_t mi = 0; mi < edit_best_mappings.size(); ++mi) {
-    uint32_t i1 = edit_best_mappings[mi].first;
-    uint32_t i2 = edit_best_mappings[mi].second;
-    int current_sum_errors = mappings1[i1].first + mappings2[i2].first;
-    if (current_sum_errors == min_sum_errors) {
-      uint32_t rid1 = mappings1[i1].second >> 32;
-      uint32_t position1 = mappings1[i1].second;
-      uint32_t verification_window_start_position1 =
-          position1 + 1 > (read1_length + mapping_parameters_.error_threshold)
-              ? position1 + 1 - read1_length -
-                    mapping_parameters_.error_threshold
-              : 0;
-      if (position1 >= reference.GetSequenceLengthAt(rid1)) {
-        verification_window_start_position1 =
-            reference.GetSequenceLengthAt(rid1) -
-            mapping_parameters_.error_threshold - read1_length;
-      }
-      // int mapping_start_position1;
-      uint32_t rid2 = mappings2[i2].second >> 32;
-      uint32_t position2 = mappings2[i2].second;
-      uint32_t verification_window_start_position2 =
-          position2 + 1 > (read2_length + mapping_parameters_.error_threshold)
-              ? position2 + 1 - read2_length -
-                    mapping_parameters_.error_threshold
-              : 0;
-      if (position2 >= reference.GetSequenceLengthAt(rid2)) {
-        verification_window_start_position2 =
-            reference.GetSequenceLengthAt(rid2) -
-            mapping_parameters_.error_threshold - read2_length;
-      }
-      int current_alignment_score1, current_alignment_score2,
-          current_alignment_score;
-      if (first_read_direction == kPositive) {
-        current_alignment_score1 = ksw_semi_global2(
-            read1_length + 2 * mapping_parameters_.error_threshold,
-            reference.GetSequenceAt(rid1) + verification_window_start_position1,
-            read1_length, read1, 5, mat,
-            mapping_parameters_.gap_open_penalties[0],
-            mapping_parameters_.gap_extension_penalties[0],
-            mapping_parameters_.gap_open_penalties[1],
-            mapping_parameters_.gap_extension_penalties[1],
-            mapping_parameters_.error_threshold * 2 + 1, NULL, NULL);
-        current_alignment_score2 = ksw_semi_global2(
-            read2_length + 2 * mapping_parameters_.error_threshold,
-            reference.GetSequenceAt(rid2) + verification_window_start_position2,
-            read2_length, negative_read2.data(), 5, mat,
-            mapping_parameters_.gap_open_penalties[0],
-            mapping_parameters_.gap_extension_penalties[0],
-            mapping_parameters_.gap_open_penalties[1],
-            mapping_parameters_.gap_extension_penalties[1],
-            mapping_parameters_.error_threshold * 2 + 1, NULL, NULL);
-      } else {
-        current_alignment_score1 = ksw_semi_global2(
-            read1_length + 2 * mapping_parameters_.error_threshold,
-            reference.GetSequenceAt(rid1) + verification_window_start_position1,
-            read1_length, negative_read1.data(), 5, mat,
-            mapping_parameters_.gap_open_penalties[0],
-            mapping_parameters_.gap_extension_penalties[0],
-            mapping_parameters_.gap_open_penalties[1],
-            mapping_parameters_.gap_extension_penalties[1],
-            mapping_parameters_.error_threshold * 2 + 1, NULL, NULL);
-        current_alignment_score2 = ksw_semi_global2(
-            read1_length + 2 * mapping_parameters_.error_threshold,
-            reference.GetSequenceAt(rid2) + verification_window_start_position2,
-            read2_length, read2, 5, mat,
-            mapping_parameters_.gap_open_penalties[0],
-            mapping_parameters_.gap_extension_penalties[0],
-            mapping_parameters_.gap_open_penalties[1],
-            mapping_parameters_.gap_extension_penalties[1],
-            mapping_parameters_.error_threshold * 2 + 1, NULL, NULL);
-      }
-      current_alignment_score =
-          current_alignment_score1 + current_alignment_score2;
-      // std::cerr << current_alignment_score1 << " " <<
-      // current_alignment_score2 << " " << current_alignment_score <<"\n";
-      if (current_alignment_score > *best_alignment_score) {
-        *second_best_alignment_score = *best_alignment_score;
-        *num_second_best_mappings = *num_best_mappings;
-        *best_alignment_score = current_alignment_score;
-        *num_best_mappings = 1;
-        best_mappings->clear();
-        best_mappings->emplace_back(i1, i2);
-      } else if (current_alignment_score == *best_alignment_score) {
-        (*num_best_mappings)++;
-        best_mappings->emplace_back(i1, i2);
-      } else if (current_alignment_score == *second_best_alignment_score) {
-        (*num_second_best_mappings)++;
-      }
-    } else if (current_sum_errors == second_min_sum_errors) {
     }
   }
 }
@@ -1905,22 +1723,24 @@ uint8_t MappingGenerator<MappingRecord>::GetMAPQForSingleEndRead(
     Direction direction, int num_errors, uint16_t alignment_length,
     int read_length, int max_num_error_difference,
     const MappingMetadata &mapping_metadata) {
-  // int mapq_coef = 60;
-  // int mapq_coef_length = 45;
   int mapq_coef_length = 50;
-  // double mapq_coef_fraction = log(mapq_coef_length);
   int mapq_coef_fraction = log(mapq_coef_length);
+
   if (!mapping_parameters_.split_alignment) {
     alignment_length =
         alignment_length > read_length ? alignment_length : read_length;
   }
+
   double alignment_identity = 1 - (double)num_errors / alignment_length;
+
   if (mapping_parameters_.split_alignment) {
     alignment_identity = (double)(-num_errors) / alignment_length;
     if (alignment_identity > 1) alignment_identity = 1;
   }
+
   int mapq = 0;
   int second_min_num_errors = mapping_metadata.second_min_num_errors_;
+
   if (mapping_metadata.num_best_mappings_ > 1) {
     // mapq = -4.343 * log(1 - 1.0 / num_best_mappings);
     // if (num_best_mappings == 2) {
@@ -1936,65 +1756,32 @@ uint8_t MappingGenerator<MappingRecord>::GetMAPQForSingleEndRead(
     if (second_min_num_errors > num_errors + max_num_error_difference) {
       second_min_num_errors = num_errors + max_num_error_difference;
     }
-    // mapq = (int)(mapq_coef * ((double)(second_min_num_errors -
-    // min_num_errors) / second_min_num_errors) + .499); double tmp =
-    // alignment_identity * alignment_identity; tmp = tmp * tmp; tmp = tmp *
-    // tmp; mapq = alignment_identity < 0.98 ? (int)(mapq * tmp + .499) : mapq;
+
     double tmp = alignment_length < mapq_coef_length
                      ? 1.0
                      : mapq_coef_fraction / log(alignment_length);
     tmp *= alignment_identity * alignment_identity;
-    if (!mapping_parameters_.split_alignment) {
-      // mapq = 6 * 6.02 * (second_min_num_errors - min_num_errors) * tmp * tmp
-      // + 0.499 + 10;
-      mapq =
-          5 * 6.02 * (second_min_num_errors - num_errors) * tmp * tmp + 0.499;
-      // std::cerr << "sne: " << second_min_num_errors << " min_e: " <<
-      // min_num_errors << " aln_len: " << alignment_length << "id: " <<
-      // alignment_identity << " tmp: " << tmp << " 1: mapq:" << (int)mapq <<
-      // "\n";
-    } else {
-      mapq =
-          5 * 6.02 * (second_min_num_errors - num_errors) * tmp * tmp + 0.499;
-      // if (second_min_num_errors - min_num_errors <
-      // mapping_parameters_.error_threshold + 1) {
-      //  mapq = 6 * 6.02 * (second_min_num_errors - min_num_errors) * tmp * tmp
-      //  + 0.499 ;
-      //} else {
-      //  mapq = 6 * 6.02 * (mapping_parameters_.error_threshold + 1) * tmp *
-      //  tmp + 0.499 ;
-      //}
-    }
-    // mapq = 30 - 34.0 / error_threshold + 34.0 / error_threshold *
-    // (second_min_num_errors - min_num_errors) * tmp * tmp + 0.499;
+    mapq = 5 * 6.02 * (second_min_num_errors - num_errors) * tmp * tmp + 0.499;
   }
-  // printf("%d %d %d %d. %d\n", alignment_length, min_num_errors,
-  // second_min_num_errors, mapq, read_length);
+
   if (mapping_metadata.num_second_best_mappings_ > 0) {
     mapq -= (int)(4.343 * log(mapping_metadata.num_second_best_mappings_ + 1) +
                   0.499);
-    // std::cerr << " 2: mapq:" << (int)mapq << "\n";
   }
-  // if (mapping_parameters_.split_alignment && num_candidates > 1) {
-  //  mapq -= (int)(4.343 * log(num_candidates) + 0.499);
-  //}
+
   if (mapq > 60) {
     mapq = 60;
   }
   if (mapq < 0) {
     mapq = 0;
   }
-  // printf("%d\n", repetitive_seed_length);
+
   if (mapping_metadata.repetitive_seed_length_ > 0) {
-    // double frac_rep = (repetitive_seed_length) / (double)alignment_length;
     double frac_rep =
         (mapping_metadata.repetitive_seed_length_) / (double)read_length;
     if (mapping_metadata.repetitive_seed_length_ >= (uint32_t)read_length) {
       frac_rep = 0.999;
     }
-    // mapq = mapq * (1 - frac_rep / 2) + 0.499;
-    // if (alignment_identity <= 0.95 && second_min_num_errors >
-    // mapping_parameters_.error_threshold) {
     if (alignment_identity <= 0.95) {
       mapq = mapq * (1 - sqrt(frac_rep)) + 0.499;
     } else if (alignment_identity <= 0.97) {
@@ -2005,6 +1792,7 @@ uint8_t MappingGenerator<MappingRecord>::GetMAPQForSingleEndRead(
       mapq = mapq * (1 - frac_rep * frac_rep) + 0.499;
     }
   }
+
   if (mapping_parameters_.split_alignment &&
       alignment_length < read_length - mapping_parameters_.error_threshold &&
       second_min_num_errors != num_errors) {
@@ -2031,6 +1819,7 @@ uint8_t MappingGenerator<MappingRecord>::GetMAPQForSingleEndRead(
       mapq /= (mapping_metadata.num_second_best_mappings_ / diff + 1);
     }
   }
+
   return (uint8_t)mapq;
 }
 
@@ -2086,27 +1875,22 @@ uint8_t MappingGenerator<MappingRecord>::GetMAPQForPairedEndRead(
   uint8_t mapq_pe = 0;
   int min_num_unpaired_sum_errors =
       mapping_metadata1.min_num_errors_ + mapping_metadata2.min_num_errors_ + 3;
-  // bool is_paired = (min_num_errors1 == num_errors1 && min_num_errors2 ==
-  // num_errors2);
+
   if (paired_end_mapping_metadata.num_best_mappings_ <= 1) {
     int adjusted_second_min_sum_errors =
         paired_end_mapping_metadata.second_min_sum_errors_ <
                 min_num_unpaired_sum_errors
             ? paired_end_mapping_metadata.second_min_sum_errors_
             : min_num_unpaired_sum_errors;
-    // mapq_pe = GetMAPQForSingleEndRead(2 *
-    // mapping_parameters_.error_threshold, num_positive_candidates +
-    // num_negative_candidates, repetitive_seed_length1
-    // + repetitive_seed_length2, positive_alignment_length +
-    // negative_alignment_length, min_sum_errors, num_best_mappings,
-    // second_min_sum_errors, num_second_best_mappings, read1_length +
-    // read2_length);
+
     mapq_pe = raw_mapq(adjusted_second_min_sum_errors -
                            paired_end_mapping_metadata.min_sum_errors_,
                        1);
+
 #ifdef CHROMAP_DEBUG
     std::cerr << "mapqpe: " << (int)mapq_pe << "\n";
 #endif
+
     if (paired_end_mapping_metadata.num_second_best_mappings_ > 0) {
       mapq_pe -=
           (int)(4.343 *
@@ -2114,61 +1898,42 @@ uint8_t MappingGenerator<MappingRecord>::GetMAPQForPairedEndRead(
                         1) +
                 0.499);
     }
-    // if (num_positive_candidates > 10 && num_negative_candidates > 10 &&
-    // second_min_sum_errors > 2 * mapping_parameters_.error_threshold) {
-    //  mapq_pe -= (int)(4.343 * log(num_positive_candidates +
-    //  num_negative_candidates) + 0.499);
-    //  //mapq_pe *= 0.8;
-    //}
-    // if (num_positive_candidates > 10 && num_errors1 + 2 >=
-    // second_min_num_errors1 && second_min_num_errors1 >
-    // mapping_parameters_.error_threshold) {
-    //  mapq_pe -= (int)(4.343 * log(num_positive_candidates) + 0.499);
-    //}
-    // if (num_negative_candidates > 10 && num_errors2 + 2 >=
-    // second_min_num_errors2 && second_min_num_errors2 >
-    // mapping_parameters_.error_threshold) {
-    //  mapq_pe -= (int)(4.343 * log(num_negative_candidates) + 0.499);
-    //}
+
     if (mapq_pe > 60) {
       mapq_pe = 60;
     }
     if (mapq_pe < 0) {
       mapq_pe = 0;
     }
+
 #ifdef CHROMAP_DEBUG
     std::cerr << "mapqpe: " << (int)mapq_pe << "\n";
 #endif
+
     int repetitive_seed_length = mapping_metadata1.repetitive_seed_length_ +
                                  mapping_metadata2.repetitive_seed_length_;
-    // int total_alignment_length = positive_alignment_length +
-    // negative_alignment_length;
+
     if (repetitive_seed_length > 0) {
       double total_read_length = read1_length + read2_length;
       double frac_rep = (double)repetitive_seed_length / total_read_length;
-      // double frac_rep1 = (double)repetitive_seed_length1 / read1_length;
-      // double frac_rep2 = (double)repetitive_seed_length2 / read2_length;
-      // frac_rep = frac_rep1 > frac_rep2 ? frac_rep1 : frac_rep2;
       if (repetitive_seed_length >= total_read_length) {
         frac_rep = 0.999;
       }
-      // mapq_pe = mapq_pe * (1 - frac_rep / 2) + 0.499;
-      // double alignment_identity = 1 - (double)min_sum_errors /
-      // (total_read_length > total_alignment_length ? total_read_length :
-      // total_alignment_length);
+
       double alignment_identity1 =
           1 - (double)read1_num_errors / (read1_length > read1_alignment_length
                                               ? read1_length
                                               : read1_alignment_length);
+
       double alignment_identity2 =
           1 - (double)read2_num_errors / (read2_length > read2_alignment_length
                                               ? read2_length
                                               : read2_alignment_length);
+
       double alignment_identity = alignment_identity1 < alignment_identity2
                                       ? alignment_identity1
                                       : alignment_identity2;
-      // if (alignment_identity <= 0.95 && second_min_sum_errors > 2 *
-      // mapping_parameters_.error_threshold) {
+
       if (alignment_identity <= 0.95) {
         mapq_pe = mapq_pe * (1 - sqrt(frac_rep)) + 0.499;
       } else if (alignment_identity <= 0.97) {
@@ -2176,46 +1941,28 @@ uint8_t MappingGenerator<MappingRecord>::GetMAPQForPairedEndRead(
       } else if (alignment_identity >= 0.999) {
         mapq_pe =
             mapq_pe * (1 - frac_rep * frac_rep * frac_rep * frac_rep) + 0.499;
-        // std::cerr << "mapqpe: " << (int)mapq_pe << "\n";
       } else {
         mapq_pe = mapq_pe * (1 - frac_rep * frac_rep) + 0.499;
       }
-      // if (frac_rep > 0.8) {
-      //} else {
-      // mapq_pe = mapq_pe * (1 - frac_rep * frac_rep) + 0.499;
-      //}
-      // std::cerr <<"id1,2: " << alignment_identity1 << ", " <<
-      // alignment_identity2 << " frep: " << frac_rep << " frep1: " << frac_rep1
-      // << " frep2: " << frac_rep2 << " id: " << (1 - (double)min_sum_errors /
-      // (total_read_length > total_alignment_length ? total_read_length :
-      // total_alignment_length)) << " " << alignment_identity << " mapqpe: " <<
-      // (int)mapq_pe << "\n";
     }
   }
-  // mapq1 = GetMAPQForSingleEndRead(mapping_parameters_.error_threshold,
-  // num_positive_candidates, repetitive_seed_length1,
-  // positive_alignment_length, min_num_errors1, num_best_mappings1,
-  // second_min_num_errors1, num_second_best_mappings1, read1_length);
+
   mapq1 = GetMAPQForSingleEndRead(first_read_direction, read1_num_errors,
                                   read1_alignment_length, read1_length,
                                   /*max_num_error_difference=*/2,
                                   mapping_metadata1);
-  // mapq2 = GetMAPQForSingleEndRead(mapping_parameters_.error_threshold,
-  // num_negative_candidates, repetitive_seed_length2,
-  // negative_alignment_length, min_num_errors2, num_best_mappings2,
-  // second_min_num_errors2, num_second_best_mappings2, read2_length);
+
   mapq2 = GetMAPQForSingleEndRead(second_read_direction, read2_num_errors,
                                   read2_alignment_length, read2_length,
                                   /*max_num_error_difference=*/2,
                                   mapping_metadata2);
+
 #ifdef CHROMAP_DEBUG
   std::cerr << " 1:" << (int)mapq1 << " 2:" << (int)mapq2
             << " mapq_pe:" << (int)mapq_pe << "\n";
 #endif
+
   if (!mapping_parameters_.split_alignment) {
-    // mapq1 = mapq1 > mapq_pe ? mapq1 : mapq_pe < mapq1 + 40? mapq_pe : mapq1 +
-    // 40; mapq2 = mapq2 > mapq_pe ? mapq2 : mapq_pe < mapq2 + 40? mapq_pe :
-    // mapq2 + 40;
     mapq1 = mapq1 > mapq_pe                    ? mapq1
             : mapq_pe < mapq1 + mapq_pe * 0.65 ? mapq_pe
                                                : mapq1 + mapq_pe * 0.65;
@@ -2223,63 +1970,22 @@ uint8_t MappingGenerator<MappingRecord>::GetMAPQForPairedEndRead(
             : mapq_pe < mapq2 + mapq_pe * 0.65 ? mapq_pe
                                                : mapq2 + mapq_pe * 0.65;
   }
+
   mapq1 *= 1.2;
   if (mapq1 > 60) {
     mapq1 = 60;
   }
+
   mapq2 *= 1.2;
   if (mapq2 > 60) {
     mapq2 = 60;
   }
+
 #ifdef CHROMAP_DEBUG
   std::cerr << " 1:" << (int)mapq1 << " 2:" << (int)mapq2 << "\n\n";
 #endif
-  // if (second_min_num_errors1 > mapping_parameters_.error_threshold) {
-  //  second_min_num_errors1 = 2 * mapping_parameters_.error_threshold + 1;
-  //}
-  // if (second_min_num_errors2 > mapping_parameters_.error_threshold) {
-  //  second_min_num_errors2 = 2 * mapping_parameters_.error_threshold + 1;
-  //}
-  // int mapq_coef = 60;
-  // uint8_t max_mapq1 = (int)(mapq_coef * ((double)(second_min_num_errors1 -
-  // min_num_errors1) / second_min_num_errors1) + .499); uint8_t max_mapq2 =
-  // (int)(mapq_coef * ((double)(second_min_num_errors2 - min_num_errors2) /
-  // second_min_num_errors2) + .499); uint8_t max_mapq1 = 30 - 34.0 /
-  // mapping_parameters_.error_threshold + 34.0 /
-  // mapping_parameters_.error_threshold * (second_min_num_errors1 -
-  // min_num_errors1); uint8_t max_mapq2 = 30 - 34.0 /
-  // mapping_parameters_.error_threshold + 34.0 /
-  // mapping_parameters_.error_threshold * (second_min_num_errors2 -
-  // min_num_errors2); mapq1 = mapq1 < max_mapq1 ? mapq1 : max_mapq1; mapq2 =
-  // mapq2 < max_mapq2 ? mapq2 : max_mapq2; mapq1 = mapq1 <
-  // raw_mapq(second_min_num_errors1 - min_num_errors1, 1) ? mapq1 :
-  // raw_mapq(second_min_num_errors1 - min_num_errors1, 1); if
-  // (second_min_num_errors1 < num_errors1) {
-  //  second_min_num_errors1 = num_errors1;
-  //}
-  // mapq1 = mapq1 < raw_mapq(second_min_num_errors1 - num_errors1, 1) ? mapq1 :
-  // raw_mapq(second_min_num_errors1 - num_errors1, 1);
-  ////mapq2 = mapq2 < raw_mapq(second_min_num_errors2 - min_num_errors2, 1) ?
-  /// mapq2 : raw_mapq(second_min_num_errors2 - min_num_errors2, 1);
-  // if (second_min_num_errors2 < num_errors2) {
-  //  second_min_num_errors2 = num_errors2;
-  //}
-  // mapq2 = mapq2 < raw_mapq(second_min_num_errors2 - num_errors2, 1) ? mapq2 :
-  // raw_mapq(second_min_num_errors2 - num_errors2, 1);
+
   uint8_t mapq = mapq1 < mapq2 ? mapq1 : mapq2;
-  // uint8_t mapq = (mapq1 + mapq2) / 2;
-  // uint8_t mapq = (mapq1 + mapq2) / 2 + 0.499;
-  // if ((mapq1 < mapq2 && mapq1 + 30 >= mapq2) || (mapq2 < mapq1 && mapq2 + 30
-  // >= mapq1)) {
-  //  uint8_t min_mapq = mapq1 < mapq2 ? mapq1 : mapq2;
-  //  mapq = min_mapq;
-  //  //mapq = (mapq + 1 * min_mapq) / 2 + 0.499;
-  //} else {
-  //  uint8_t max_mapq = mapq1 > mapq2 ? mapq1 : mapq2;
-  //  mapq = (mapq + 1 * max_mapq) / 2 + 0.499;
-  //}
-  // std::cerr << " 1:" << (int)mapq1 << " 2:" << (int)mapq2 << " mapq_pe:" <<
-  // (int)mapq_pe << " mapq:" << (int)mapq << "\n";
 
   if (mapq < 60 && force_mapq >= 0 && force_mapq < mapq) {
     mapq = force_mapq;
