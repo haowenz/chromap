@@ -25,14 +25,6 @@ class MappingMetadata {
     repetitive_seed_length_ = 0;
   }
 
-  inline void PrintCandidates(FILE *fp) {
-    uint32_t i ;
-    for (i = 0 ; i < positive_candidates_.size() ; ++i)
-      fprintf(fp, "+ %d %d %d %d\n", i, (int)(positive_candidates_[i].position>>32), (int)(positive_candidates_[i].position), positive_candidates_[i].count) ;
-    for (i = 0 ; i < negative_candidates_.size() ; ++i)
-      fprintf(fp, "- %d %d %d %d\n", i, (int)(negative_candidates_[i].position>>32), (int)(negative_candidates_[i].position), negative_candidates_[i].count) ;
-  }
-
   inline size_t GetNumCandidates() const {
     return positive_candidates_.size() + negative_candidates_.size();
   }
@@ -88,6 +80,21 @@ class MappingMetadata {
   }
   inline void SetNumSecondBestMappings(int num_second_best_mappings) {
     num_second_best_mappings_ = num_second_best_mappings;
+  }
+
+  // For debug only.
+  inline void PrintCandidates(FILE *fp) {
+    uint32_t i;
+    for (i = 0; i < positive_candidates_.size(); ++i)
+      fprintf(fp, "+ %d %d %d %d\n", i,
+              (int)(positive_candidates_[i].position >> 32),
+              (int)(positive_candidates_[i].position),
+              positive_candidates_[i].count);
+    for (i = 0; i < negative_candidates_.size(); ++i)
+      fprintf(fp, "- %d %d %d %d\n", i,
+              (int)(negative_candidates_[i].position >> 32),
+              (int)(negative_candidates_[i].position),
+              negative_candidates_[i].count);
   }
 
  protected:
