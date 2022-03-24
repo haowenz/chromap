@@ -1,6 +1,7 @@
 #ifndef ALIGNMENT_H_
 #define ALIGNMENT_H_
 
+#include "mapping_in_memory.h"
 #include "sam_mapping.h"
 #include "sequence_batch.h"
 #include "utils.h"
@@ -10,16 +11,18 @@ namespace chromap {
 int GetLongestMatchLength(const char *pattern, const char *text,
                           const int read_length);
 
-// return: newly adjust reference start/end position (kPositive for start,
-// kNegative for end)
+// Return newly adjusted reference start/end position for kPositive/kNegative
+// mappings.
 int AdjustGapBeginning(Direction mapping_direction, const char *ref,
                        const char *read, int *gap_beginning, int read_end,
                        int ref_start_position, int ref_end_position,
                        int *n_cigar, uint32_t **cigar);
 
-void GenerateMDTag(const char *pattern, const char *text,
-                   int mapping_start_position, int n_cigar,
-                   const uint32_t *cigar, int &NM, std::string &MD_tag);
+// Reference (pattern) mapping start postion and cigar must be computed before
+// calling this function. Read (text) must be already at the start position.
+void GenerateNMAndMDTag(const char *pattern, const char *text,
+                        int mapping_start_position,
+                        MappingInMemory &mapping_in_memory);
 
 int BandedAlignPatternToText(int error_threshold, const char *pattern,
                              const char *text, const int read_length,
