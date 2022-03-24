@@ -12,6 +12,7 @@
 #include "bed_mapping.h"
 #include "ksw.h"
 #include "mapping.h"
+#include "mapping_in_memory.h"
 #include "mapping_metadata.h"
 #include "mapping_parameters.h"
 #include "paf_mapping.h"
@@ -96,49 +97,18 @@ class MappingGenerator {
       std::vector<std::vector<MappingRecord>> &mappings_on_diff_ref_seqs);
 
   void GetRefStartEndPositionForReadFromMapping(
-      Direction mapping_direction, const std::pair<int, uint64_t> &mapping,
-      const char *read, int read_length, int in_split_site,
-      const SequenceBatch &reference, uint32_t *ref_start_position,
-      uint32_t *ref_end_position, int *n_cigar, uint32_t **cigar, int *NM,
-      std::string &MD_TAG);
+      const std::pair<int, uint64_t> &mapping, const SequenceBatch &reference,
+      MappingInMemory &mapping_in_memory);
 
-  void EmplaceBackMappingRecord(
-      uint32_t read_id, uint64_t barcode, uint32_t fragment_start_position,
-      uint16_t fragment_length, uint8_t mapq, uint8_t direction,
-      uint8_t is_unique, uint8_t num_dups,
-      std::vector<MappingRecord> *mappings_on_diff_ref_seqs);
-  void EmplaceBackMappingRecord(
-      uint32_t read_id, const char *read_name, uint16_t read_length,
-      uint64_t barcode, uint32_t fragment_start_position,
-      uint16_t fragment_length, uint8_t mapq, uint8_t direction,
-      uint8_t is_unique, uint8_t num_dups,
-      std::vector<MappingRecord> *mappings_on_diff_ref_seqs);
-  void EmplaceBackMappingRecord(
-      uint32_t read_id, const char *read_name, uint64_t cell_barcode,
-      uint8_t num_dups, int64_t position, int rid, int flag, uint8_t direction,
-      uint8_t is_unique, uint8_t mapq, uint32_t NM, int n_cigar,
-      uint32_t *cigar, std::string &MD_tag, const char *read,
-      const char *read_qual,
-      std::vector<MappingRecord> *mappings_on_diff_ref_seqs);
+  // For single-end. It should be fully specialized.
+  void EmplaceBackSingleEndMappingRecord(
+      MappingInMemory &mapping_in_memory,
+      std::vector<std::vector<MappingRecord>> &mappings_on_diff_ref_seqs);
 
-  void EmplaceBackMappingRecord(
-      uint32_t read_id, uint64_t barcode, uint32_t fragment_start_position,
-      uint16_t fragment_length, uint8_t mapq, uint8_t direction,
-      uint8_t is_unique, uint8_t num_dups, uint16_t positive_alignment_length,
-      uint16_t negative_alignment_length,
-      std::vector<MappingRecord> *mappings_on_diff_ref_seqs);
-  void EmplaceBackMappingRecord(
-      uint32_t read_id, const char *read1_name, const char *read2_name,
-      uint16_t read1_length, uint16_t read2_length, uint64_t barcode,
-      uint32_t fragment_start_position, uint16_t fragment_length, uint8_t mapq1,
-      uint8_t mapq2, uint8_t direction, uint8_t is_unique, uint8_t num_dups,
-      uint16_t positive_alignment_length, uint16_t negative_alignment_length,
-      std::vector<MappingRecord> *mappings_on_diff_ref_seqs);
-  void EmplaceBackMappingRecord(
-      uint32_t read_id, const char *read_name, uint64_t cell_barcode, int rid1,
-      int rid2, uint32_t pos1, uint32_t pos2, int direction1, int direction2,
-      uint8_t mapq, uint8_t is_unique, uint8_t num_dups,
-      std::vector<MappingRecord> *mappings_on_diff_ref_seqs);
+  // For paired-end. It should be fully specialized.
+  void EmplaceBackPairedEndMappingRecord(
+      PairedEndMappingInMemory &paired_mapping_in_memory,
+      std::vector<std::vector<MappingRecord>> &mappings_on_diff_ref_seqs);
 
   uint8_t GetMAPQForSingleEndRead(Direction direction, int num_errors,
                                   uint16_t alignment_length, int read_length,
@@ -876,7 +846,12 @@ void MappingGenerator<MappingRecord>::ProcessBestMappingsForSingleEndRead(
   const uint32_t read_length = read_batch.GetSequenceLengthAt(read_index);
   const std::string &negative_read =
       read_batch.GetNegativeSequenceAt(read_index);
-  const uint8_t is_unique = mapping_metadata.num_best_mappings_ == 1 ? 1 : 0;
+
+  MappingInMemory mapping_in_memory;
+  mapping_in_memory.read_id = read_id;
+  mapping_in_memory.read_name = read_name;
+  // const uint8_t is_unique = mapping_metadata.num_best_mappings_ == 1 ? 1 : 0;
+  mapping_in_memory.is_unique = (mapping_metadata.num_best_mappings_ == 1);
 
   uint64_t barcode_key = 0;
   if (!mapping_parameters_.is_bulk_data) {
@@ -884,6 +859,12 @@ void MappingGenerator<MappingRecord>::ProcessBestMappingsForSingleEndRead(
         read_index, /*start_position=*/0,
         barcode_batch.GetSequenceLengthAt(read_index));
   }
+  mapping_in_memory.barcode_key = barcode_key;
+
+  mapping_in_memory.direction = mapping_direction;
+  mapping_in_memory.read_sequence =
+      mapping_direction == kPositive ? read : negative_read.data();
+  mapping_in_memory.read_length = read_length;
 
   for (uint32_t mi = 0; mi < mappings.size(); ++mi) {
     if (mappings[mi].first > mapping_metadata.min_num_errors_) {
@@ -892,63 +873,37 @@ void MappingGenerator<MappingRecord>::ProcessBestMappingsForSingleEndRead(
 
     if (best_mapping_index ==
         best_mapping_indices[num_best_mappings_reported]) {
-      uint32_t ref_start_position;
-      uint32_t ref_end_position;
+      mapping_in_memory.rid = mappings[mi].second >> 32;
 
-      uint32_t *cigar;
-      int n_cigar = 0;
-      int NM = 0;
-      std::string MD_tag = "";
-
-      uint8_t direction = 1;
-      const char *effect_read = read;
-      if (mapping_direction == kNegative) {
-        direction = 0;
-        effect_read = negative_read.data();
-      }
-
-      const uint32_t rid = mappings[mi].second >> 32;
-
-      int split_site = 0;
       if (mapping_parameters_.split_alignment) {
-        split_site = split_sites[mi];
+        mapping_in_memory.read_split_site = split_sites[mi];
       }
 
-      GetRefStartEndPositionForReadFromMapping(
-          mapping_direction, mappings[mi], effect_read, read_length, split_site,
-          reference, &ref_start_position, &ref_end_position, &n_cigar, &cigar,
-          &NM, MD_tag);
+      GetRefStartEndPositionForReadFromMapping(mappings[mi], reference,
+                                               mapping_in_memory);
 
-      const uint16_t alignment_length =
-          ref_end_position - ref_start_position + 1;
+      const uint16_t alignment_length = mapping_in_memory.ref_end_position -
+                                        mapping_in_memory.ref_start_position +
+                                        1;
       const uint8_t mapq = GetMAPQForSingleEndRead(
           mapping_direction, /*num_errors=*/mappings[mi].first,
           alignment_length, read_length,
           /*max_num_error_difference=*/mapping_parameters_.error_threshold,
           mapping_metadata);
+      mapping_in_memory.mapq = mapq;
 
       if (mapping_parameters_.mapping_output_format == MAPPINGFORMAT_SAM) {
         uint16_t flag = mapping_direction == kPositive ? 0 : BAM_FREVERSE;
         if (num_best_mappings_reported >= 1) {
           flag |= BAM_FSECONDARY;
         }
-        EmplaceBackMappingRecord(read_id, read_name, barcode_key, 1,
-                                 ref_start_position, rid, flag, 0, is_unique,
-                                 mapq, NM, n_cigar, cigar, MD_tag, effect_read,
-                                 read_batch.GetSequenceQualAt(read_index),
-                                 &(mappings_on_diff_ref_seqs[rid]));
-      } else if (mapping_parameters_.mapping_output_format ==
-                 MAPPINGFORMAT_PAF) {
-        EmplaceBackMappingRecord(
-            read_id, read_name, read_length, barcode_key, ref_start_position,
-            ref_end_position - ref_start_position + 1, mapq, direction,
-            is_unique, 1, &(mappings_on_diff_ref_seqs[rid]));
-      } else {
-        EmplaceBackMappingRecord(read_id, barcode_key, ref_start_position,
-                                 ref_end_position - ref_start_position + 1,
-                                 mapq, direction, is_unique, 1,
-                                 &(mappings_on_diff_ref_seqs[rid]));
+        mapping_in_memory.SAM_flag = flag;
+        mapping_in_memory.qual_sequence =
+            read_batch.GetSequenceQualAt(read_index);
       }
+
+      EmplaceBackSingleEndMappingRecord(mapping_in_memory,
+                                        mappings_on_diff_ref_seqs);
 
       num_best_mappings_reported++;
       if (num_best_mappings_reported ==
@@ -1106,6 +1061,13 @@ void MappingGenerator<MappingRecord>::
         int &num_best_mappings_reported, int force_mapq,
         const PairedEndMappingMetadata &paired_end_mapping_metadata,
         std::vector<std::vector<MappingRecord>> &mappings_on_diff_ref_seqs) {
+  PairedEndMappingInMemory paired_end_mapping_in_memory;
+
+  paired_end_mapping_in_memory.mapping_in_memory1.direction =
+      first_read_direction;
+  paired_end_mapping_in_memory.mapping_in_memory2.direction =
+      second_read_direction;
+
   const char *read1 = read_batch1.GetSequenceAt(pair_index);
   const char *read2 = read_batch2.GetSequenceAt(pair_index);
   const uint32_t read1_length = read_batch1.GetSequenceLengthAt(pair_index);
@@ -1117,6 +1079,15 @@ void MappingGenerator<MappingRecord>::
   const std::string &negative_read2 =
       read_batch2.GetNegativeSequenceAt(pair_index);
   const uint32_t read_id = read_batch1.GetSequenceIdAt(pair_index);
+
+  paired_end_mapping_in_memory.mapping_in_memory1.read_id = read_id;
+  paired_end_mapping_in_memory.mapping_in_memory2.read_id = read_id;
+
+  paired_end_mapping_in_memory.mapping_in_memory1.read_name = read1_name;
+  paired_end_mapping_in_memory.mapping_in_memory2.read_name = read2_name;
+
+  paired_end_mapping_in_memory.mapping_in_memory1.read_length = read1_length;
+  paired_end_mapping_in_memory.mapping_in_memory2.read_length = read2_length;
 
   const MappingMetadata &mapping_metadata1 =
       paired_end_mapping_metadata.mapping_metadata1_;
@@ -1149,6 +1120,7 @@ void MappingGenerator<MappingRecord>::
        mapping_metadata2.num_best_mappings_ == 1)
           ? 1
           : 0;
+  paired_end_mapping_in_memory.is_unique = is_unique;
 
   uint64_t barcode_key = 0;
   if (!mapping_parameters_.is_bulk_data) {
@@ -1156,6 +1128,8 @@ void MappingGenerator<MappingRecord>::
         pair_index, /*start_position=*/0,
         barcode_batch.GetSequenceLengthAt(pair_index));
   }
+  paired_end_mapping_in_memory.mapping_in_memory1.barcode_key = barcode_key;
+  paired_end_mapping_in_memory.mapping_in_memory2.barcode_key = barcode_key;
 
   for (uint32_t mi = 0; mi < best_mappings.size(); ++mi) {
     const uint32_t i1 = best_mappings[mi].first;
@@ -1171,38 +1145,27 @@ void MappingGenerator<MappingRecord>::
       const uint32_t rid1 = mappings1[i1].second >> 32;
       const uint32_t rid2 = mappings2[i2].second >> 32;
 
-      uint32_t ref_start_position1, ref_end_position1;
-      uint32_t ref_start_position2, ref_end_position2;
+      paired_end_mapping_in_memory.mapping_in_memory1.rid = rid1;
+      paired_end_mapping_in_memory.mapping_in_memory2.rid = rid2;
 
-      const char *effect_read1 = read1;
-      const char *effect_read2 = read2;
-      if (first_read_direction == kNegative) {
-        effect_read1 = negative_read1.data();
-      }
-      if (second_read_direction == kNegative) {
-        effect_read2 = negative_read2.data();
-      }
+      paired_end_mapping_in_memory.mapping_in_memory1.read_sequence =
+          first_read_direction == kPositive ? read1 : negative_read1.data();
+      paired_end_mapping_in_memory.mapping_in_memory2.read_sequence =
+          second_read_direction == kPositive ? read2 : negative_read2.data();
 
-      uint32_t *cigar1, *cigar2;
-      int n_cigar1 = 0, n_cigar2 = 0;
-      int NM1 = 0, NM2 = 0;
-      std::string MD_tag1 = "", MD_tag2 = "";
-
-      int split_site1 = 0;
-      int split_site2 = 0;
       if (mapping_parameters_.split_alignment) {
-        split_site1 = split_sites1[i1];
-        split_site2 = split_sites2[i2];
+        paired_end_mapping_in_memory.mapping_in_memory1.read_split_site =
+            split_sites1[i1];
+        paired_end_mapping_in_memory.mapping_in_memory2.read_split_site =
+            split_sites2[i2];
       }
 
       GetRefStartEndPositionForReadFromMapping(
-          first_read_direction, mappings1[i1], effect_read1, read1_length,
-          split_site1, reference, &ref_start_position1, &ref_end_position1,
-          &n_cigar1, &cigar1, &NM1, MD_tag1);
+          mappings1[i1], reference,
+          paired_end_mapping_in_memory.mapping_in_memory1);
       GetRefStartEndPositionForReadFromMapping(
-          second_read_direction, mappings2[i2], effect_read2, read2_length,
-          split_site2, reference, &ref_start_position2, &ref_end_position2,
-          &n_cigar2, &cigar2, &NM2, MD_tag2);
+          mappings2[i2], reference,
+          paired_end_mapping_in_memory.mapping_in_memory2);
 
       uint8_t mapq1 = 0;
       uint8_t mapq2 = 0;
@@ -1210,14 +1173,13 @@ void MappingGenerator<MappingRecord>::
           first_read_direction, second_read_direction,
           /*read1_num_errors=*/mappings1[i1].first,
           /*read2_num_errors=*/mappings2[i2].first,
-          ref_end_position1 - ref_start_position1 + 1,
-          ref_end_position2 - ref_start_position2 + 1, read1_length,
-          read2_length, force_mapq, paired_end_mapping_metadata, mapq1, mapq2);
-
-      uint8_t direction = 1;
-      if (first_read_direction == kNegative) {
-        direction = 0;
-      }
+          paired_end_mapping_in_memory.mapping_in_memory1.GetFragmentLength(),
+          paired_end_mapping_in_memory.mapping_in_memory2.GetFragmentLength(),
+          read1_length, read2_length, force_mapq, paired_end_mapping_metadata,
+          mapq1, mapq2);
+      paired_end_mapping_in_memory.mapq = mapq;
+      paired_end_mapping_in_memory.mapping_in_memory1.mapq = mapq;
+      paired_end_mapping_in_memory.mapping_in_memory2.mapq = mapq;
 
       if (mapping_parameters_.mapping_output_format == MAPPINGFORMAT_SAM) {
         uint16_t flag1 = 3;
@@ -1236,91 +1198,18 @@ void MappingGenerator<MappingRecord>::
           flag1 |= BAM_FSECONDARY;
           flag2 |= BAM_FSECONDARY;
         }
-        // printf("%d %d\n", ref_start_position1, ref_end_position1);
-        // printf("%d %d\n", ref_start_position2, ref_end_position2);
-        EmplaceBackMappingRecord(
-            read_id, read1_name, barcode_key, 1, ref_start_position1, rid1,
-            flag1, first_read_direction == kPositive ? 1 : 0, is_unique, mapq,
-            NM1, n_cigar1, cigar1, MD_tag1, effect_read1,
-            read_batch1.GetSequenceQualAt(pair_index),
-            &(mappings_on_diff_ref_seqs[rid1]));
-        EmplaceBackMappingRecord(
-            read_id, read2_name, barcode_key, 1, ref_start_position2, rid2,
-            flag2, second_read_direction == kPositive ? 1 : 0, is_unique, mapq,
-            NM2, n_cigar2, cigar2, MD_tag2, effect_read2,
-            read_batch2.GetSequenceQualAt(pair_index),
-            &(mappings_on_diff_ref_seqs[rid2]));
-      } else if (mapping_parameters_.mapping_output_format ==
-                 MAPPINGFORMAT_PAIRS) {
-        int position1 = ref_start_position1;
-        int position2 = ref_start_position2;
-
-        uint8_t direction2 = 1;
-        if (second_read_direction == kNegative) {
-          direction2 = 0;
-          position2 = ref_end_position2;
-        }
-        if (direction == 0) {
-          position1 = ref_end_position1;
-        }
-        int rid1_rank = pairs_custom_rid_rank_[rid1];
-        int rid2_rank = pairs_custom_rid_rank_[rid2];
-        if (rid1_rank < rid2_rank || (rid1 == rid2 && position1 < position2)) {
-          EmplaceBackMappingRecord(read_id, read1_name, barcode_key, rid1, rid2,
-                                   position1, position2, direction, direction2,
-                                   mapq, is_unique, 1,
-                                   &(mappings_on_diff_ref_seqs[rid1]));
-        } else {
-          EmplaceBackMappingRecord(read_id, read1_name, barcode_key, rid2, rid1,
-                                   position2, position1, direction2, direction,
-                                   mapq, is_unique, 1,
-                                   &(mappings_on_diff_ref_seqs[rid2]));
-        }
-      } else if (mapping_parameters_.mapping_output_format ==
-                 MAPPINGFORMAT_PAF) {
-        uint32_t fragment_start_position = ref_start_position1;
-        uint16_t fragment_length = ref_end_position2 - ref_start_position1 + 1;
-        ;
-        uint16_t positive_alignment_length =
-            ref_end_position1 - ref_start_position1 + 1;
-        uint16_t negative_alignment_length =
-            ref_end_position2 - ref_start_position2 + 1;
-        if (direction == 0) {
-          fragment_start_position = ref_start_position2;
-          fragment_length = ref_end_position1 - ref_start_position2 + 1;
-          positive_alignment_length =
-              ref_end_position2 - ref_start_position2 + 1;
-          negative_alignment_length =
-              ref_end_position1 - ref_start_position1 + 1;
-        }
-        EmplaceBackMappingRecord(
-            read_id, read1_name, read2_name,
-            (uint16_t)read_batch1.GetSequenceLengthAt(pair_index),
-            (uint16_t)read_batch2.GetSequenceLengthAt(pair_index), barcode_key,
-            fragment_start_position, fragment_length, mapq1, mapq2, direction,
-            is_unique, 1, positive_alignment_length, negative_alignment_length,
-            &(mappings_on_diff_ref_seqs[rid1]));
-      } else {
-        uint32_t fragment_start_position = ref_start_position1;
-        uint16_t fragment_length = ref_end_position2 - ref_start_position1 + 1;
-        ;
-        uint16_t positive_alignment_length =
-            ref_end_position1 - ref_start_position1 + 1;
-        uint16_t negative_alignment_length =
-            ref_end_position2 - ref_start_position2 + 1;
-        if (direction == 0) {
-          fragment_start_position = ref_start_position2;
-          fragment_length = ref_end_position1 - ref_start_position2 + 1;
-          positive_alignment_length =
-              ref_end_position2 - ref_start_position2 + 1;
-          negative_alignment_length =
-              ref_end_position1 - ref_start_position1 + 1;
-        }
-        EmplaceBackMappingRecord(
-            read_id, barcode_key, fragment_start_position, fragment_length,
-            mapq, direction, is_unique, 1, positive_alignment_length,
-            negative_alignment_length, &(mappings_on_diff_ref_seqs[rid1]));
+        paired_end_mapping_in_memory.mapping_in_memory1.SAM_flag = flag1;
+        paired_end_mapping_in_memory.mapping_in_memory2.SAM_flag = flag2;
+        paired_end_mapping_in_memory.mapping_in_memory1.qual_sequence =
+            read_batch1.GetSequenceQualAt(pair_index);
+        paired_end_mapping_in_memory.mapping_in_memory2.qual_sequence =
+            read_batch2.GetSequenceQualAt(pair_index);
+        paired_end_mapping_in_memory.mapping_in_memory1.is_unique = is_unique;
+        paired_end_mapping_in_memory.mapping_in_memory2.is_unique = is_unique;
       }
+
+      EmplaceBackPairedEndMappingRecord(paired_end_mapping_in_memory,
+                                        mappings_on_diff_ref_seqs);
 
       num_best_mappings_reported++;
       if (num_best_mappings_reported ==
@@ -1334,15 +1223,12 @@ void MappingGenerator<MappingRecord>::
   }
 }
 
-// The returned coordinate is left closed and right closed, and is without chrom
-// id.
+// The computed ref start and end coordinates are left closed and right closed.
 template <typename MappingRecord>
 void MappingGenerator<MappingRecord>::GetRefStartEndPositionForReadFromMapping(
-    Direction mapping_direction, const std::pair<int, uint64_t> &mapping,
-    const char *read, int read_length, int in_split_site,
-    const SequenceBatch &reference, uint32_t *ref_start_position,
-    uint32_t *ref_end_position, int *n_cigar, uint32_t **cigar, int *NM,
-    std::string &MD_tag) {
+    const std::pair<int, uint64_t> &mapping, const SequenceBatch &reference,
+    MappingInMemory &mapping_in_memory) {
+  // For now this mat is only used by ksw to generate mappings in SAM format.
   int8_t mat[25];
   // if (output_mapping_in_SAM_) {
   int i, j, k;
@@ -1355,32 +1241,37 @@ void MappingGenerator<MappingRecord>::GetRefStartEndPositionForReadFromMapping(
   for (j = 0; j < 5; ++j) mat[k++] = 0;
   //}
 
-  uint32_t rid = mapping.second >> 32;
-  uint32_t position = mapping.second;
-  int full_read_length = read_length;
-  int min_num_errors = mapping.first;
-  int split_site = mapping_direction == kPositive ? 0 : read_length;
+  const uint32_t rid = mapping.second >> 32;
+  const uint32_t ref_position = mapping.second;
+
+  const int full_read_length = mapping_in_memory.read_length;
+  int read_length = mapping_in_memory.read_length;
+
+  const int min_num_errors = mapping.first;
+
+  int split_site = mapping_in_memory.direction == kPositive
+                       ? 0
+                       : mapping_in_memory.read_length;
+
   int gap_beginning = 0;
   int actual_num_errors = 0;
 
   if (mapping_parameters_.split_alignment) {
-    split_site = in_split_site & 0xffff;
+    split_site = mapping_in_memory.read_split_site & 0xffff;
     // Beginning means the 5' end of the read.
-    gap_beginning = (in_split_site >> 16) & 0xff;
+    gap_beginning = (mapping_in_memory.read_split_site >> 16) & 0xff;
     // In split alignment, -num_errors is the number of matches.
-    actual_num_errors = (in_split_site >> 24) & 0xff;
+    actual_num_errors = (mapping_in_memory.read_split_site >> 24) & 0xff;
     read_length = split_site - gap_beginning;
   }
 
   uint32_t verification_window_start_position =
-      position + 1 >
+      ref_position + 1 >
               (uint32_t)(read_length + mapping_parameters_.error_threshold)
-          ? position + 1 - read_length - mapping_parameters_.error_threshold
+          ? ref_position + 1 - read_length - mapping_parameters_.error_threshold
           : 0;
-  // printf("ne4: %d %d. %d %d %d %d.\n", position,
-  // verification_window_start_position, read_length, split_site, gap_beginning,
-  // actual_num_errors);
-  if (position + mapping_parameters_.error_threshold >=
+
+  if (ref_position + mapping_parameters_.error_threshold >=
       reference.GetSequenceLengthAt(rid)) {
     verification_window_start_position = reference.GetSequenceLengthAt(rid) -
                                          mapping_parameters_.error_threshold -
@@ -1400,337 +1291,201 @@ void MappingGenerator<MappingRecord>::GetRefStartEndPositionForReadFromMapping(
     read_length = split_site - gap_beginning;
   }
 
-  int mapping_start_position = 0;
-  if (mapping_direction == kPositive) {
+  if (mapping_in_memory.direction == kPositive) {
     if (mapping_parameters_.mapping_output_format == MAPPINGFORMAT_SAM) {
-      *n_cigar = 0;
-      int mapping_end_position;
+      mapping_in_memory.n_cigar = 0;
+
+      int mapping_start_position = 0;
+      int mapping_end_position = 0;
+
       ksw_semi_global3(
           read_length + 2 * mapping_parameters_.error_threshold,
           reference.GetSequenceAt(rid) + verification_window_start_position,
-          read_length, read + gap_beginning, 5, mat,
+          read_length, mapping_in_memory.read_sequence + gap_beginning, 5, mat,
           mapping_parameters_.gap_open_penalties[0],
           mapping_parameters_.gap_extension_penalties[0],
           mapping_parameters_.gap_open_penalties[1],
           mapping_parameters_.gap_extension_penalties[1],
-          mapping_parameters_.error_threshold * 2 + 1, n_cigar, cigar,
+          mapping_parameters_.error_threshold * 2 + 1,
+          &(mapping_in_memory.n_cigar), &(mapping_in_memory.cigar),
           &mapping_start_position, &mapping_end_position);
-      // std::cerr << verification_window_start_position << " " << read_length
-      // << " " << split_site << " " << mapping_start_position << " " <<
-      // mapping_end_position << "\n";
+
       if (gap_beginning > 0) {
         int new_ref_start_position = AdjustGapBeginning(
-            mapping_direction, reference.GetSequenceAt(rid), read,
-            &gap_beginning, read_length - 1,
+            mapping_in_memory.direction, reference.GetSequenceAt(rid),
+            mapping_in_memory.read_sequence, &gap_beginning, read_length - 1,
             verification_window_start_position + mapping_start_position,
             verification_window_start_position + mapping_end_position - 1,
-            n_cigar, cigar);
+            &(mapping_in_memory.n_cigar), &(mapping_in_memory.cigar));
         mapping_start_position =
             new_ref_start_position - verification_window_start_position;
       }
-      GenerateMDTag(reference.GetSequenceAt(rid), read + gap_beginning,
-                    verification_window_start_position + mapping_start_position,
-                    *n_cigar, *cigar, *NM, MD_tag);
 
-      *ref_start_position =
+      GenerateNMAndMDTag(
+          reference.GetSequenceAt(rid),
+          mapping_in_memory.read_sequence + gap_beginning,
+          verification_window_start_position + mapping_start_position,
+          mapping_in_memory);
+
+      mapping_in_memory.ref_start_position =
           verification_window_start_position + mapping_start_position;
-      *ref_end_position =
+      mapping_in_memory.ref_end_position =
           verification_window_start_position + mapping_end_position - 1;
     } else {
+      int mapping_start_position = 0;
       if (!mapping_parameters_.split_alignment) {
         BandedTraceback(
             mapping_parameters_.error_threshold, min_num_errors,
             reference.GetSequenceAt(rid) + verification_window_start_position,
-            read, read_length, &mapping_start_position);
+            mapping_in_memory.read_sequence, read_length,
+            &mapping_start_position);
       } else {
         BandedTraceback(
             mapping_parameters_.error_threshold, actual_num_errors,
             reference.GetSequenceAt(rid) + verification_window_start_position,
-            read + gap_beginning, read_length, &mapping_start_position);
+            mapping_in_memory.read_sequence + gap_beginning, read_length,
+            &mapping_start_position);
       }
+
       if (gap_beginning > 0) {
         int new_ref_start_position = AdjustGapBeginning(
-            mapping_direction, reference.GetSequenceAt(rid), read,
-            &gap_beginning, read_length - 1,
+            mapping_in_memory.direction, reference.GetSequenceAt(rid),
+            mapping_in_memory.read_sequence, &gap_beginning, read_length - 1,
             verification_window_start_position + mapping_start_position,
-            position, n_cigar, cigar);
+            ref_position, &(mapping_in_memory.n_cigar),
+            &(mapping_in_memory.cigar));
+
         mapping_start_position =
             new_ref_start_position - verification_window_start_position;
       }
 
-      *ref_start_position =
+      mapping_in_memory.ref_start_position =
           verification_window_start_position + mapping_start_position;
-      *ref_end_position = position;
+      mapping_in_memory.ref_end_position = ref_position;
     }
-  } else {  // reverse strand
-    int read_start_site = full_read_length - split_site;
-    if (mapping_parameters_.mapping_output_format == MAPPINGFORMAT_SAM) {
-      *n_cigar = 0;
-      int mapping_end_position;
 
-      //  reversed read looks like:
-      //
-      //      veri_start_pos       position
-      //  ref   --|-------------------|------------------->
-      //  read     <-|--read_length---|--gap_beginning--
-      //          split_site
-      //
-
-      // Is the map start/end position left close right open as in bed format?
-      /*if (read_start_site + read_length > full_read_length || read_start_site
-      < 0
-        || verification_window_start_position + read_start_site + read_length +
-      2 * mapping_parameters_.error_threshold >
-      reference.GetSequenceLengthAt(rid)) { printf("ERROR! %d %d %d %d\n",
-      full_read_length, split_site, gap_beginning, read_length);
-      }*/
-      ksw_semi_global3(read_length + 2 * mapping_parameters_.error_threshold,
-                       reference.GetSequenceAt(rid) +
-                           verification_window_start_position + read_start_site,
-                       read_length, read + read_start_site, 5, mat,
-                       mapping_parameters_.gap_open_penalties[0],
-                       mapping_parameters_.gap_extension_penalties[0],
-                       mapping_parameters_.gap_open_penalties[1],
-                       mapping_parameters_.gap_extension_penalties[1],
-                       mapping_parameters_.error_threshold * 2 + 1, n_cigar,
-                       cigar, &mapping_start_position, &mapping_end_position);
-      if (gap_beginning > 0) {
-        // printf("before adjust %d %d %d. %d %d\n", split_site,
-        // read_start_site, read_length, verification_window_start_position +
-        // mapping_start_position, verification_window_start_position +
-        // mapping_end_position);
-        int new_ref_end_position = AdjustGapBeginning(
-            mapping_direction, reference.GetSequenceAt(rid),
-            read + read_start_site, &gap_beginning, read_length - 1,
-            verification_window_start_position + mapping_start_position,
-            verification_window_start_position + mapping_end_position - 1,
-            n_cigar, cigar);
-        // The returned position is right-closed, so need to plus one to match
-        // bed convention
-        mapping_end_position = new_ref_end_position + 1 -
-                               verification_window_start_position -
-                               read_start_site;
-        read_length = split_site - gap_beginning;
-      }
-      GenerateMDTag(reference.GetSequenceAt(rid), read + read_start_site,
-                    verification_window_start_position + read_start_site +
-                        mapping_start_position,
-                    *n_cigar, *cigar, *NM, MD_tag);
-      *ref_start_position = verification_window_start_position +
-                            read_start_site + mapping_start_position;
-      *ref_end_position = verification_window_start_position + read_start_site +
-                          mapping_end_position - 1;
-    } else {
-      // int n_cigar = 0;
-      // uint32_t *cigar;
-      int mapping_end_position =
-          position - verification_window_start_position + 1;
-      mapping_start_position = mapping_parameters_.error_threshold;
-      // ksw_semi_global3(read_length + 2 * mapping_parameters_.error_threshold,
-      // reference.GetSequenceAt(rid) + verification_window_start_position,
-      // read_length, negative_read.data() + split_sites[mi], 5, mat,
-      // mapping_parameters_.gap_open_penalties[0],
-      // mapping_parameters_.gap_extension_penalties[0],
-      // mapping_parameters_.gap_open_penalties[1],
-      // mapping_parameters_.gap_extension_penalties[1],
-      // mapping_parameters_.error_threshold * 2 + 1, &n_cigar, &cigar,
-      // &mapping_start_position, &mapping_end_position); mapq =
-      // GetMAPQForSingleEndRead(mapping_parameters_.error_threshold, 0, 0,
-      // mapping_end_position - mapping_start_position + 1, min_num_errors,
-      // num_best_mappings, second_min_num_errors, num_second_best_mappings);
-      // uint32_t fragment_start_position = verification_window_start_position +
-      // mapping_start_position; uint16_t fragment_length = mapping_end_position
-      // - mapping_start_position + 1;
-      if (!mapping_parameters_.split_alignment) {
-        BandedTraceback(
-            mapping_parameters_.error_threshold, min_num_errors,
-            reference.GetSequenceAt(rid) + verification_window_start_position,
-            read + read_start_site, read_length, &mapping_start_position);
-      } else {
-        // BandedTracebackToEnd(mapping_parameters_.error_threshold,actual_num_errors,
-        // reference.GetSequenceAt(rid)
-        // + verification_window_start_position, read + read_start_site,
-        // read_length, &mapping_end_position);
-        BandedAlignPatternToText(
-            mapping_parameters_.error_threshold,
-            reference.GetSequenceAt(rid) + verification_window_start_position,
-            read + read_start_site, read_length, &mapping_end_position);
-        mapping_end_position +=
-            1;  // seems banded align's mapping end position is included?
-      }
-      // int mapping_end_position = (int)position;
-      if (gap_beginning > 0) {
-        // printf("before adjust %d %d %d. %d %d\n", split_site,
-        // read_start_site, read_length, verification_window_start_position +
-        // mapping_start_position, verification_window_start_position +
-        // mapping_end_position);
-        int new_ref_end_position = AdjustGapBeginning(
-            mapping_direction, reference.GetSequenceAt(rid),
-            read + read_start_site, &gap_beginning, read_length - 1,
-            verification_window_start_position + mapping_start_position,
-            verification_window_start_position + mapping_end_position, n_cigar,
-            cigar);
-        // The returned position is right-closed, so need to plus one to match
-        // bed convention
-        mapping_end_position =
-            new_ref_end_position - verification_window_start_position + 1;
-        read_length = split_site - gap_beginning;
-      }
-      *ref_start_position =
-          verification_window_start_position + mapping_start_position;
-      *ref_end_position =
-          verification_window_start_position + mapping_end_position - 1;
-    }
+    return;
   }
-}
 
-template <typename MappingRecord>
-void MappingGenerator<MappingRecord>::EmplaceBackMappingRecord(
-    uint32_t read_id, uint64_t barcode, uint32_t fragment_start_position,
-    uint16_t fragment_length, uint8_t mapq, uint8_t direction,
-    uint8_t is_unique, uint8_t num_dups, uint16_t positive_alignment_length,
-    uint16_t negative_alignment_length,
-    std::vector<MappingRecord> *mappings_on_diff_ref_seqs) {}
+  //  reversed read looks like:
+  //
+  //      veri_start_pos       ref_position
+  //  ref   --|-------------------|------------------->
+  //  read     <-|--read_length---|--gap_beginning--
+  //          split_site
+  //
 
-template <>
-inline void
-MappingGenerator<PairedEndMappingWithoutBarcode>::EmplaceBackMappingRecord(
-    uint32_t read_id, uint64_t barcode, uint32_t fragment_start_position,
-    uint16_t fragment_length, uint8_t mapq, uint8_t direction,
-    uint8_t is_unique, uint8_t num_dups, uint16_t positive_alignment_length,
-    uint16_t negative_alignment_length,
-    std::vector<PairedEndMappingWithoutBarcode> *mappings_on_diff_ref_seqs) {
-  mappings_on_diff_ref_seqs->emplace_back(PairedEndMappingWithoutBarcode(
-      read_id, fragment_start_position, fragment_length, mapq, direction,
-      is_unique, num_dups, positive_alignment_length,
-      negative_alignment_length));
-}
+  const int read_start_site = full_read_length - split_site;
+  if (mapping_parameters_.mapping_output_format == MAPPINGFORMAT_SAM) {
+    mapping_in_memory.n_cigar = 0;
 
-template <>
-inline void
-MappingGenerator<PairedEndMappingWithBarcode>::EmplaceBackMappingRecord(
-    uint32_t read_id, uint64_t barcode, uint32_t fragment_start_position,
-    uint16_t fragment_length, uint8_t mapq, uint8_t direction,
-    uint8_t is_unique, uint8_t num_dups, uint16_t positive_alignment_length,
-    uint16_t negative_alignment_length,
-    std::vector<PairedEndMappingWithBarcode> *mappings_on_diff_ref_seqs) {
-  mappings_on_diff_ref_seqs->emplace_back(PairedEndMappingWithBarcode(
-      read_id, barcode, fragment_start_position, fragment_length, mapq,
-      direction, is_unique, num_dups, positive_alignment_length,
-      negative_alignment_length));
-}
+    int mapping_start_position = 0;
+    int mapping_end_position = 0;
 
-template <typename MappingRecord>
-void MappingGenerator<MappingRecord>::EmplaceBackMappingRecord(
-    uint32_t read_id, const char *read1_name, const char *read2_name,
-    uint16_t read1_length, uint16_t read2_length, uint64_t barcode,
-    uint32_t fragment_start_position, uint16_t fragment_length, uint8_t mapq1,
-    uint8_t mapq2, uint8_t direction, uint8_t is_unique, uint8_t num_dups,
-    uint16_t positive_alignment_length, uint16_t negative_alignment_length,
-    std::vector<MappingRecord> *mappings_on_diff_ref_seqs) {}
+    ksw_semi_global3(read_length + 2 * mapping_parameters_.error_threshold,
+                     reference.GetSequenceAt(rid) +
+                         verification_window_start_position + read_start_site,
+                     read_length,
+                     mapping_in_memory.read_sequence + read_start_site, 5, mat,
+                     mapping_parameters_.gap_open_penalties[0],
+                     mapping_parameters_.gap_extension_penalties[0],
+                     mapping_parameters_.gap_open_penalties[1],
+                     mapping_parameters_.gap_extension_penalties[1],
+                     mapping_parameters_.error_threshold * 2 + 1,
+                     &(mapping_in_memory.n_cigar), &(mapping_in_memory.cigar),
+                     &mapping_start_position, &mapping_end_position);
 
-template <>
-inline void MappingGenerator<PairedPAFMapping>::EmplaceBackMappingRecord(
-    uint32_t read_id, const char *read1_name, const char *read2_name,
-    uint16_t read1_length, uint16_t read2_length, uint64_t barcode,
-    uint32_t fragment_start_position, uint16_t fragment_length, uint8_t mapq1,
-    uint8_t mapq2, uint8_t direction, uint8_t is_unique, uint8_t num_dups,
-    uint16_t positive_alignment_length, uint16_t negative_alignment_length,
-    std::vector<PairedPAFMapping> *mappings_on_diff_ref_seqs) {
-  mappings_on_diff_ref_seqs->emplace_back(PairedPAFMapping(
-      read_id, std::string(read1_name), std::string(read2_name), read1_length,
-      read2_length, fragment_start_position, fragment_length,
-      positive_alignment_length, negative_alignment_length,
-      mapq1 < mapq2 ? mapq1 : mapq2, mapq1, mapq2, direction, is_unique,
-      num_dups));
-}
+    if (gap_beginning > 0) {
+      int new_ref_end_position = AdjustGapBeginning(
+          mapping_in_memory.direction, reference.GetSequenceAt(rid),
+          mapping_in_memory.read_sequence + read_start_site, &gap_beginning,
+          read_length - 1,
+          verification_window_start_position + mapping_start_position,
+          verification_window_start_position + mapping_end_position - 1,
+          &(mapping_in_memory.n_cigar), &(mapping_in_memory.cigar));
 
-template <typename MappingRecord>
-void MappingGenerator<MappingRecord>::EmplaceBackMappingRecord(
-    uint32_t read_id, const char *read_name, uint64_t cell_barcode, int rid1,
-    int rid2, uint32_t pos1, uint32_t pos2, int direction1, int direction2,
-    uint8_t mapq, uint8_t is_unique, uint8_t num_dups,
-    std::vector<MappingRecord> *mappings_on_diff_ref_seqs) {}
+      // The returned position is right-closed, so need to plus one to match
+      // bed convention
+      mapping_end_position = new_ref_end_position + 1 -
+                             verification_window_start_position -
+                             read_start_site;
+      read_length = split_site - gap_beginning;
+    }
 
-template <>
-inline void MappingGenerator<PairsMapping>::EmplaceBackMappingRecord(
-    uint32_t read_id, const char *read_name, uint64_t cell_barcode, int rid1,
-    int rid2, uint32_t pos1, uint32_t pos2, int direction1, int direction2,
-    uint8_t mapq, uint8_t is_unique, uint8_t num_dups,
-    std::vector<PairsMapping> *mappings_on_diff_ref_seqs) {
-  mappings_on_diff_ref_seqs->emplace_back(PairsMapping{
-      read_id, std::string(read_name), cell_barcode, rid1, rid2, pos1, pos2,
-      direction1, direction2, mapq, is_unique, num_dups});
-}
+    GenerateNMAndMDTag(reference.GetSequenceAt(rid),
+                       mapping_in_memory.read_sequence + read_start_site,
+                       verification_window_start_position + read_start_site +
+                           mapping_start_position,
+                       mapping_in_memory);
 
-template <typename MappingRecord>
-void MappingGenerator<MappingRecord>::EmplaceBackMappingRecord(
-    uint32_t read_id, uint64_t barcode, uint32_t fragment_start_position,
-    uint16_t fragment_length, uint8_t mapq, uint8_t direction,
-    uint8_t is_unique, uint8_t num_dups,
-    std::vector<MappingRecord> *mappings_on_diff_ref_seqs) {}
+    mapping_in_memory.ref_start_position = verification_window_start_position +
+                                           read_start_site +
+                                           mapping_start_position;
+    mapping_in_memory.ref_end_position = verification_window_start_position +
+                                         read_start_site +
+                                         mapping_end_position - 1;
+  } else {
+    int mapping_start_position = mapping_parameters_.error_threshold;
+    int mapping_end_position =
+        ref_position - verification_window_start_position + 1;
+    // int n_cigar = 0;
+    // uint32_t *cigar;
+    // ksw_semi_global3(read_length + 2 * mapping_parameters_.error_threshold,
+    // reference.GetSequenceAt(rid) + verification_window_start_position,
+    // read_length, negative_read.data() + split_sites[mi], 5, mat,
+    // mapping_parameters_.gap_open_penalties[0],
+    // mapping_parameters_.gap_extension_penalties[0],
+    // mapping_parameters_.gap_open_penalties[1],
+    // mapping_parameters_.gap_extension_penalties[1],
+    // mapping_parameters_.error_threshold * 2 + 1, &n_cigar, &cigar,
+    // &mapping_start_position, &mapping_end_position); mapq =
+    // GetMAPQForSingleEndRead(mapping_parameters_.error_threshold, 0, 0,
+    // mapping_end_position - mapping_start_position + 1, min_num_errors,
+    // num_best_mappings, second_min_num_errors, num_second_best_mappings);
+    // uint32_t fragment_start_position = verification_window_start_position +
+    // mapping_start_position; uint16_t fragment_length = mapping_end_position
+    // - mapping_start_position + 1;
+    if (!mapping_parameters_.split_alignment) {
+      BandedTraceback(
+          mapping_parameters_.error_threshold, min_num_errors,
+          reference.GetSequenceAt(rid) + verification_window_start_position,
+          mapping_in_memory.read_sequence + read_start_site, read_length,
+          &mapping_start_position);
+    } else {
+      // BandedTracebackToEnd(mapping_parameters_.error_threshold,actual_num_errors,
+      // reference.GetSequenceAt(rid)
+      // + verification_window_start_position, read + read_start_site,
+      // read_length, &mapping_end_position);
+      BandedAlignPatternToText(
+          mapping_parameters_.error_threshold,
+          reference.GetSequenceAt(rid) + verification_window_start_position,
+          mapping_in_memory.read_sequence + read_start_site, read_length,
+          &mapping_end_position);
+      // seems banded align's mapping end position is included?
+      mapping_end_position += 1;
+    }
 
-template <>
-inline void MappingGenerator<MappingWithoutBarcode>::EmplaceBackMappingRecord(
-    uint32_t read_id, uint64_t barcode, uint32_t fragment_start_position,
-    uint16_t fragment_length, uint8_t mapq, uint8_t direction,
-    uint8_t is_unique, uint8_t num_dups,
-    std::vector<MappingWithoutBarcode> *mappings_on_diff_ref_seqs) {
-  mappings_on_diff_ref_seqs->emplace_back(
-      MappingWithoutBarcode{read_id, fragment_start_position, fragment_length,
-                            mapq, direction, is_unique, num_dups});
-}
+    if (gap_beginning > 0) {
+      int new_ref_end_position = AdjustGapBeginning(
+          mapping_in_memory.direction, reference.GetSequenceAt(rid),
+          mapping_in_memory.read_sequence + read_start_site, &gap_beginning,
+          read_length - 1,
+          verification_window_start_position + mapping_start_position,
+          verification_window_start_position + mapping_end_position,
+          &(mapping_in_memory.n_cigar), &(mapping_in_memory.cigar));
 
-template <>
-inline void MappingGenerator<MappingWithBarcode>::EmplaceBackMappingRecord(
-    uint32_t read_id, uint64_t barcode, uint32_t fragment_start_position,
-    uint16_t fragment_length, uint8_t mapq, uint8_t direction,
-    uint8_t is_unique, uint8_t num_dups,
-    std::vector<MappingWithBarcode> *mappings_on_diff_ref_seqs) {
-  mappings_on_diff_ref_seqs->emplace_back(MappingWithBarcode{
-      read_id, barcode, fragment_start_position, fragment_length, mapq,
-      direction, is_unique, num_dups});
-}
+      // The returned position is right-closed, so need to plus one to match
+      // bed convention.
+      mapping_end_position =
+          new_ref_end_position - verification_window_start_position + 1;
+      read_length = split_site - gap_beginning;
+    }
 
-template <typename MappingRecord>
-void MappingGenerator<MappingRecord>::EmplaceBackMappingRecord(
-    uint32_t read_id, const char *read_name, uint16_t read_length,
-    uint64_t barcode, uint32_t fragment_start_position,
-    uint16_t fragment_length, uint8_t mapq, uint8_t direction,
-    uint8_t is_unique, uint8_t num_dups,
-    std::vector<MappingRecord> *mappings_on_diff_ref_seqs) {}
-
-template <>
-inline void MappingGenerator<PAFMapping>::EmplaceBackMappingRecord(
-    uint32_t read_id, const char *read_name, uint16_t read_length,
-    uint64_t barcode, uint32_t fragment_start_position,
-    uint16_t fragment_length, uint8_t mapq, uint8_t direction,
-    uint8_t is_unique, uint8_t num_dups,
-    std::vector<PAFMapping> *mappings_on_diff_ref_seqs) {
-  mappings_on_diff_ref_seqs->emplace_back(PAFMapping{
-      read_id, std::string(read_name), read_length, fragment_start_position,
-      fragment_length, mapq, direction, is_unique, num_dups});
-}
-
-template <typename MappingRecord>
-void MappingGenerator<MappingRecord>::EmplaceBackMappingRecord(
-    uint32_t read_id, const char *read_name, uint64_t cell_barcode,
-    uint8_t num_dups, int64_t position, int rid, int flag, uint8_t direction,
-    uint8_t is_unique, uint8_t mapq, uint32_t NM, int n_cigar, uint32_t *cigar,
-    std::string &MD_tag, const char *read, const char *read_qual,
-    std::vector<MappingRecord> *mappings_on_diff_ref_seqs) {}
-
-template <>
-inline void MappingGenerator<SAMMapping>::EmplaceBackMappingRecord(
-    uint32_t read_id, const char *read_name, uint64_t cell_barcode,
-    uint8_t num_dups, int64_t position, int rid, int flag, uint8_t direction,
-    uint8_t is_unique, uint8_t mapq, uint32_t NM, int n_cigar, uint32_t *cigar,
-    std::string &MD_tag, const char *read, const char *read_qual,
-    std::vector<SAMMapping> *mappings_on_diff_ref_seqs) {
-  mappings_on_diff_ref_seqs->emplace_back(
-      read_id, std::string(read_name), cell_barcode, num_dups, position, rid,
-      flag, direction, 0, is_unique, mapq, NM, n_cigar, cigar, MD_tag,
-      std::string(read), std::string(read_qual));
+    mapping_in_memory.ref_start_position =
+        verification_window_start_position + mapping_start_position;
+    mapping_in_memory.ref_end_position =
+        verification_window_start_position + mapping_end_position - 1;
+  }
 }
 
 template <typename MappingRecord>

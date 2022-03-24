@@ -22,8 +22,6 @@ int GetLongestMatchLength(const char *pattern, const char *text,
   return max_match;
 }
 
-// return: newly adjust reference start/end position (kPositive for start,
-// kNegative for end)
 int AdjustGapBeginning(Direction mapping_direction, const char *ref,
                        const char *read, int *gap_beginning, int read_end,
                        int ref_start_position, int ref_end_position,
@@ -33,7 +31,9 @@ int AdjustGapBeginning(Direction mapping_direction, const char *ref,
     if (*gap_beginning <= 0) {
       return ref_start_position;
     }
+
     // printf("%d\n", *gap_beginning);
+
     for (i = *gap_beginning - 1, j = ref_start_position - 1; i >= 0 && j >= 0;
          --i, --j) {
       // printf("%c %c\n", read[i], ref[j]);
@@ -41,6 +41,7 @@ int AdjustGapBeginning(Direction mapping_direction, const char *ref,
         break;
       }
     }
+
     *gap_beginning = i + 1;
     // TODO: add soft clip in cigar
     if (n_cigar && *n_cigar > 0) {
@@ -48,43 +49,55 @@ int AdjustGapBeginning(Direction mapping_direction, const char *ref,
         (*cigar)[0] += (ref_start_position - 1 - j) << 4;
       }
     }
-    return j + 1;
-  } else {
-    if (*gap_beginning <= 0) {
-      return ref_end_position;
-    }
-    // printf("%d\n", *gap_beginning);
-    /*char *tmp = new char[255] ;
-    strncpy(tmp, ref + ref_start_position, ref_end_position - ref_start_position
-    + 1 + 10) ; printf("%s %d. %d %d\n", tmp, strlen(tmp), ref_end_position -
-    ref_start_position + 1 + 10, strlen(ref)) ; delete[] tmp;*/
-    for (i = read_end + 1, j = ref_end_position + 1; read[i] && ref[j];
-         ++i, ++j) {
-      // printf("%c %c %c %c %c %c\n", read[i], ref[j - 1], ref[j], ref[j + 1],
-      // ref[j + 2], ref[j + 3]);
-      if (read[i] != ref[j] && read[i] != ref[j] - 'a' + 'A') {
-        break;
-      }
-    }
-    *gap_beginning = *gap_beginning + i - (read_end + 1);
-    if (n_cigar && *n_cigar > 0) {
-      if (((*cigar)[*n_cigar - 1] & 0xf) == BAM_CMATCH) {
-        (*cigar)[*n_cigar - 1] += (j - (ref_end_position + 1)) << 4;
-      }
-    }
 
-    return j - 1;
+    return j + 1;
   }
+
+  if (*gap_beginning <= 0) {
+    return ref_end_position;
+  }
+
+  // printf("%d\n", *gap_beginning);
+  /*char *tmp = new char[255] ;
+  strncpy(tmp, ref + ref_start_position, ref_end_position - ref_start_position
+  + 1 + 10) ; printf("%s %d. %d %d\n", tmp, strlen(tmp), ref_end_position -
+  ref_start_position + 1 + 10, strlen(ref)) ; delete[] tmp;*/
+
+  for (i = read_end + 1, j = ref_end_position + 1; read[i] && ref[j];
+       ++i, ++j) {
+    // printf("%c %c %c %c %c %c\n", read[i], ref[j - 1], ref[j], ref[j + 1],
+    // ref[j + 2], ref[j + 3]);
+    if (read[i] != ref[j] && read[i] != ref[j] - 'a' + 'A') {
+      break;
+    }
+  }
+
+  *gap_beginning = *gap_beginning + i - (read_end + 1);
+
+  if (n_cigar && *n_cigar > 0) {
+    if (((*cigar)[*n_cigar - 1] & 0xf) == BAM_CMATCH) {
+      (*cigar)[*n_cigar - 1] += (j - (ref_end_position + 1)) << 4;
+    }
+  }
+
+  return j - 1;
 }
 
-void GenerateMDTag(const char *pattern, const char *text,
-                   int mapping_start_position, int n_cigar,
-                   const uint32_t *cigar, int &NM, std::string &MD_tag) {
-  int num_matches = 0;
+void GenerateNMAndMDTag(const char *pattern, const char *text,
+                        int mapping_start_position,
+                        MappingInMemory &mapping_in_memory) {
   const char *read = text;
   const char *reference = pattern + mapping_start_position;
+
+  const uint32_t *cigar = mapping_in_memory.cigar;
+  const int n_cigar = mapping_in_memory.n_cigar;
+  mapping_in_memory.NM = 0;
+  mapping_in_memory.MD_tag.clear();
+
+  int num_matches = 0;
   int read_position = 0;
   int reference_position = 0;
+
   for (int ci = 0; ci < n_cigar; ++ci) {
     uint32_t current_cigar_uint = cigar[ci];
     uint8_t cigar_operation = bam_cigar_op(current_cigar_uint);
@@ -97,28 +110,28 @@ void GenerateMDTag(const char *pattern, const char *text,
           ++num_matches;
         } else {
           // a mismatch
-          ++NM;
+          ++mapping_in_memory.NM;
           if (num_matches != 0) {
-            MD_tag.append(std::to_string(num_matches));
+            mapping_in_memory.MD_tag.append(std::to_string(num_matches));
             num_matches = 0;
           }
-          MD_tag.push_back(reference[reference_position]);
+          mapping_in_memory.MD_tag.push_back(reference[reference_position]);
         }
         ++reference_position;
         ++read_position;
       }
     } else if (cigar_operation == BAM_CINS) {
-      NM += num_cigar_operations;
+      mapping_in_memory.NM += num_cigar_operations;
       read_position += num_cigar_operations;
     } else if (cigar_operation == BAM_CDEL) {
-      NM += num_cigar_operations;
+      mapping_in_memory.NM += num_cigar_operations;
       if (num_matches != 0) {
-        MD_tag.append(std::to_string(num_matches));
+        mapping_in_memory.MD_tag.append(std::to_string(num_matches));
         num_matches = 0;
       }
-      MD_tag.push_back('^');
+      mapping_in_memory.MD_tag.push_back('^');
       for (int opi = 0; opi < num_cigar_operations; ++opi) {
-        MD_tag.push_back(reference[reference_position]);
+        mapping_in_memory.MD_tag.push_back(reference[reference_position]);
         ++reference_position;
       }
     } else {
@@ -126,7 +139,7 @@ void GenerateMDTag(const char *pattern, const char *text,
     }
   }
   if (num_matches != 0) {
-    MD_tag.append(std::to_string(num_matches));
+    mapping_in_memory.MD_tag.append(std::to_string(num_matches));
   }
 }
 
