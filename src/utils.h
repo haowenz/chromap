@@ -3,7 +3,10 @@
 
 #include <sys/resource.h>
 #include <sys/time.h>
+
+#include <iostream>
 #include <tuple>
+#include <vector>
 
 #include "candidate.h"
 #include "khash.h"
