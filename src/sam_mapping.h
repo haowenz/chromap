@@ -210,6 +210,8 @@ class SAMMapping : public Mapping {
     // We don't support Tn5 shift in SAM format because it has other fields that
     // depend mapping position.
   }
+  // TODO(Haowen): I have to change the variable names or this function to make
+  // the meaning consistent.
   bool IsPositiveStrand() const { return is_rev_ > 0 ? true : false; }
   // For now for convenience, we assume cigar should not be accessed after
   // generating the cigar string for output
