@@ -211,7 +211,7 @@ class SequenceBatch {
   }
 
  protected:
-  void ReplaceByEffectiveRange(kstring_t &seq);
+  void ReplaceByEffectiveRange(kstring_t &seq, bool is_seq);
 
   uint32_t num_loaded_sequences_ = 0;
   uint32_t max_num_sequences_ = 0;

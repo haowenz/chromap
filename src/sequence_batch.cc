@@ -30,12 +30,12 @@ uint32_t SequenceBatch::LoadBatch() {
     if (length > 0) {
       kseq_t *sequence = sequence_batch_[sequence_index];
       std::swap(sequence_kseq_->seq, sequence->seq);
-      ReplaceByEffectiveRange(sequence->seq);
+      ReplaceByEffectiveRange(sequence->seq, true);
       std::swap(sequence_kseq_->name, sequence->name);
       std::swap(sequence_kseq_->comment, sequence->comment);
       if (sequence_kseq_->qual.l != 0) {  // fastq file
         std::swap(sequence_kseq_->qual, sequence->qual);
-        ReplaceByEffectiveRange(sequence->qual);
+        ReplaceByEffectiveRange(sequence->qual, false);
       }
       sequence->id = num_loaded_sequences_;
       ++num_loaded_sequences_;
@@ -71,14 +71,14 @@ bool SequenceBatch::LoadOneSequenceAndSaveAt(uint32_t sequence_index) {
   if (length > 0) {
     kseq_t *sequence = sequence_batch_[sequence_index];
     std::swap(sequence_kseq_->seq, sequence->seq);
-    ReplaceByEffectiveRange(sequence->seq);
+    ReplaceByEffectiveRange(sequence->seq, true);
     std::swap(sequence_kseq_->name, sequence->name);
     std::swap(sequence_kseq_->comment, sequence->comment);
     sequence->id = num_loaded_sequences_;
     ++num_loaded_sequences_;
     if (sequence_kseq_->qual.l != 0) {  // fastq file
       std::swap(sequence_kseq_->qual, sequence->qual);
-      ReplaceByEffectiveRange(sequence->qual);
+      ReplaceByEffectiveRange(sequence->qual, false);
     }
   } else {
     if (length != -1) {
@@ -104,12 +104,12 @@ uint32_t SequenceBatch::LoadAllSequences() {
       sequence_batch_.emplace_back((kseq_t *)calloc(1, sizeof(kseq_t)));
       kseq_t *sequence = sequence_batch_.back();
       std::swap(sequence_kseq_->seq, sequence->seq);
-      ReplaceByEffectiveRange(sequence->seq);
+      ReplaceByEffectiveRange(sequence->seq, true);
       std::swap(sequence_kseq_->name, sequence->name);
       std::swap(sequence_kseq_->comment, sequence->comment);
       if (sequence_kseq_->qual.l != 0) {  // fastq file
         std::swap(sequence_kseq_->qual, sequence->qual);
-        ReplaceByEffectiveRange(sequence->qual);
+        ReplaceByEffectiveRange(sequence->qual, false);
       }
       sequence->id = num_loaded_sequences_;
       ++num_loaded_sequences_;
@@ -137,7 +137,7 @@ void SequenceBatch::FinalizeLoading() {
   gzclose(sequence_file_);
 }
 
-void SequenceBatch::ReplaceByEffectiveRange(kstring_t &seq) {
+void SequenceBatch::ReplaceByEffectiveRange(kstring_t &seq, bool is_seq) {
   if (effective_range_[0] == 0 && effective_range_[1] == -1 &&
       effective_range_[2] == 1) {
     return;
@@ -152,8 +152,10 @@ void SequenceBatch::ReplaceByEffectiveRange(kstring_t &seq) {
   seq.s[i] = '\0';
   seq.l = end - start + 1;
   if (effective_range_[2] == -1) {
-    for (i = 0; i < (int)seq.l; ++i) {
-      seq.s[i] = Uint8ToChar(((uint8_t)3) ^ (CharToUint8(seq.s[i])));
+    if (is_seq) {
+      for (i = 0; i < (int)seq.l; ++i) {
+        seq.s[i] = Uint8ToChar(((uint8_t)3) ^ (CharToUint8(seq.s[i])));
+      }
     }
     for (i = 0, j = seq.l - 1; i < j; ++i, --j) {
       char tmp = seq.s[i];
