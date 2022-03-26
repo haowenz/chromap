@@ -165,6 +165,9 @@ class SequenceBatch {
           seed = ((seed << 2) | current_base) & mask;  // forward k-mer
         } else {
           seed = (seed << 2) & mask;  // N->A
+          if (effective_range_[2] == -1) {
+            seed |= 3ull;  // N->T if the sequence are reverse complemented
+          }
         }
       } else {
         seed = (seed << 2) & mask;  // Pad A
