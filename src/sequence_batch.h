@@ -81,6 +81,25 @@ class SequenceBatch {
     return negative_sequence_batch_[sequence_index];
   }
 
+  // big_endian: N_pos is in the order of sequence
+  // little_endian: N_pos is in the order from the sequence right side to left, 
+  //                this is the order of the GenerateSeed
+  inline void GetSequenceNsAt(uint32_t sequence_index, bool little_endian, std::vector<int> &N_pos) {
+    int l = sequence_batch_[sequence_index]->seq.l;
+    char *s = sequence_batch_[sequence_index]->seq.s;
+    int i;
+    N_pos.clear();
+    if (little_endian) {
+      for (i = l - 1; i >= 0; --i) {
+        if (s[i] == 'N') N_pos.push_back(l - 1 - i);
+      }
+    } else {
+      for (i = 0; i < l; ++i) {
+        if (s[i] == 'N') N_pos.push_back(i);
+      }
+    }
+  }
+
   inline void SetSeqEffectiveRange(int start, int end, int strand) {
     effective_range_[0] = start;
     effective_range_[1] = end;
@@ -165,9 +184,6 @@ class SequenceBatch {
           seed = ((seed << 2) | current_base) & mask;  // forward k-mer
         } else {
           seed = (seed << 2) & mask;  // N->A
-          if (effective_range_[2] == -1) {
-            seed |= 3ull;  // N->T if the sequence are reverse complemented
-          }
         }
       } else {
         seed = (seed << 2) & mask;  // Pad A

@@ -340,6 +340,10 @@ void Chromap::ComputeBarcodeAbundance(uint64_t max_num_sample_barcodes) {
     while (num_loaded_barcodes > 0) {
       for (uint32_t barcode_index = 0; barcode_index < num_loaded_barcodes;
            ++barcode_index) {
+        std::vector<int> N_pos ; // position of Ns
+        barcode_batch.GetSequenceNsAt(barcode_index, true, N_pos);
+        if (N_pos.size() > 0) continue;
+
         uint32_t barcode_length =
             barcode_batch.GetSequenceLengthAt(barcode_index);
         uint64_t barcode_key = barcode_batch.GenerateSeedFromSequenceAt(
@@ -413,7 +417,12 @@ bool Chromap::CorrectBarcodeAt(uint32_t barcode_index,
       barcode_index, 0, barcode_length);
   khiter_t barcode_whitelist_lookup_table_iterator =
       kh_get(k64_seq, barcode_whitelist_lookup_table_, barcode_key);
-  if (barcode_whitelist_lookup_table_iterator !=
+  std::vector<int> N_pos ; // position of Ns
+  
+  barcode_batch.GetSequenceNsAt(barcode_index, true, N_pos);
+  if (N_pos.size() > (uint32_t)mapping_parameters_.barcode_correction_error_threshold) return false;
+  
+  if (N_pos.size() == 0 && barcode_whitelist_lookup_table_iterator !=
       kh_end(barcode_whitelist_lookup_table_)) {
     // Correct barcode
     ++num_barcode_in_whitelist;
@@ -426,12 +435,20 @@ bool Chromap::CorrectBarcodeAt(uint32_t barcode_index,
     const char *barcode_qual = barcode_batch.GetSequenceQualAt(barcode_index);
     std::vector<BarcodeWithQual> corrected_barcodes_with_quals;
     uint64_t mask = (uint64_t)3;
-    for (uint32_t i = 0; i < barcode_length; ++i) {
+    uint32_t i_start = 0;
+    uint32_t i_end = barcode_length;
+    uint32_t ti_limit = 3;
+    if (N_pos.size() > 0) {
+      i_start = N_pos[0];
+      i_end = N_pos[0] + 1;
+      ti_limit = 4;
+    }
+    for (uint32_t i = i_start; i < i_end; ++i) {
       uint64_t barcode_key_to_change = mask << (2 * i);
       barcode_key_to_change = ~barcode_key_to_change;
       barcode_key_to_change &= barcode_key;
       uint64_t base_to_change1 = (barcode_key >> (2 * i)) & mask;
-      for (uint32_t ti = 0; ti < 3; ++ti) {
+      for (uint32_t ti = 0; ti < ti_limit; ++ti) {
         // change the base
         base_to_change1 += 1;
         base_to_change1 &= mask;
@@ -462,14 +479,22 @@ bool Chromap::CorrectBarcodeAt(uint32_t barcode_index,
           // (char)0 << "\n";
         }
         if (mapping_parameters_.barcode_correction_error_threshold == 2) {
-          for (uint32_t j = i + 1; j < barcode_length; ++j) {
+          uint32_t j_start = i + 1;
+          uint32_t j_end = barcode_length;
+          uint32_t ti2_limit = 3;
+          if (N_pos.size() == 2) {
+            j_start = N_pos[1];
+            j_end = N_pos[1] + 1;
+            ti2_limit = 4;
+          }
+          for (uint32_t j = j_start; j < j_end; ++j) {
             uint64_t barcode_key_to_change2 = mask << (2 * i);
             barcode_key_to_change2 = mask << (2 * j);
             barcode_key_to_change2 = ~barcode_key_to_change2;
             barcode_key_to_change2 &= corrected_barcode_key;
             uint64_t base_to_change2 =
                 (corrected_barcode_key >> (2 * j)) & mask;
-            for (uint32_t ti2 = 0; ti2 < 3; ++ti2) {
+            for (uint32_t ti2 = 0; ti2 < ti2_limit; ++ti2) {
               // change the base
               base_to_change2 += 1;
               base_to_change2 &= mask;
