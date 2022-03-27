@@ -341,7 +341,7 @@ void Chromap::ComputeBarcodeAbundance(uint64_t max_num_sample_barcodes) {
       for (uint32_t barcode_index = 0; barcode_index < num_loaded_barcodes;
            ++barcode_index) {
         std::vector<int> N_pos ; // position of Ns
-        barcode_batch.GetSequenceNsAt(barcode_index, true, N_pos);
+        barcode_batch.GetSequenceNsAt(barcode_index, /*little_endian=*/true, N_pos);
         if (N_pos.size() > 0) continue;
 
         uint32_t barcode_length =
@@ -419,7 +419,7 @@ bool Chromap::CorrectBarcodeAt(uint32_t barcode_index,
       kh_get(k64_seq, barcode_whitelist_lookup_table_, barcode_key);
   std::vector<int> N_pos ; // position of Ns
   
-  barcode_batch.GetSequenceNsAt(barcode_index, true, N_pos);
+  barcode_batch.GetSequenceNsAt(barcode_index, /*little_endian=*/true, N_pos);
   if (N_pos.size() > (uint32_t)mapping_parameters_.barcode_correction_error_threshold) return false;
   
   if (N_pos.size() == 0 && barcode_whitelist_lookup_table_iterator !=
