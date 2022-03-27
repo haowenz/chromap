@@ -30,12 +30,12 @@ uint32_t SequenceBatch::LoadBatch() {
     if (length > 0) {
       kseq_t *sequence = sequence_batch_[sequence_index];
       std::swap(sequence_kseq_->seq, sequence->seq);
-      ReplaceByEffectiveRange(sequence->seq, true);
+      ReplaceByEffectiveRange(sequence->seq, /*is_seq=*/true);
       std::swap(sequence_kseq_->name, sequence->name);
       std::swap(sequence_kseq_->comment, sequence->comment);
       if (sequence_kseq_->qual.l != 0) {  // fastq file
         std::swap(sequence_kseq_->qual, sequence->qual);
-        ReplaceByEffectiveRange(sequence->qual, false);
+        ReplaceByEffectiveRange(sequence->qual, /*is_seq=*/false);
       }
       sequence->id = num_loaded_sequences_;
       ++num_loaded_sequences_;
@@ -71,14 +71,14 @@ bool SequenceBatch::LoadOneSequenceAndSaveAt(uint32_t sequence_index) {
   if (length > 0) {
     kseq_t *sequence = sequence_batch_[sequence_index];
     std::swap(sequence_kseq_->seq, sequence->seq);
-    ReplaceByEffectiveRange(sequence->seq, true);
+    ReplaceByEffectiveRange(sequence->seq, /*is_seq=*/true);
     std::swap(sequence_kseq_->name, sequence->name);
     std::swap(sequence_kseq_->comment, sequence->comment);
     sequence->id = num_loaded_sequences_;
     ++num_loaded_sequences_;
     if (sequence_kseq_->qual.l != 0) {  // fastq file
       std::swap(sequence_kseq_->qual, sequence->qual);
-      ReplaceByEffectiveRange(sequence->qual, false);
+      ReplaceByEffectiveRange(sequence->qual, /*is_seq=*/false);
     }
   } else {
     if (length != -1) {
@@ -104,12 +104,12 @@ uint32_t SequenceBatch::LoadAllSequences() {
       sequence_batch_.emplace_back((kseq_t *)calloc(1, sizeof(kseq_t)));
       kseq_t *sequence = sequence_batch_.back();
       std::swap(sequence_kseq_->seq, sequence->seq);
-      ReplaceByEffectiveRange(sequence->seq, true);
+      ReplaceByEffectiveRange(sequence->seq, /*is_seq=*/true);
       std::swap(sequence_kseq_->name, sequence->name);
       std::swap(sequence_kseq_->comment, sequence->comment);
       if (sequence_kseq_->qual.l != 0) {  // fastq file
         std::swap(sequence_kseq_->qual, sequence->qual);
-        ReplaceByEffectiveRange(sequence->qual, false);
+        ReplaceByEffectiveRange(sequence->qual, /*is_seq=*/false);
       }
       sequence->id = num_loaded_sequences_;
       ++num_loaded_sequences_;
