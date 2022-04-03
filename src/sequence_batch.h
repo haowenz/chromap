@@ -129,14 +129,16 @@ class SequenceBatch {
 
   inline void TrimSequenceAt(uint32_t sequence_index, int length_after_trim) {
     kseq_t *sequence = sequence_batch_[sequence_index];
-    negative_sequence_batch_[sequence_index].erase(
-        negative_sequence_batch_[sequence_index].begin(),
-        negative_sequence_batch_[sequence_index].begin() + sequence->seq.l -
-            length_after_trim);
-    sequence->seq.l = length_after_trim;
-    sequence->seq.s[sequence->seq.l] = '\0';
-    sequence->qual.l = length_after_trim;
-    sequence->qual.s[sequence->qual.l] = '\0';
+    if (length_after_trim < (int)sequence->seq.l) {
+      negative_sequence_batch_[sequence_index].erase(
+          negative_sequence_batch_[sequence_index].begin(),
+          negative_sequence_batch_[sequence_index].begin() + sequence->seq.l -
+          length_after_trim);
+      sequence->seq.l = length_after_trim;
+      sequence->seq.s[sequence->seq.l] = '\0';
+      sequence->qual.l = length_after_trim;
+      sequence->qual.s[sequence->qual.l] = '\0';
+    }
   }
 
   inline void SwapSequenceBatch(SequenceBatch &batch) {
