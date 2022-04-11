@@ -129,6 +129,7 @@ class SequenceBatch {
 
   inline void TrimSequenceAt(uint32_t sequence_index, int length_after_trim) {
     kseq_t *sequence = sequence_batch_[sequence_index];
+    // The case of equality may arise when this read is contained in the mate.
     if (length_after_trim < (int)sequence->seq.l) {
       negative_sequence_batch_[sequence_index].erase(
           negative_sequence_batch_[sequence_index].begin(),
