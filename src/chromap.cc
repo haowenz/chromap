@@ -134,10 +134,16 @@ void Chromap::TrimAdapterForPairedEndRead(uint32_t pair_index,
   for (int si = 0; si < error_threshold_for_merging + 1; ++si) {
     size_t seed_start_position =
         negative_read2.find(read1 + si * seed_length, 0, seed_length);
-    while (seed_start_position != std::string::npos &&
-           (int)(read2_length - seed_start_position + seed_length * si) >=
+    while (seed_start_position != std::string::npos) {
+      // The seed hit does not allow enough match based on the length
+      //   before the hit
+      if ( !((int)(read2_length - seed_start_position + seed_length * si) >=
                min_overlap_length &&
-           seed_start_position >= (size_t)(si * seed_length)) {
+           seed_start_position >= (size_t)(si * seed_length) )) {
+        seed_start_position = negative_read2.find(
+            read1 + si * seed_length, seed_start_position + 1, seed_length);
+        continue;
+      }
       bool can_merge = true;
       int num_errors = 0;
       // The bases before the seed.
