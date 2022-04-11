@@ -108,8 +108,8 @@ uint32_t Chromap::LoadPairedEndReadsWithBarcodes(SequenceBatch &read_batch1,
 void Chromap::TrimAdapterForPairedEndRead(uint32_t pair_index,
                                           SequenceBatch &read_batch1,
                                           SequenceBatch &read_batch2) {
-  uint32_t raw_read1_length = read_batch1.GetSequenceLengthAt(pair_index);
-  uint32_t raw_read2_length = read_batch2.GetSequenceLengthAt(pair_index);
+  const uint32_t raw_read1_length = read_batch1.GetSequenceLengthAt(pair_index);
+  const uint32_t raw_read2_length = read_batch2.GetSequenceLengthAt(pair_index);
   const char *raw_read1 = read_batch1.GetSequenceAt(pair_index);
   const char *raw_read2 = read_batch2.GetSequenceAt(pair_index);
   const std::string &raw_negative_read1 =
@@ -122,14 +122,14 @@ void Chromap::TrimAdapterForPairedEndRead(uint32_t pair_index,
   const char *read1 = raw_read1_length <= raw_read2_length ? raw_read1 : raw_read2;
   const std::string &negative_read2 = raw_read1_length <= raw_read2_length ? 
                                     raw_negative_read2 : raw_negative_read1;
-  uint32_t read1_length = raw_read1_length <= raw_read2_length ? raw_read1_length :
+  const uint32_t read1_length = raw_read1_length <= raw_read2_length ? raw_read1_length :
                                     raw_read2_length;
-  uint32_t read2_length = raw_read1_length <= raw_read2_length ? raw_read2_length :
+  const uint32_t read2_length = raw_read1_length <= raw_read2_length ? raw_read2_length :
                                     raw_read1_length;
 
-  int min_overlap_length = mapping_parameters_.min_read_length;
-  int seed_length = min_overlap_length / 2;
-  int error_threshold_for_merging = 1;
+  const int min_overlap_length = mapping_parameters_.min_read_length;
+  const int seed_length = min_overlap_length / 2;
+  const int error_threshold_for_merging = 1;
   bool is_merged = false;
   for (int si = 0; si < error_threshold_for_merging + 1; ++si) {
     size_t seed_start_position =
@@ -168,13 +168,17 @@ void Chromap::TrimAdapterForPairedEndRead(uint32_t pair_index,
         // Trim adapters and TODO: fix sequencing errors
         int overlap_length =
             read2_length - seed_start_position + si * seed_length;
-        // The case that read1 is contained in read2
         int read2_offset = 0; 
+        // The case that read1 is strictly contained in read2
+        // overlap_length is inferred from the longer read2, which
+        //   could be longer than read1. In that case, we don't trim
+        //   read1 (make overlap length equal to read1 length) and
+        //   trim read2 as the original plan.
         if (overlap_length > (int)read1_length) {
           read2_offset = overlap_length - read1_length;
           overlap_length = read1_length;
         }
-        if (read1_length <= read2_length) {
+        if (raw_read1_length <= raw_read2_length) {
           read_batch1.TrimSequenceAt(pair_index, overlap_length);
           read_batch2.TrimSequenceAt(pair_index, overlap_length + read2_offset);
         } else {
