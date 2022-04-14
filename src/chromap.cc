@@ -116,36 +116,46 @@ void Chromap::TrimAdapterForPairedEndRead(uint32_t pair_index,
       read_batch1.GetNegativeSequenceAt(pair_index);
   const std::string &raw_negative_read2 =
       read_batch2.GetNegativeSequenceAt(pair_index);
-  
-  // In the actual adaptor trimming, we assuem length(read1)<=length(read2)
-  //  so we can have the case that read1 is a subset of read2
-  const char *read1 = raw_read1_length <= raw_read2_length ? raw_read1 : raw_read2;
-  const std::string &negative_read2 = raw_read1_length <= raw_read2_length ? 
-                                    raw_negative_read2 : raw_negative_read1;
-  const uint32_t read1_length = raw_read1_length <= raw_read2_length ? raw_read1_length :
-                                    raw_read2_length;
-  const uint32_t read2_length = raw_read1_length <= raw_read2_length ? raw_read2_length :
-                                    raw_read1_length;
+
+  // In the actual adaptor trimming, we assuem length(read1)<=length(read2). So
+  // we can have the case that read1 is a subset of read2.
+  const char *read1 =
+      raw_read1_length <= raw_read2_length ? raw_read1 : raw_read2;
+  const std::string &negative_read2 = raw_read1_length <= raw_read2_length
+                                          ? raw_negative_read2
+                                          : raw_negative_read1;
+  const uint32_t read1_length = raw_read1_length <= raw_read2_length
+                                    ? raw_read1_length
+                                    : raw_read2_length;
+  const uint32_t read2_length = raw_read1_length <= raw_read2_length
+                                    ? raw_read2_length
+                                    : raw_read1_length;
 
   const int min_overlap_length = mapping_parameters_.min_read_length;
   const int seed_length = min_overlap_length / 2;
   const int error_threshold_for_merging = 1;
   bool is_merged = false;
+
   for (int si = 0; si < error_threshold_for_merging + 1; ++si) {
     size_t seed_start_position =
         negative_read2.find(read1 + si * seed_length, 0, seed_length);
+
     while (seed_start_position != std::string::npos) {
-      // The seed hit does not allow enough match based on the length
-      //   before the hit
-      if ( !((int)(read2_length - seed_start_position + seed_length * si) >=
-               min_overlap_length &&
-           seed_start_position >= (size_t)(si * seed_length) )) {
+      const bool before_seed_is_enough_long =
+          seed_start_position >= (size_t)(si * seed_length);
+      const bool overlap_is_enough_long =
+          (int)(read2_length - seed_start_position + seed_length * si) >=
+          min_overlap_length;
+
+      if (!before_seed_is_enough_long || !overlap_is_enough_long) {
         seed_start_position = negative_read2.find(
             read1 + si * seed_length, seed_start_position + 1, seed_length);
         continue;
       }
+
       bool can_merge = true;
       int num_errors = 0;
+
       // The bases before the seed.
       for (int i = 0; i < seed_length * si; ++i) {
         if (negative_read2[seed_start_position - si * seed_length + i] !=
@@ -157,9 +167,10 @@ void Chromap::TrimAdapterForPairedEndRead(uint32_t pair_index,
           break;
         }
       }
-      // The bases after the seed
-      for (uint32_t i = seed_length; i + seed_start_position < read2_length
-          && read1[i];
+
+      // The bases after the seed.
+      for (uint32_t i = seed_length; i + seed_start_position < read2_length &&
+                                     si * seed_length + i < read1_length;
            ++i) {
         if (negative_read2[seed_start_position + i] !=
             read1[si * seed_length + i]) {
@@ -170,20 +181,21 @@ void Chromap::TrimAdapterForPairedEndRead(uint32_t pair_index,
           break;
         }
       }
+
       if (can_merge) {
         // Trim adapters and TODO: fix sequencing errors
         int overlap_length =
             read2_length - seed_start_position + si * seed_length;
-        int read2_offset = 0; 
-        // The case that read1 is strictly contained in read2
-        // overlap_length is inferred from the longer read2, which
-        //   could be longer than read1. In that case, we don't trim
-        //   read1 (make overlap length equal to read1 length) and
-        //   trim read2 as the original plan.
+        int read2_offset = 0;
+        // The case that read1 is strictly contained in read2. overlap_length is
+        // inferred from the longer read2, which could be longer than read1. In
+        // that case, we don't trim read1 (make overlap length equal to read1
+        // length) and trim read2 as the original plan.
         if (overlap_length > (int)read1_length) {
           read2_offset = overlap_length - read1_length;
           overlap_length = read1_length;
         }
+
         if (raw_read1_length <= raw_read2_length) {
           read_batch1.TrimSequenceAt(pair_index, overlap_length);
           read_batch2.TrimSequenceAt(pair_index, overlap_length + read2_offset);
@@ -191,14 +203,17 @@ void Chromap::TrimAdapterForPairedEndRead(uint32_t pair_index,
           read_batch1.TrimSequenceAt(pair_index, overlap_length + read2_offset);
           read_batch2.TrimSequenceAt(pair_index, overlap_length);
         }
+
         is_merged = true;
         // std::cerr << "Trimed! overlap length: " << overlap_length << ", " <<
         // read1.GetLength() << " " << read2.GetLength() << "\n";
         break;
       }
+
       seed_start_position = negative_read2.find(
           read1 + si * seed_length, seed_start_position + 1, seed_length);
     }
+
     if (is_merged) {
       break;
     }
@@ -379,8 +394,9 @@ void Chromap::ComputeBarcodeAbundance(uint64_t max_num_sample_barcodes) {
     while (num_loaded_barcodes > 0) {
       for (uint32_t barcode_index = 0; barcode_index < num_loaded_barcodes;
            ++barcode_index) {
-        std::vector<int> N_pos ; // position of Ns
-        barcode_batch.GetSequenceNsAt(barcode_index, /*little_endian=*/true, N_pos);
+        std::vector<int> N_pos;  // position of Ns
+        barcode_batch.GetSequenceNsAt(barcode_index, /*little_endian=*/true,
+                                      N_pos);
         if (N_pos.size() > 0) continue;
 
         uint32_t barcode_length =
@@ -456,13 +472,15 @@ bool Chromap::CorrectBarcodeAt(uint32_t barcode_index,
       barcode_index, 0, barcode_length);
   khiter_t barcode_whitelist_lookup_table_iterator =
       kh_get(k64_seq, barcode_whitelist_lookup_table_, barcode_key);
-  std::vector<int> N_pos ; // position of Ns
-  
+  std::vector<int> N_pos;  // position of Ns
+
   barcode_batch.GetSequenceNsAt(barcode_index, /*little_endian=*/true, N_pos);
-  if (N_pos.size() > (uint32_t)mapping_parameters_.barcode_correction_error_threshold) return false;
-  
+  if (N_pos.size() >
+      (uint32_t)mapping_parameters_.barcode_correction_error_threshold)
+    return false;
+
   if (N_pos.size() == 0 && barcode_whitelist_lookup_table_iterator !=
-      kh_end(barcode_whitelist_lookup_table_)) {
+                               kh_end(barcode_whitelist_lookup_table_)) {
     // Correct barcode
     ++num_barcode_in_whitelist;
     return true;
