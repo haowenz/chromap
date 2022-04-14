@@ -82,11 +82,12 @@ class SequenceBatch {
   }
 
   // big_endian: N_pos is in the order of sequence
-  // little_endian: N_pos is in the order from the sequence right side to left, 
+  // little_endian: N_pos is in the order from the sequence right side to left,
   //                this is the order of the GenerateSeed
-  // e.g: If the sequence is "ACN", big endian returns N at 2, 
+  // e.g: If the sequence is "ACN", big endian returns N at 2,
   //      little endian returns N at 0.
-  inline void GetSequenceNsAt(uint32_t sequence_index, bool little_endian, std::vector<int> &N_pos) {
+  inline void GetSequenceNsAt(uint32_t sequence_index, bool little_endian,
+                              std::vector<int> &N_pos) {
     const int l = sequence_batch_[sequence_index]->seq.l;
     const char *s = sequence_batch_[sequence_index]->seq.s;
     N_pos.clear();
@@ -129,17 +130,20 @@ class SequenceBatch {
 
   inline void TrimSequenceAt(uint32_t sequence_index, int length_after_trim) {
     kseq_t *sequence = sequence_batch_[sequence_index];
-    // The case of equality may arise when this read is contained in the mate.
-    if (length_after_trim < (int)sequence->seq.l) {
-      negative_sequence_batch_[sequence_index].erase(
-          negative_sequence_batch_[sequence_index].begin(),
-          negative_sequence_batch_[sequence_index].begin() + sequence->seq.l -
-          length_after_trim);
-      sequence->seq.l = length_after_trim;
-      sequence->seq.s[sequence->seq.l] = '\0';
-      sequence->qual.l = length_after_trim;
-      sequence->qual.s[sequence->qual.l] = '\0';
+
+    if (length_after_trim >= (int)sequence->seq.l) {
+      return;
     }
+
+    negative_sequence_batch_[sequence_index].erase(
+        negative_sequence_batch_[sequence_index].begin(),
+        negative_sequence_batch_[sequence_index].begin() + sequence->seq.l -
+            length_after_trim);
+
+    sequence->seq.l = length_after_trim;
+    sequence->seq.s[sequence->seq.l] = '\0';
+    sequence->qual.l = length_after_trim;
+    sequence->qual.s[sequence->qual.l] = '\0';
   }
 
   inline void SwapSequenceBatch(SequenceBatch &batch) {
