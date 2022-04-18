@@ -138,31 +138,7 @@ void SequenceBatch::FinalizeLoading() {
 }
 
 void SequenceBatch::ReplaceByEffectiveRange(kstring_t &seq, bool is_seq) {
-  if (effective_range_[0] == 0 && effective_range_[1] == -1 &&
-      effective_range_[2] == 1) {
-    return;
-  }
-  int i, j;
-  int start = effective_range_[0];
-  int end = effective_range_[1];
-  if (effective_range_[1] == -1) end = seq.l - 1;
-  for (i = 0; i < end - start + 1; ++i) {
-    seq.s[i] = seq.s[start + i];
-  }
-  seq.s[i] = '\0';
-  seq.l = end - start + 1;
-  if (effective_range_[2] == -1) {
-    if (is_seq) {
-      for (i = 0; i < (int)seq.l; ++i) {
-        seq.s[i] = Uint8ToChar(((uint8_t)3) ^ (CharToUint8(seq.s[i])));
-      }
-    }
-    for (i = 0, j = seq.l - 1; i < j; ++i, --j) {
-      char tmp = seq.s[i];
-      seq.s[i] = seq.s[j];
-      seq.s[j] = tmp;
-    }
-  }
+  seq.l = effective_range_.Replace(seq.s, seq.l, is_seq);
 }
 
 }  // namespace chromap

@@ -301,8 +301,7 @@ uint32_t Chromap::SampleInputBarcodesAndExamineLength() {
   uint32_t sample_batch_size = 1000;
   SequenceBatch barcode_batch(sample_batch_size);
 
-  barcode_batch.SetSeqEffectiveRange(barcode_format_[0], barcode_format_[1],
-                                     barcode_format_[2]);
+  barcode_batch.SetSeqEffectiveRange(barcode_format_);
 
   barcode_batch.InitializeLoading(mapping_parameters_.barcode_file_paths[0]);
 
@@ -383,8 +382,7 @@ void Chromap::LoadBarcodeWhitelist() {
 void Chromap::ComputeBarcodeAbundance(uint64_t max_num_sample_barcodes) {
   double real_start_time = GetRealTime();
   SequenceBatch barcode_batch(read_batch_size_);
-  barcode_batch.SetSeqEffectiveRange(barcode_format_[0], barcode_format_[1],
-                                     barcode_format_[2]);
+  barcode_batch.SetSeqEffectiveRange(barcode_format_);
   for (size_t read_file_index = 0;
        read_file_index < mapping_parameters_.read_file1_paths.size();
        ++read_file_index) {
@@ -717,84 +715,30 @@ void Chromap::OutputMappingStatistics() {
 }
 
 void Chromap::ParseReadFormat(const std::string &read_format) {
-  uint32_t i;
-  int j = 0;
-  int k = 0;  // for read1, read2, or barcode
-  read1_format_[0] = 0;
-  read1_format_[1] = -1;
-  read1_format_[2] = 1;
-  read2_format_[0] = 0;
-  read2_format_[1] = -1;
-  read2_format_[2] = 1;
-  barcode_format_[0] = 0;
-  barcode_format_[1] = -1;
-  barcode_format_[2] = 1;
-  int fields[3] = {0, -1, 1};
-  char buffer[20];
-  int blen = 0;
-  for (i = 0; i < read_format.size(); ++i) {
-    if (read_format[i] == ',' || i == 0) {
-      if (i > 0) {
-        buffer[blen] = '\0';
-        if (j <= 1) {
-          fields[j] = atoi(buffer);
-        } else {
-          fields[j] = buffer[0] == '+' ? 1 : -1;
-        }
-        if (k == 0)
-          memcpy(read1_format_, fields, sizeof(fields));
-        else if (k == 1)
-          memcpy(read2_format_, fields, sizeof(fields));
-        else
-          memcpy(barcode_format_, fields, sizeof(fields));
-
-        ++i;
-      }
-      if (read_format[i] == 'r' && read_format[i + 1] == '1')
-        k = 0;
-      else if (read_format[i] == 'r' && read_format[i + 1] == '2')
-        k = 1;
-      else if (read_format[i] == 'b' && read_format[i + 1] == 'c')
-        k = 2;
-      else
-        ExitWithMessage("Unknown read format: " + read_format + "\n");
-      j = 0;
-      fields[0] = fields[1] = 0;
-      i += 2;
-      blen = 0;
+  uint32_t i, j;
+  read1_format_.Init();
+  read2_format_.Init();
+  barcode_format_.Init();
+  for (i = 0; i < read_format.size(); ) {
+    for (j = i + 1; j < read_format.size() && j != ','; ++j) 
+      ;
+    bool parse_success = true;
+    if (read_format[i] == 'r' && read_format[i + 1] == '1') {
+      parse_success = read1_format_.ParseEffectiveRange(
+                read_format.c_str() + i, j - i);
+    } else if (read_format[i] == 'r' && read_format[i + 1] == '2') {
+      parse_success = read2_format_.ParseEffectiveRange(
+                read_format.c_str() + i, j - i);
+    } else if (read_format[i] == 'b' && read_format[i + 1] == 'c') {
+      parse_success = barcode_format_.ParseEffectiveRange(
+                read_format.c_str() + i, j - i);
     } else {
-      if (read_format[i] != ':') {
-        if (j < 3) {
-          buffer[blen] = read_format[i];
-          ++blen;
-        } else {
-          ExitWithMessage("Unknown read format: " + read_format + "\n");
-        }
-      } else {
-        buffer[blen] = '\0';
-        if (j <= 1) {
-          fields[j] = atoi(buffer);
-        } else {
-          fields[j] = buffer[0] == '+' ? 1 : -1;
-        }
-        ++j;
-        blen = 0;
-      }
+      parse_success = false;
     }
+    if (!parse_success) 
+      ExitWithMessage("Unknown read format: " + read_format + "\n");
+    i = j;
   }
-  buffer[blen] = '\0';
-  if (j <= 1) {
-    fields[j] = atoi(buffer);
-  } else {
-    fields[j] = buffer[0] == '+' ? 1 : -1;
-  }
-  // By initialization, it is fine even if there is no read_format specified
-  if (k == 0)
-    memcpy(read1_format_, fields, sizeof(fields));
-  else if (k == 1)
-    memcpy(read2_format_, fields, sizeof(fields));
-  else
-    memcpy(barcode_format_, fields, sizeof(fields));
 }
 
 void Chromap::GenerateCustomRidRanks(

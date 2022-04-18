@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "kseq.h"
+#include "sequence_effective_range.h"
 
 namespace chromap {
 
@@ -16,9 +17,7 @@ class SequenceBatch {
  public:
   KSEQ_INIT(gzFile, gzread);
   SequenceBatch() {
-    effective_range_[0] = 0;
-    effective_range_[1] = -1;
-    effective_range_[2] = 1;
+    effective_range_.Init();
   }
 
   // Construct once and use update sequences when loading each batch.
@@ -30,9 +29,7 @@ class SequenceBatch {
       sequence_batch_.back()->f = NULL;
     }
     negative_sequence_batch_.assign(max_num_sequences_, "");
-    effective_range_[0] = 0;
-    effective_range_[1] = -1;
-    effective_range_[2] = 1;
+    effective_range_.Init();
   }
 
   ~SequenceBatch() {
@@ -102,10 +99,8 @@ class SequenceBatch {
     }
   }
 
-  inline void SetSeqEffectiveRange(int start, int end, int strand) {
-    effective_range_[0] = start;
-    effective_range_[1] = end;
-    effective_range_[2] = strand;
+  inline void SetSeqEffectiveRange(const SequenceEffectiveRange &range) {
+    effective_range_ = range;
   }
 
   //  inline char GetReverseComplementBaseOfSequenceAt(uint32_t sequence_index,
@@ -247,7 +242,7 @@ class SequenceBatch {
   kseq_t *sequence_kseq_ = nullptr;
   std::vector<kseq_t *> sequence_batch_;
   std::vector<std::string> negative_sequence_batch_;
-  int effective_range_[3] = {0, -1, 1};  // actual range within each sequence.
+  SequenceEffectiveRange effective_range_;  // actual range within each sequence.
 
   static constexpr uint8_t char_to_uint8_table_[256] = {
       4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
