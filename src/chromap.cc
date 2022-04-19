@@ -301,7 +301,7 @@ uint32_t Chromap::SampleInputBarcodesAndExamineLength() {
   uint32_t sample_batch_size = 1000;
   SequenceBatch barcode_batch(sample_batch_size);
 
-  barcode_batch.SetSeqEffectiveRange(barcode_format_);
+  barcode_batch.SetSeqEffectiveRange(barcode_effective_range_);
 
   barcode_batch.InitializeLoading(mapping_parameters_.barcode_file_paths[0]);
 
@@ -382,7 +382,7 @@ void Chromap::LoadBarcodeWhitelist() {
 void Chromap::ComputeBarcodeAbundance(uint64_t max_num_sample_barcodes) {
   double real_start_time = GetRealTime();
   SequenceBatch barcode_batch(read_batch_size_);
-  barcode_batch.SetSeqEffectiveRange(barcode_format_);
+  barcode_batch.SetSeqEffectiveRange(barcode_effective_range_);
   for (size_t read_file_index = 0;
        read_file_index < mapping_parameters_.read_file1_paths.size();
        ++read_file_index) {
@@ -715,22 +715,22 @@ void Chromap::OutputMappingStatistics() {
 
 void Chromap::ParseReadFormat(const std::string &read_format) {
   uint32_t i, j;
-  read1_format_.Init();
-  read2_format_.Init();
-  barcode_format_.Init();
+  read1_effective_range_.Init();
+  read2_effective_range_.Init();
+  barcode_effective_range_.Init();
   for (i = 0; i < read_format.size();) {
     for (j = i + 1; j < read_format.size() && j != ','; ++j)
       ;
     bool parse_success = true;
     if (read_format[i] == 'r' && read_format[i + 1] == '1') {
-      parse_success =
-          read1_format_.ParseEffectiveRange(read_format.c_str() + i, j - i);
+      parse_success = read1_effective_range_.ParseEffectiveRange(
+          read_format.c_str() + i, j - i);
     } else if (read_format[i] == 'r' && read_format[i + 1] == '2') {
-      parse_success =
-          read2_format_.ParseEffectiveRange(read_format.c_str() + i, j - i);
+      parse_success = read2_effective_range_.ParseEffectiveRange(
+          read_format.c_str() + i, j - i);
     } else if (read_format[i] == 'b' && read_format[i + 1] == 'c') {
-      parse_success =
-          barcode_format_.ParseEffectiveRange(read_format.c_str() + i, j - i);
+      parse_success = barcode_effective_range_.ParseEffectiveRange(
+          read_format.c_str() + i, j - i);
     } else {
       parse_success = false;
     }
