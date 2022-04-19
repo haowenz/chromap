@@ -91,8 +91,8 @@ class BarcodeTranslator {
     sequence.reserve(seed_length);
     uint64_t mask_ = 3;
     for (uint32_t i = 0; i < seed_length; ++i) {
-      sequence.push_back(SequenceBatch::Uint8ToChar(
-          (seed >> ((seed_length - 1 - i) * 2)) & mask_));
+      sequence.push_back(
+          Uint8ToChar((seed >> ((seed_length - 1 - i) * 2)) & mask_));
     }
     return sequence;
   }

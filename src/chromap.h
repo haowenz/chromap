@@ -312,8 +312,9 @@ void Chromap::MapSingleEndReads() {
                 read_batch_for_loading, barcode_batch_for_loading);
           }  // end of openmp loading task
           uint32_t history_update_threshold =
-            mm_to_candidates_cache.GetUpdateThreshold(num_loaded_reads, num_reads_, false);
-             // int grain_size = 10000;
+              mm_to_candidates_cache.GetUpdateThreshold(num_loaded_reads,
+                                                        num_reads_, false);
+          // int grain_size = 10000;
 //#pragma omp taskloop grainsize(grain_size) //num_tasks(num_threads_* 50)
 #pragma omp taskloop num_tasks( \
     mapping_parameters_.num_threads *mapping_parameters_.num_threads)
@@ -351,7 +352,7 @@ void Chromap::MapSingleEndReads() {
                     mapping_parameters_.error_threshold, index,
                     mapping_metadata);
               }
-              
+
               if (read_index < history_update_threshold) {
                 mm_history[read_index].timestamp = num_reads_;
                 mm_history[read_index].minimizers =
@@ -702,7 +703,8 @@ void Chromap::MapPairedEndReads() {
 
           int grain_size = 5000;
           uint32_t history_update_threshold =
-            mm_to_candidates_cache.GetUpdateThreshold(num_loaded_pairs, num_reads_, true);
+              mm_to_candidates_cache.GetUpdateThreshold(num_loaded_pairs,
+                                                        num_reads_, true);
 #pragma omp taskloop grainsize(grain_size)
           for (uint32_t pair_index = 0; pair_index < num_loaded_pairs;
                ++pair_index) {
@@ -917,7 +919,7 @@ void Chromap::MapPairedEndReads() {
           //}
 #pragma omp taskwait
           // Update cache
-          for (uint32_t pair_index = 0; pair_index < history_update_threshold ;
+          for (uint32_t pair_index = 0; pair_index < history_update_threshold;
                ++pair_index) {
             if (mm_history1[pair_index].timestamp != num_reads_) continue;
 

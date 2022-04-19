@@ -526,9 +526,9 @@ bool Chromap::CorrectBarcodeAt(uint32_t barcode_index,
           adjusted_qual = adjusted_qual < 3 ? 3 : adjusted_qual;
           double score =
               pow(10.0, ((-adjusted_qual) / 10.0)) * barcode_abundance;
-          corrected_barcodes_with_quals.emplace_back(BarcodeWithQual{
-              barcode_length - 1 - i,
-              SequenceBatch::Uint8ToChar(base_to_change1), 0, 0, score});
+          corrected_barcodes_with_quals.emplace_back(
+              BarcodeWithQual{barcode_length - 1 - i,
+                              Uint8ToChar(base_to_change1), 0, 0, score});
           // std::cerr << "1score: " << score << " pos1: " << barcode_length - 1
           // - i << " b1: " << base_to_change1 << " pos2: " << 0 << " b2: " <<
           // (char)0 << "\n";
@@ -579,10 +579,9 @@ bool Chromap::CorrectBarcodeAt(uint32_t barcode_index,
                 double score =
                     pow(10.0, ((-adjusted_qual) / 10.0)) * barcode_abundance;
                 corrected_barcodes_with_quals.emplace_back(BarcodeWithQual{
-                    barcode_length - 1 - i,
-                    SequenceBatch::Uint8ToChar(base_to_change1),
-                    barcode_length - 1 - j,
-                    SequenceBatch::Uint8ToChar(base_to_change2), score});
+                    barcode_length - 1 - i, Uint8ToChar(base_to_change1),
+                    barcode_length - 1 - j, Uint8ToChar(base_to_change2),
+                    score});
                 // std::cerr << "2score: " << score << " pos1: " <<
                 // barcode_length - 1 - i << " b1: " << base_to_change1 << "
                 // pos2: " << barcode_length - 1 -j << " b2: " <<
@@ -719,23 +718,23 @@ void Chromap::ParseReadFormat(const std::string &read_format) {
   read1_format_.Init();
   read2_format_.Init();
   barcode_format_.Init();
-  for (i = 0; i < read_format.size(); ) {
-    for (j = i + 1; j < read_format.size() && j != ','; ++j) 
+  for (i = 0; i < read_format.size();) {
+    for (j = i + 1; j < read_format.size() && j != ','; ++j)
       ;
     bool parse_success = true;
     if (read_format[i] == 'r' && read_format[i + 1] == '1') {
-      parse_success = read1_format_.ParseEffectiveRange(
-                read_format.c_str() + i, j - i);
+      parse_success =
+          read1_format_.ParseEffectiveRange(read_format.c_str() + i, j - i);
     } else if (read_format[i] == 'r' && read_format[i + 1] == '2') {
-      parse_success = read2_format_.ParseEffectiveRange(
-                read_format.c_str() + i, j - i);
+      parse_success =
+          read2_format_.ParseEffectiveRange(read_format.c_str() + i, j - i);
     } else if (read_format[i] == 'b' && read_format[i + 1] == 'c') {
-      parse_success = barcode_format_.ParseEffectiveRange(
-                read_format.c_str() + i, j - i);
+      parse_success =
+          barcode_format_.ParseEffectiveRange(read_format.c_str() + i, j - i);
     } else {
       parse_success = false;
     }
-    if (!parse_success) 
+    if (!parse_success)
       ExitWithMessage("Unknown read format: " + read_format + "\n");
     i = j;
   }

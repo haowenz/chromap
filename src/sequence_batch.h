@@ -10,15 +10,14 @@
 
 #include "kseq.h"
 #include "sequence_effective_range.h"
+#include "utils.h"
 
 namespace chromap {
 
 class SequenceBatch {
  public:
   KSEQ_INIT(gzFile, gzread);
-  SequenceBatch() {
-    effective_range_.Init();
-  }
+  SequenceBatch() { effective_range_.Init(); }
 
   // Construct once and use update sequences when loading each batch.
   SequenceBatch(uint32_t max_num_sequences)
@@ -164,14 +163,6 @@ class SequenceBatch {
     sequence->seq.s[base_position] = correct_base;
   }
 
-  inline static uint8_t CharToUint8(const char c) {
-    return char_to_uint8_table_[(uint8_t)c];
-  }
-
-  inline static char Uint8ToChar(const uint8_t i) {
-    return uint8_to_char_table_[i];
-  }
-
   inline uint64_t GenerateSeedFromSequenceAt(uint32_t sequence_index,
                                              uint32_t start_position,
                                              uint32_t seed_length) const {
@@ -181,8 +172,7 @@ class SequenceBatch {
     uint64_t seed = 0;
     for (uint32_t i = 0; i < seed_length; ++i) {
       if (start_position + i < sequence_length) {
-        uint8_t current_base =
-            SequenceBatch::CharToUint8(sequence[i + start_position]);
+        uint8_t current_base = CharToUint8(sequence[i + start_position]);
         if (current_base < 4) {                        // not an ambiguous base
           seed = ((seed << 2) | current_base) & mask;  // forward k-mer
         } else {
@@ -203,8 +193,7 @@ class SequenceBatch {
     uint64_t seed = 0;
     for (uint32_t i = 0; i < seed_length; ++i) {
       if (start_position + i < sequence_length) {
-        uint8_t current_base =
-            SequenceBatch::CharToUint8(sequence[i + start_position]);
+        uint8_t current_base = CharToUint8(sequence[i + start_position]);
         if (current_base < 4) {                        // not an ambiguous base
           seed = ((seed << 2) | current_base) & mask;  // forward k-mer
         } else {
@@ -233,8 +222,6 @@ class SequenceBatch {
   }
 
  protected:
-  void ReplaceByEffectiveRange(kstring_t &seq, bool is_seq);
-
   uint32_t num_loaded_sequences_ = 0;
   uint32_t max_num_sequences_ = 0;
   uint64_t num_bases_ = 0;
@@ -242,22 +229,10 @@ class SequenceBatch {
   kseq_t *sequence_kseq_ = nullptr;
   std::vector<kseq_t *> sequence_batch_;
   std::vector<std::string> negative_sequence_batch_;
-  SequenceEffectiveRange effective_range_;  // actual range within each sequence.
 
-  static constexpr uint8_t char_to_uint8_table_[256] = {
-      4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
-      4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
-      4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 0, 4, 1, 4, 4, 4, 2,
-      4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
-      4, 0, 4, 1, 4, 4, 4, 2, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 3, 4, 4, 4,
-      4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
-      4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
-      4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
-      4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
-      4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
-      4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4};
-  static constexpr char uint8_to_char_table_[8] = {'A', 'C', 'G', 'T',
-                                                   'N', 'N', 'N', 'N'};
+  // Actual range within each sequence.
+  SequenceEffectiveRange effective_range_;
+  void ReplaceByEffectiveRange(kstring_t &seq, bool is_seq);
 };
 
 }  // namespace chromap

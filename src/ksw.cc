@@ -517,7 +517,7 @@ int ksw_semi_global3(int qlen, const char *query, int tlen, const char *target, 
 	// generate the query profile
 	for (k = i = 0; k < m; ++k) {
 		const int8_t *p = &mat[k * m];
-		for (j = 0; j < qlen; ++j) qp[i++] = p[chromap::SequenceBatch::CharToUint8(query[j])];
+		for (j = 0; j < qlen; ++j) qp[i++] = p[chromap::CharToUint8(query[j])];
 	}
 	// fill the first row
 	eh[0].h = 0; eh[0].e = MINUS_INF;
@@ -528,7 +528,7 @@ int ksw_semi_global3(int qlen, const char *query, int tlen, const char *target, 
 	// DP loop
 	for (i = 0; LIKELY(i < tlen); ++i) { // target sequence is in the outer loop
 		int32_t f = MINUS_INF, h1, beg, end, t;
-		int8_t *q = &qp[chromap::SequenceBatch::CharToUint8(target[i]) * qlen];
+		int8_t *q = &qp[chromap::CharToUint8(target[i]) * qlen];
 		//beg = i > w? i - w : 0;
 		beg = i; 
 		//beg = i > 1? i - 1 : 0;
