@@ -6,9 +6,6 @@
 
 namespace chromap {
 
-constexpr uint8_t SequenceBatch::char_to_uint8_table_[256];
-constexpr char SequenceBatch::uint8_to_char_table_[8];
-
 void SequenceBatch::InitializeLoading(const std::string &sequence_file_path) {
   sequence_file_ = gzopen(sequence_file_path.c_str(), "r");
   if (sequence_file_ == NULL) {

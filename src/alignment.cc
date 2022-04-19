@@ -9,8 +9,7 @@ int GetLongestMatchLength(const char *pattern, const char *text,
   int max_match = 0;
   int tmp = 0;
   for (int i = 0; i < read_length; ++i) {
-    if (SequenceBatch::CharToUint8(pattern[i]) ==
-        SequenceBatch::CharToUint8(text[i])) {
+    if (CharToUint8(pattern[i]) == CharToUint8(text[i])) {
       ++tmp;
     } else if (tmp > max_match) {
       max_match = tmp;
@@ -148,7 +147,7 @@ int BandedAlignPatternToText(int error_threshold, const char *pattern,
                              int *mapping_end_position) {
   uint32_t Peq[5] = {0, 0, 0, 0, 0};
   for (int i = 0; i < 2 * error_threshold; i++) {
-    uint8_t base = SequenceBatch::CharToUint8(pattern[i]);
+    uint8_t base = CharToUint8(pattern[i]);
     Peq[base] = Peq[base] | (1 << i);
   }
   uint32_t highest_bit_in_band_mask = 1 << (2 * error_threshold);
@@ -161,10 +160,9 @@ int BandedAlignPatternToText(int error_threshold, const char *pattern,
   uint32_t HP = 0;
   int num_errors_at_band_start_position = 0;
   for (int i = 0; i < read_length; i++) {
-    uint8_t pattern_base =
-        SequenceBatch::CharToUint8(pattern[i + 2 * error_threshold]);
+    uint8_t pattern_base = CharToUint8(pattern[i + 2 * error_threshold]);
     Peq[pattern_base] = Peq[pattern_base] | highest_bit_in_band_mask;
-    X = Peq[SequenceBatch::CharToUint8(text[i])] | VN;
+    X = Peq[CharToUint8(text[i])] | VN;
     D0 = ((VP + (X & VP)) ^ VP) | X;
     HN = VP & D0;
     HP = VN | ~(VP | D0);
@@ -207,7 +205,7 @@ int BandedAlignPatternToTextWithDropOff(int error_threshold,
                                         int *read_mapping_length) {
   uint32_t Peq[5] = {0, 0, 0, 0, 0};
   for (int i = 0; i < 2 * error_threshold; i++) {
-    uint8_t base = SequenceBatch::CharToUint8(pattern[i]);
+    uint8_t base = CharToUint8(pattern[i]);
     Peq[base] = Peq[base] | (1 << i);
   }
   uint32_t highest_bit_in_band_mask = 1 << (2 * error_threshold);
@@ -225,10 +223,9 @@ int BandedAlignPatternToTextWithDropOff(int error_threshold,
   int fail_beginning = 0;  // the alignment failed at the beginning part
   int prev_num_errors_at_band_start_position = 0;
   for (; i < read_length; i++) {
-    uint8_t pattern_base =
-        SequenceBatch::CharToUint8(pattern[i + 2 * error_threshold]);
+    uint8_t pattern_base = CharToUint8(pattern[i + 2 * error_threshold]);
     Peq[pattern_base] = Peq[pattern_base] | highest_bit_in_band_mask;
-    X = Peq[SequenceBatch::CharToUint8(text[i])] | VN;
+    X = Peq[CharToUint8(text[i])] | VN;
     D0 = ((VP + (X & VP)) ^ VP) | X;
     HN = VP & D0;
     HP = VN | ~(VP | D0);
@@ -297,8 +294,8 @@ int BandedAlignPatternToTextWithDropOffFrom3End(int error_threshold,
                                                 int *read_mapping_length) {
   uint32_t Peq[5] = {0, 0, 0, 0, 0};
   for (int i = 0; i < 2 * error_threshold; i++) {
-    uint8_t base = SequenceBatch::CharToUint8(
-        pattern[read_length + 2 * error_threshold - 1 - i]);
+    uint8_t base =
+        CharToUint8(pattern[read_length + 2 * error_threshold - 1 - i]);
     Peq[base] = Peq[base] | (1 << i);
   }
   uint32_t highest_bit_in_band_mask = 1 << (2 * error_threshold);
@@ -318,10 +315,9 @@ int BandedAlignPatternToTextWithDropOffFrom3End(int error_threshold,
   for (; i < read_length; i++) {
     // printf("%c %c %d\n", pattern[read_length - 1 - i], pattern[read_length -
     // 1 - i + error_threshold], text[read_length - 1 - i]);
-    uint8_t pattern_base =
-        SequenceBatch::CharToUint8(pattern[read_length - 1 - i]);
+    uint8_t pattern_base = CharToUint8(pattern[read_length - 1 - i]);
     Peq[pattern_base] = Peq[pattern_base] | highest_bit_in_band_mask;
-    X = Peq[SequenceBatch::CharToUint8(text[read_length - 1 - i])] | VN;
+    X = Peq[CharToUint8(text[read_length - 1 - i])] | VN;
     D0 = ((VP + (X & VP)) ^ VP) | X;
     HN = VP & D0;
     HP = VN | ~(VP | D0);
@@ -407,10 +403,10 @@ void BandedAlign4PatternsToText(int error_threshold, const char **patterns,
     Peq[ai] = _mm_setzero_si128();
   }
   for (int i = 0; i < 2 * error_threshold; i++) {
-    uint8_t base0 = SequenceBatch::CharToUint8(reference_sequence0[i]);
-    uint8_t base1 = SequenceBatch::CharToUint8(reference_sequence1[i]);
-    uint8_t base2 = SequenceBatch::CharToUint8(reference_sequence2[i]);
-    uint8_t base3 = SequenceBatch::CharToUint8(reference_sequence3[i]);
+    uint8_t base0 = CharToUint8(reference_sequence0[i]);
+    uint8_t base1 = CharToUint8(reference_sequence1[i]);
+    uint8_t base2 = CharToUint8(reference_sequence2[i]);
+    uint8_t base3 = CharToUint8(reference_sequence3[i]);
     Peq[base0] = _mm_or_si128(highest_bit_in_band_mask_vpu0, Peq[base0]);
     Peq[base1] = _mm_or_si128(highest_bit_in_band_mask_vpu1, Peq[base1]);
     Peq[base2] = _mm_or_si128(highest_bit_in_band_mask_vpu2, Peq[base2]);
@@ -432,19 +428,15 @@ void BandedAlign4PatternsToText(int error_threshold, const char **patterns,
   __m128i num_errors_at_band_start_position_vpu = _mm_setzero_si128();
   __m128i early_stop_threshold_vpu = _mm_set1_epi32(error_threshold * 3);
   for (int i = 0; i < read_length; i++) {
-    uint8_t base0 = SequenceBatch::CharToUint8(
-        reference_sequence0[i + 2 * error_threshold]);
-    uint8_t base1 = SequenceBatch::CharToUint8(
-        reference_sequence1[i + 2 * error_threshold]);
-    uint8_t base2 = SequenceBatch::CharToUint8(
-        reference_sequence2[i + 2 * error_threshold]);
-    uint8_t base3 = SequenceBatch::CharToUint8(
-        reference_sequence3[i + 2 * error_threshold]);
+    uint8_t base0 = CharToUint8(reference_sequence0[i + 2 * error_threshold]);
+    uint8_t base1 = CharToUint8(reference_sequence1[i + 2 * error_threshold]);
+    uint8_t base2 = CharToUint8(reference_sequence2[i + 2 * error_threshold]);
+    uint8_t base3 = CharToUint8(reference_sequence3[i + 2 * error_threshold]);
     Peq[base0] = _mm_or_si128(highest_bit_in_band_mask_vpu0, Peq[base0]);
     Peq[base1] = _mm_or_si128(highest_bit_in_band_mask_vpu1, Peq[base1]);
     Peq[base2] = _mm_or_si128(highest_bit_in_band_mask_vpu2, Peq[base2]);
     Peq[base3] = _mm_or_si128(highest_bit_in_band_mask_vpu3, Peq[base3]);
-    X = _mm_or_si128(Peq[SequenceBatch::CharToUint8(text[i])], VN);
+    X = _mm_or_si128(Peq[CharToUint8(text[i])], VN);
     D0 = _mm_and_si128(X, VP);
     D0 = _mm_add_epi32(D0, VP);
     D0 = _mm_xor_si128(D0, VP);
@@ -548,14 +540,14 @@ void BandedAlign8PatternsToText(int error_threshold, const char **patterns,
     Peq[ai] = _mm_setzero_si128();
   }
   for (int i = 0; i < 2 * error_threshold; i++) {
-    uint8_t base0 = SequenceBatch::CharToUint8(reference_sequence0[i]);
-    uint8_t base1 = SequenceBatch::CharToUint8(reference_sequence1[i]);
-    uint8_t base2 = SequenceBatch::CharToUint8(reference_sequence2[i]);
-    uint8_t base3 = SequenceBatch::CharToUint8(reference_sequence3[i]);
-    uint8_t base4 = SequenceBatch::CharToUint8(reference_sequence4[i]);
-    uint8_t base5 = SequenceBatch::CharToUint8(reference_sequence5[i]);
-    uint8_t base6 = SequenceBatch::CharToUint8(reference_sequence6[i]);
-    uint8_t base7 = SequenceBatch::CharToUint8(reference_sequence7[i]);
+    uint8_t base0 = CharToUint8(reference_sequence0[i]);
+    uint8_t base1 = CharToUint8(reference_sequence1[i]);
+    uint8_t base2 = CharToUint8(reference_sequence2[i]);
+    uint8_t base3 = CharToUint8(reference_sequence3[i]);
+    uint8_t base4 = CharToUint8(reference_sequence4[i]);
+    uint8_t base5 = CharToUint8(reference_sequence5[i]);
+    uint8_t base6 = CharToUint8(reference_sequence6[i]);
+    uint8_t base7 = CharToUint8(reference_sequence7[i]);
     Peq[base0] = _mm_or_si128(highest_bit_in_band_mask_vpu0, Peq[base0]);
     Peq[base1] = _mm_or_si128(highest_bit_in_band_mask_vpu1, Peq[base1]);
     Peq[base2] = _mm_or_si128(highest_bit_in_band_mask_vpu2, Peq[base2]);
@@ -581,22 +573,14 @@ void BandedAlign8PatternsToText(int error_threshold, const char **patterns,
   __m128i num_errors_at_band_start_position_vpu = _mm_setzero_si128();
   __m128i early_stop_threshold_vpu = _mm_set1_epi16(error_threshold * 3);
   for (int i = 0; i < read_length; i++) {
-    uint8_t base0 = SequenceBatch::CharToUint8(
-        reference_sequence0[i + 2 * error_threshold]);
-    uint8_t base1 = SequenceBatch::CharToUint8(
-        reference_sequence1[i + 2 * error_threshold]);
-    uint8_t base2 = SequenceBatch::CharToUint8(
-        reference_sequence2[i + 2 * error_threshold]);
-    uint8_t base3 = SequenceBatch::CharToUint8(
-        reference_sequence3[i + 2 * error_threshold]);
-    uint8_t base4 = SequenceBatch::CharToUint8(
-        reference_sequence4[i + 2 * error_threshold]);
-    uint8_t base5 = SequenceBatch::CharToUint8(
-        reference_sequence5[i + 2 * error_threshold]);
-    uint8_t base6 = SequenceBatch::CharToUint8(
-        reference_sequence6[i + 2 * error_threshold]);
-    uint8_t base7 = SequenceBatch::CharToUint8(
-        reference_sequence7[i + 2 * error_threshold]);
+    uint8_t base0 = CharToUint8(reference_sequence0[i + 2 * error_threshold]);
+    uint8_t base1 = CharToUint8(reference_sequence1[i + 2 * error_threshold]);
+    uint8_t base2 = CharToUint8(reference_sequence2[i + 2 * error_threshold]);
+    uint8_t base3 = CharToUint8(reference_sequence3[i + 2 * error_threshold]);
+    uint8_t base4 = CharToUint8(reference_sequence4[i + 2 * error_threshold]);
+    uint8_t base5 = CharToUint8(reference_sequence5[i + 2 * error_threshold]);
+    uint8_t base6 = CharToUint8(reference_sequence6[i + 2 * error_threshold]);
+    uint8_t base7 = CharToUint8(reference_sequence7[i + 2 * error_threshold]);
     Peq[base0] = _mm_or_si128(highest_bit_in_band_mask_vpu0, Peq[base0]);
     Peq[base1] = _mm_or_si128(highest_bit_in_band_mask_vpu1, Peq[base1]);
     Peq[base2] = _mm_or_si128(highest_bit_in_band_mask_vpu2, Peq[base2]);
@@ -605,7 +589,7 @@ void BandedAlign8PatternsToText(int error_threshold, const char **patterns,
     Peq[base5] = _mm_or_si128(highest_bit_in_band_mask_vpu5, Peq[base5]);
     Peq[base6] = _mm_or_si128(highest_bit_in_band_mask_vpu6, Peq[base6]);
     Peq[base7] = _mm_or_si128(highest_bit_in_band_mask_vpu7, Peq[base7]);
-    X = _mm_or_si128(Peq[SequenceBatch::CharToUint8(text[i])], VN);
+    X = _mm_or_si128(Peq[CharToUint8(text[i])], VN);
     D0 = _mm_and_si128(X, VP);
     D0 = _mm_add_epi16(D0, VP);
     D0 = _mm_xor_si128(D0, VP);
@@ -694,8 +678,8 @@ void BandedTraceback(int error_threshold, int min_num_errors,
   // if not then there are gaps so that we have to traceback with edit distance.
   uint32_t Peq[5] = {0, 0, 0, 0, 0};
   for (int i = 0; i < 2 * error_threshold; i++) {
-    uint8_t base = SequenceBatch::CharToUint8(
-        pattern[read_length - 1 + 2 * error_threshold - i]);
+    uint8_t base =
+        CharToUint8(pattern[read_length - 1 + 2 * error_threshold - i]);
     Peq[base] = Peq[base] | (1 << i);
   }
   uint32_t highest_bit_in_band_mask = 1 << (2 * error_threshold);
@@ -708,10 +692,9 @@ void BandedTraceback(int error_threshold, int min_num_errors,
   uint32_t HP = 0;
   int num_errors_at_band_start_position = 0;
   for (int i = 0; i < read_length; i++) {
-    uint8_t pattern_base =
-        SequenceBatch::CharToUint8(pattern[read_length - 1 - i]);
+    uint8_t pattern_base = CharToUint8(pattern[read_length - 1 - i]);
     Peq[pattern_base] = Peq[pattern_base] | highest_bit_in_band_mask;
-    X = Peq[SequenceBatch::CharToUint8(text[read_length - 1 - i])] | VN;
+    X = Peq[CharToUint8(text[read_length - 1 - i])] | VN;
     D0 = ((VP + (X & VP)) ^ VP) | X;
     HN = VP & D0;
     HP = VN | ~(VP | D0);
@@ -759,7 +742,7 @@ void BandedTracebackToEnd(int error_threshold, int min_num_errors,
   // if not then there are gaps so that we have to traceback with edit distance.
   uint32_t Peq[5] = {0, 0, 0, 0, 0};
   for (int i = 0; i < 2 * error_threshold; i++) {
-    uint8_t base = SequenceBatch::CharToUint8(pattern[i]);
+    uint8_t base = CharToUint8(pattern[i]);
     Peq[base] = Peq[base] | (1 << i);
   }
   uint32_t highest_bit_in_band_mask = 1 << (2 * error_threshold);
@@ -774,10 +757,9 @@ void BandedTracebackToEnd(int error_threshold, int min_num_errors,
   for (int i = 0; i < read_length; i++) {
     // printf("=>%d %d %c %c\n", i, num_errors_at_band_start_position, pattern[i
     // + 2 * error_threshold], text[i]) ;
-    uint8_t pattern_base =
-        SequenceBatch::CharToUint8(pattern[i + 2 * error_threshold]);
+    uint8_t pattern_base = CharToUint8(pattern[i + 2 * error_threshold]);
     Peq[pattern_base] = Peq[pattern_base] | highest_bit_in_band_mask;
-    X = Peq[SequenceBatch::CharToUint8(text[i])] | VN;
+    X = Peq[CharToUint8(text[i])] | VN;
     D0 = ((VP + (X & VP)) ^ VP) | X;
     HN = VP & D0;
     HP = VN | ~(VP | D0);

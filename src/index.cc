@@ -622,7 +622,7 @@ void Index::GenerateMinimizerSketch(
   int min_position = 0;
 
   for (uint32_t position = 0; position < sequence_length; ++position) {
-    uint8_t current_base = SequenceBatch::CharToUint8(sequence[position]);
+    uint8_t current_base = CharToUint8(sequence[position]);
     std::pair<uint64_t, uint64_t> current_seed = {UINT64_MAX, UINT64_MAX};
     if (current_base < 4) {
       // Not an ambiguous base.
