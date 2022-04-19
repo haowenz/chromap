@@ -132,9 +132,9 @@ class Chromap {
   const uint32_t read_batch_size_ = 500000;
 
   // 0-start, 1-end (includsive), 2-strand(-1:minus, 1:plus)
-  SequenceEffectiveRange barcode_format_;
-  SequenceEffectiveRange read1_format_;
-  SequenceEffectiveRange read2_format_;
+  SequenceEffectiveRange barcode_effective_range_;
+  SequenceEffectiveRange read1_effective_range_;
+  SequenceEffectiveRange read2_effective_range_;
 
   std::vector<int> custom_rid_rank_;
   std::vector<int> pairs_custom_rid_rank_;
@@ -188,10 +188,10 @@ void Chromap::MapSingleEndReads() {
   SequenceBatch read_batch_for_loading(read_batch_size_);
   SequenceBatch barcode_batch(read_batch_size_);
   SequenceBatch barcode_batch_for_loading(read_batch_size_);
-  read_batch.SetSeqEffectiveRange(read1_format_);
-  read_batch_for_loading.SetSeqEffectiveRange(read1_format_);
-  barcode_batch.SetSeqEffectiveRange(barcode_format_);
-  barcode_batch_for_loading.SetSeqEffectiveRange(barcode_format_);
+  read_batch.SetSeqEffectiveRange(read1_effective_range_);
+  read_batch_for_loading.SetSeqEffectiveRange(read1_effective_range_);
+  barcode_batch.SetSeqEffectiveRange(barcode_effective_range_);
+  barcode_batch_for_loading.SetSeqEffectiveRange(barcode_effective_range_);
 
   std::vector<std::vector<MappingRecord>> mappings_on_diff_ref_seqs;
   mappings_on_diff_ref_seqs.reserve(num_reference_sequences);
@@ -559,12 +559,12 @@ void Chromap::MapPairedEndReads() {
   SequenceBatch read_batch2_for_loading(read_batch_size_);
   SequenceBatch barcode_batch_for_loading(read_batch_size_);
 
-  read_batch1.SetSeqEffectiveRange(read1_format_);
-  read_batch2.SetSeqEffectiveRange(read2_format_);
-  barcode_batch.SetSeqEffectiveRange(barcode_format_);
-  read_batch1_for_loading.SetSeqEffectiveRange(read1_format_);
-  read_batch2_for_loading.SetSeqEffectiveRange(read2_format_);
-  barcode_batch_for_loading.SetSeqEffectiveRange(barcode_format_);
+  read_batch1.SetSeqEffectiveRange(read1_effective_range_);
+  read_batch2.SetSeqEffectiveRange(read2_effective_range_);
+  barcode_batch.SetSeqEffectiveRange(barcode_effective_range_);
+  read_batch1_for_loading.SetSeqEffectiveRange(read1_effective_range_);
+  read_batch2_for_loading.SetSeqEffectiveRange(read2_effective_range_);
+  barcode_batch_for_loading.SetSeqEffectiveRange(barcode_effective_range_);
 
   // Initialize cache
   mm_cache mm_to_candidates_cache(2000003);
