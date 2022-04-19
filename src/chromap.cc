@@ -714,13 +714,15 @@ void Chromap::OutputMappingStatistics() {
 }
 
 void Chromap::ParseReadFormat(const std::string &read_format) {
-  uint32_t i, j;
   read1_effective_range_.Init();
   read2_effective_range_.Init();
   barcode_effective_range_.Init();
+
+  uint32_t i, j;
   for (i = 0; i < read_format.size();) {
     for (j = i + 1; j < read_format.size() && j != ','; ++j)
       ;
+
     bool parse_success = true;
     if (read_format[i] == 'r' && read_format[i + 1] == '1') {
       parse_success = read1_effective_range_.ParseEffectiveRange(
@@ -734,8 +736,11 @@ void Chromap::ParseReadFormat(const std::string &read_format) {
     } else {
       parse_success = false;
     }
-    if (!parse_success)
+
+    if (!parse_success) {
       ExitWithMessage("Unknown read format: " + read_format + "\n");
+    }
+
     i = j;
   }
 }
