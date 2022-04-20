@@ -128,7 +128,8 @@ class SequenceEffectiveRange {
 
   std::vector<int> starts;
   std::vector<int> ends;
-  // The barcode will be reverse-complemented after extraction if strand is '-'.
+  // Strand is either '+' or '-'. The barcode will be reverse-complemented after
+  // extraction if strand is '-'.
   char strand;
   // Whether the range has been modified by new input.
   bool default_range;
