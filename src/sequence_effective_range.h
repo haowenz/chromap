@@ -21,7 +21,6 @@ class SequenceEffectiveRange {
     starts.push_back(0);
     ends.push_back(-1);
     strand = 1;
-    range_num = 1;
     default_range = true;
   }
 
@@ -65,9 +64,9 @@ class SequenceEffectiveRange {
     std::sort(starts.begin(), starts.end());
     std::sort(ends.begin(), ends.end());
 
-    range_num = starts.size();
+    const int num_ranges = starts.size();
     if (ends[0] == -1) {
-      for (i = 0; i < range_num - 1; ++i) {
+      for (i = 0; i < num_ranges - 1; ++i) {
         ends[i] = ends[i + 1];
       }
       ends[i] = -1;
@@ -94,7 +93,8 @@ class SequenceEffectiveRange {
 
     int i, j, k;
     i = 0;
-    for (k = 0; k < range_num; ++k) {
+    const int num_ranges = starts.size();
+    for (k = 0; k < num_ranges; ++k) {
       int start = starts[k];
       int end = ends[k];
 
@@ -129,7 +129,6 @@ class SequenceEffectiveRange {
  private:
   std::vector<int> starts;
   std::vector<int> ends;
-  int range_num;
   int strand;
   // Whether the range has been modified by new input.
   bool default_range;
