@@ -31,14 +31,14 @@ class SequenceEffectiveRange {
     int j = 0;  // start, end, strand section
     char buffer[20];
     int blen = 0;
-   
+
     if (default_range) {
       starts.clear();
       ends.clear();
       strand = 1;
       default_range = false;
     }
-  
+
     for (i = 3; i <= len; ++i) {
       if (i == len || s[i] == ':') {
         buffer[blen] = '\0';
@@ -97,8 +97,14 @@ class SequenceEffectiveRange {
     for (k = 0; k < range_num; ++k) {
       int start = starts[k];
       int end = ends[k];
-      if (end == -1) end = len - 1;
-      for (j = start; j <= end; ++i, ++j) s[i] = s[j];
+
+      if (end == -1) {
+        end = len - 1;
+      }
+
+      for (j = start; j <= end; ++i, ++j) {
+        s[i] = s[j];
+      }
     }
 
     s[i] = '\0';
@@ -125,7 +131,8 @@ class SequenceEffectiveRange {
   std::vector<int> ends;
   int range_num;
   int strand;
-  bool default_range; // whether the range has been modified by new input
+  // Whether the range has been modified by new input.
+  bool default_range;
 };
 
 }  // namespace chromap
