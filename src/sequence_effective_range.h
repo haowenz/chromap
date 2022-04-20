@@ -75,19 +75,10 @@ class SequenceEffectiveRange {
     return true;
   }
 
-  // Check whether the effective range is the full range
-  bool IsFullRange() {
-    if (strand == '+' && starts[0] == 0 && ends[0] == -1) {
-      return true;
-    }
-
-    return false;
-  }
-
   // Replace by the range specified in the starts, ends section, but does not
   // apply the strand operation. Return new length.
   int Replace(char *s, int len, bool need_complement) {
-    if (IsFullRange()) {
+    if (IsFullRangeAndPositiveStrand()) {
       return len;
     }
 
@@ -127,6 +118,14 @@ class SequenceEffectiveRange {
   }
 
  private:
+  bool IsFullRangeAndPositiveStrand() {
+    if (strand == '+' && starts[0] == 0 && ends[0] == -1) {
+      return true;
+    }
+
+    return false;
+  }
+
   std::vector<int> starts;
   std::vector<int> ends;
   // The barcode will be reverse-complemented after extraction if strand is '-'.
