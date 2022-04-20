@@ -711,6 +711,10 @@ void Chromap::OutputMappingStatistics() {
 }
 
 void Chromap::ParseReadFormat(const std::string &read_format) {
+  if (read_format.empty()) {
+    return;
+  }
+
   read1_effective_range_.InitializeParsing();
   read2_effective_range_.InitializeParsing();
   barcode_effective_range_.InitializeParsing();
