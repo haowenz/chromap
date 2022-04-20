@@ -24,6 +24,13 @@ class SequenceEffectiveRange {
   }
 
   void FinalizeParsing() {
+    if (starts.empty() && ends.empty()) {
+      starts.push_back(0);
+      ends.push_back(-1);
+      strand = '+';
+      return;
+    }
+
     std::sort(starts.begin(), starts.end());
     std::sort(ends.begin(), ends.end());
 
