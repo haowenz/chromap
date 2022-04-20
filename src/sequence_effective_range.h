@@ -20,7 +20,7 @@ class SequenceEffectiveRange {
   void Init() {
     starts.push_back(0);
     ends.push_back(-1);
-    strand = 1;
+    strand = '+';
     default_range = true;
   }
 
@@ -34,7 +34,7 @@ class SequenceEffectiveRange {
     if (default_range) {
       starts.clear();
       ends.clear();
-      strand = 1;
+      strand = '+';
       default_range = false;
     }
 
@@ -46,7 +46,7 @@ class SequenceEffectiveRange {
         } else if (j == 1) {
           ends.push_back(atoi(buffer));
         } else {
-          strand = buffer[0] == '+' ? 1 : -1;
+          strand = buffer[0];
         }
 
         blen = 0;
@@ -77,7 +77,7 @@ class SequenceEffectiveRange {
 
   // Check whether the effective range is the full range
   bool IsFullRange() {
-    if (strand == 1 && starts[0] == 0 && ends[0] == -1) {
+    if (strand == '+' && starts[0] == 0 && ends[0] == -1) {
       return true;
     }
 
@@ -110,7 +110,7 @@ class SequenceEffectiveRange {
     s[i] = '\0';
     len = i;
 
-    if (strand == -1) {
+    if (strand == '-') {
       if (need_complement) {
         for (i = 0; i < len; ++i) {
           s[i] = Uint8ToChar(((uint8_t)3) ^ (CharToUint8(s[i])));
@@ -129,7 +129,8 @@ class SequenceEffectiveRange {
  private:
   std::vector<int> starts;
   std::vector<int> ends;
-  int strand;
+  // The barcode will be reverse-complemented after extraction if strand is '-'.
+  char strand;
   // Whether the range has been modified by new input.
   bool default_range;
 };
