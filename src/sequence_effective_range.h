@@ -22,6 +22,7 @@ class SequenceEffectiveRange {
     ends.push_back(-1);
     strand = 1;
     range_num = 1;
+    default_range = true;
   }
 
   // Return false if it fails to parse the format string.
@@ -30,14 +31,17 @@ class SequenceEffectiveRange {
     int j = 0;  // start, end, strand section
     char buffer[20];
     int blen = 0;
-    starts.clear();
-    ends.clear();
-    strand = 1;
-
+   
+    if (default_range) {
+      starts.clear();
+      ends.clear();
+      strand = 1;
+      default_range = false;
+    }
+  
     for (i = 3; i <= len; ++i) {
-      if (i == len || s[i] == '/' || s[i] == ':') {
+      if (i == len || s[i] == ':') {
         buffer[blen] = '\0';
-
         if (j == 0) {
           starts.push_back(atoi(buffer));
         } else if (j == 1) {
@@ -121,6 +125,7 @@ class SequenceEffectiveRange {
   std::vector<int> ends;
   int range_num;
   int strand;
+  bool default_range; // whether the range has been modified by new input
 };
 
 }  // namespace chromap

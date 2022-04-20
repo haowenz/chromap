@@ -152,8 +152,8 @@ Chromap also supports user-defined barcode format, including mixed barcode and g
 data case. User can specify the sequence structure through option **--read-format**. The value
 is a comma-separated string, each field in the string is also a semi-comma-splitted string
 
-    [r1|r2|bc]:start0/start1/...:end0/end1/...:strand
-The start and end are inclusive and -1 means the end of the read. User may use '/' symbol to specify multiple segments. The strand is presented by '+' and '-' symbol, if '-' the barcode will be reverse-complemented after extraction. The strand symbol can be omitted if it is '+' and is ignored on r1 and r2. For example,
+    [r1|r2|bc]:start:end:strand
+The start and end are inclusive and -1 means the end of the read. User may use multiple fields to specify non-consecutive segments, e.g. bc:0:15,bc:32:-1. The strand is presented by '+' and '-' symbol, if '-' the barcode will be reverse-complemented after extraction. The strand symbol can be omitted if it is '+' and is ignored on r1 and r2. For example,
 when the barcode is in the first 16bp of read1, one can use the option 
 `-1 read1.fq.gz -2 read2.fq.gz --barcode read1.fq.gz --read-format bc:0:15,r1:16:-1`
 
