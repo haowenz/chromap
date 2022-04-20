@@ -11,32 +11,34 @@
 namespace chromap {
 
 // The class handles the custom read format indicating the effective range on a
-// sequence.
+// sequence. Default is the full range.
 class SequenceEffectiveRange {
  public:
-  SequenceEffectiveRange() {}
-  ~SequenceEffectiveRange() {}
+  SequenceEffectiveRange() = default;
+  ~SequenceEffectiveRange() = default;
 
-  void Init() {
-    starts.push_back(0);
-    ends.push_back(-1);
+  void InitializeParsing() {
+    starts.clear();
+    ends.clear();
     strand = '+';
-    default_range = true;
+  }
+
+  void FinalizeParsing() {
+    std::sort(starts.begin(), starts.end());
+    std::sort(ends.begin(), ends.end());
+
+    if (ends[0] == -1) {
+      ends.erase(ends.begin());
+      ends.push_back(-1);
+    }
   }
 
   // Return false if it fails to parse the format string.
-  bool ParseEffectiveRange(const char *s, int len) {
+  bool ParseFormatStringAndAppendEffectiveRange(const char *s, int len) {
     int i;
     int j = 0;  // start, end, strand section
     char buffer[20];
     int blen = 0;
-
-    if (default_range) {
-      starts.clear();
-      ends.clear();
-      strand = '+';
-      default_range = false;
-    }
 
     for (i = 3; i <= len; ++i) {
       if (i == len || s[i] == ':') {
@@ -50,7 +52,9 @@ class SequenceEffectiveRange {
         }
 
         blen = 0;
-        if (i < len && s[i] == ':') ++j;
+        if (i < len && s[i] == ':') {
+          ++j;
+        }
       } else {
         buffer[blen] = s[i];
         ++blen;
@@ -61,23 +65,12 @@ class SequenceEffectiveRange {
       return false;
     }
 
-    std::sort(starts.begin(), starts.end());
-    std::sort(ends.begin(), ends.end());
-
-    const int num_ranges = starts.size();
-    if (ends[0] == -1) {
-      for (i = 0; i < num_ranges - 1; ++i) {
-        ends[i] = ends[i + 1];
-      }
-      ends[i] = -1;
-    }
-
     return true;
   }
 
   // Replace by the range specified in the starts, ends section, but does not
   // apply the strand operation. Return new length.
-  int Replace(char *s, int len, bool need_complement) {
+  int Replace(char *s, int len, bool need_complement) const {
     if (IsFullRangeAndPositiveStrand()) {
       return len;
     }
@@ -118,7 +111,7 @@ class SequenceEffectiveRange {
   }
 
  private:
-  bool IsFullRangeAndPositiveStrand() {
+  bool IsFullRangeAndPositiveStrand() const {
     if (strand == '+' && starts[0] == 0 && ends[0] == -1) {
       return true;
     }
@@ -126,13 +119,11 @@ class SequenceEffectiveRange {
     return false;
   }
 
-  std::vector<int> starts;
-  std::vector<int> ends;
+  std::vector<int> starts = {0};
+  std::vector<int> ends = {-1};
   // Strand is either '+' or '-'. The barcode will be reverse-complemented after
   // extraction if strand is '-'.
-  char strand;
-  // Whether the range has been modified by new input.
-  bool default_range;
+  char strand = '+';
 };
 
 }  // namespace chromap
