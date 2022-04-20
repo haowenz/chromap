@@ -17,18 +17,19 @@ namespace chromap {
 class SequenceBatch {
  public:
   KSEQ_INIT(gzFile, gzread);
-  SequenceBatch() { effective_range_.Init(); }
+  SequenceBatch() = default;
 
   // Construct once and use update sequences when loading each batch.
-  SequenceBatch(uint32_t max_num_sequences)
-      : max_num_sequences_(max_num_sequences) {
+  SequenceBatch(uint32_t max_num_sequences,
+                const SequenceEffectiveRange &effective_range)
+      : max_num_sequences_(max_num_sequences),
+        effective_range_(effective_range) {
     sequence_batch_.reserve(max_num_sequences_);
     for (uint32_t i = 0; i < max_num_sequences_; ++i) {
       sequence_batch_.emplace_back((kseq_t *)calloc(1, sizeof(kseq_t)));
       sequence_batch_.back()->f = NULL;
     }
     negative_sequence_batch_.assign(max_num_sequences_, "");
-    effective_range_.Init();
   }
 
   ~SequenceBatch() {
@@ -96,10 +97,6 @@ class SequenceBatch {
         if (s[i] == 'N') N_pos.push_back(i);
       }
     }
-  }
-
-  inline void SetSeqEffectiveRange(const SequenceEffectiveRange &range) {
-    effective_range_ = range;
   }
 
   //  inline char GetReverseComplementBaseOfSequenceAt(uint32_t sequence_index,
@@ -231,7 +228,7 @@ class SequenceBatch {
   std::vector<std::string> negative_sequence_batch_;
 
   // Actual range within each sequence.
-  SequenceEffectiveRange effective_range_;
+  const SequenceEffectiveRange effective_range_;
   void ReplaceByEffectiveRange(kstring_t &seq, bool is_seq);
 };
 
