@@ -17,7 +17,7 @@ namespace chromap {
 class SequenceBatch {
  public:
   KSEQ_INIT(gzFile, gzread);
-  SequenceBatch() = default;
+  SequenceBatch() : effective_range_(SequenceEffectiveRange()) {}
 
   // Construct once and use update sequences when loading each batch.
   SequenceBatch(uint32_t max_num_sequences,
