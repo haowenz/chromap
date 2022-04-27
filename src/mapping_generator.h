@@ -155,40 +155,39 @@ void MappingGenerator<MappingRecord>::VerifyCandidates(
 
   // Directly obtain the non-split mapping in ideal case and return without
   // running actual verification.
-  if (!mapping_parameters_.split_alignment) {
-    uint32_t i;
-    int maxCnt = 0;
-    int maxTag = 0;
-    // printf("LI_DEBUG: %u %u\n", positive_candidates.size() +
-    // negative_candidates.size(), minimizers.size()) ;
-    for (i = 0; i < positive_candidates.size(); ++i) {
+  const bool has_one_candidate =
+      (positive_candidates.size() + negative_candidates.size() == 1);
+  if (!mapping_parameters_.split_alignment && has_one_candidate) {
+    uint32_t num_all_minimizer_candidates = 0;
+    uint32_t all_minimizer_candidate_index = 0;
+    Direction all_minimizer_candidate_direction = kPositive;
+
+    for (uint32_t i = 0; i < positive_candidates.size(); ++i) {
 #ifdef LI_DEBUG
       printf("%s + %u %u %d:%d\n", __func__, i, positive_candidates[i].count,
              (int)(positive_candidates[i].position >> 32),
              (int)positive_candidates[i].position);
 #endif
       if (positive_candidates[i].count == minimizers.size()) {
-        maxTag = i << 1;
-        ++maxCnt;
+        all_minimizer_candidate_index = i;
+        ++num_all_minimizer_candidates;
       }
     }
 
-    for (i = 0; i < negative_candidates.size(); ++i) {
+    for (uint32_t i = 0; i < negative_candidates.size(); ++i) {
 #ifdef LI_DEBUG
       printf("%s - %u %u %d:%d\n", __func__, i, negative_candidates[i].count,
              (int)(negative_candidates[i].position >> 32),
              (int)negative_candidates[i].position);
 #endif
       if (negative_candidates[i].count == minimizers.size()) {
-        maxTag = (i << 1) | 1;
-        ++maxCnt;
+        all_minimizer_candidate_index = i;
+        all_minimizer_candidate_direction = kNegative;
+        ++num_all_minimizer_candidates;
       }
     }
 
-    if (maxCnt == 1 &&
-        positive_candidates.size() + negative_candidates.size() == 1) {
-      Direction candidate_direction = (maxTag & 1) ? kNegative : kPositive;
-      uint32_t ci = maxTag >> 1;
+    if (num_all_minimizer_candidates == 1) {
       num_best_mappings = 1;
       num_second_best_mappings = 0;
       min_num_errors = 0;
@@ -196,37 +195,39 @@ void MappingGenerator<MappingRecord>::VerifyCandidates(
       uint32_t rid = 0;
       uint32_t position = 0;
       uint32_t read_length = read_batch.GetSequenceLengthAt(read_index);
-      if (candidate_direction == kPositive) {
-        rid = positive_candidates[ci].position >> 32;
-        position = positive_candidates[ci].position;
+
+      if (all_minimizer_candidate_direction == kPositive) {
+        rid = positive_candidates[all_minimizer_candidate_index].position >> 32;
+        position = positive_candidates[all_minimizer_candidate_index].position;
       } else {
-        rid = negative_candidates[ci].position >> 32;
-        position = (uint32_t)negative_candidates[ci].position - read_length + 1;
+        rid = negative_candidates[all_minimizer_candidate_index].position >> 32;
+        position = (uint32_t)negative_candidates[all_minimizer_candidate_index]
+                       .position -
+                   read_length + 1;
       }
 
-      bool flag = true;
+      bool is_valid_candidate = true;
       if (position < (uint32_t)mapping_parameters_.error_threshold ||
           position >= reference.GetSequenceLengthAt(rid) ||
           position + read_length + mapping_parameters_.error_threshold >=
               reference.GetSequenceLengthAt(rid)) {
-        flag = false;
+        is_valid_candidate = false;
       }
 
-      if (flag) {
-        if (candidate_direction == kPositive) {
+      if (is_valid_candidate) {
+        if (all_minimizer_candidate_direction == kPositive) {
           positive_mappings.emplace_back(
-              0, positive_candidates[ci].position + read_length - 1);
+              0, positive_candidates[all_minimizer_candidate_index].position +
+                     read_length - 1);
         } else {
-          negative_mappings.emplace_back(0, negative_candidates[ci].position);
+          negative_mappings.emplace_back(
+              0, negative_candidates[all_minimizer_candidate_index].position);
         }
-        // fprintf(stderr, "Saved %d\n", positive_candidates.size() +
-        // negative_candidates.size() ) ;
+
         return;
       }
     }
   }
-  // printf("Notsaved %d\n", positive_candidates.size() +
-  // negative_candidates.size()) ;
 
   // Use more sophicated approach to obtain the mapping.
   // Sort the candidates by their count in descending order.
