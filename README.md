@@ -1,4 +1,4 @@
-[![CI](https://github.com/haowenz/chromap/actions/workflows/ci.yml/badge.svg)](https://github.com/haowenz/chromap/actions/workflows/ci.yml) [![Anaconda-Server Badge](https://anaconda.org/bioconda/chromap/badges/license.svg)](https://anaconda.org/bioconda/chromap) [![Anaconda-Server Badge](https://anaconda.org/bioconda/chromap/badges/version.svg)](https://anaconda.org/bioconda/chromap) [![Anaconda-Server Badge](https://anaconda.org/bioconda/chromap/badges/platforms.svg)](https://anaconda.org/bioconda/chromap)
+[![GitHub build](https://github.com/haowenz/chromap/actions/workflows/ci.yml/badge.svg)](https://github.com/haowenz/chromap/actions/workflows/ci.yml) ![GitHub license](https://img.shields.io/github/license/haowenz/chromap) ![Conda version](https://img.shields.io/conda/v/bioconda/chromap) ![Conda platform](https://img.shields.io/conda/pn/bioconda/chromap) ![Conda download](https://img.shields.io/conda/dn/bioconda/chromap)
 
 ## <a name="started"></a>Getting Started
 ```sh
