@@ -1,4 +1,4 @@
-[![GitHub build](https://github.com/haowenz/chromap/actions/workflows/ci.yml/badge.svg)](https://github.com/haowenz/chromap/actions/workflows/ci.yml) ![GitHub license](https://img.shields.io/github/license/haowenz/chromap) ![Conda version](https://img.shields.io/conda/v/bioconda/chromap) ![Conda platform](https://img.shields.io/conda/pn/bioconda/chromap) ![Conda download](https://img.shields.io/conda/dn/bioconda/chromap)
+[![GitHub build](https://github.com/haowenz/chromap/actions/workflows/ci.yml/badge.svg)](https://github.com/haowenz/chromap/actions/workflows/ci.yml) [![GitHub license](https://img.shields.io/github/license/haowenz/chromap)](https://github.com/haowenz/chromap/blob/master/LICENSE) [![Conda version](https://img.shields.io/conda/v/bioconda/chromap)](https://anaconda.org/bioconda/chromap) [![Conda platform](https://img.shields.io/conda/pn/bioconda/chromap)](https://anaconda.org/bioconda/chromap) [![Conda download](https://img.shields.io/conda/dn/bioconda/chromap)](https://anaconda.org/bioconda/chromap)
 
 ## <a name="started"></a>Getting Started
 ```sh
