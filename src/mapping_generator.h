@@ -61,6 +61,10 @@ class MappingGenerator {
       std::vector<std::vector<MappingRecord>> &mappings_on_diff_ref_seqs);
 
  private:
+  bool DirectlyGenerateOneNonSplitMappingSupportedByAllMinimizers(
+      const SequenceBatch &read_batch, uint32_t read_index,
+      const SequenceBatch &reference, MappingMetadata &mapping_metadata);
+
   void VerifyCandidatesOnOneDirectionUsingSIMD(
       Direction candidate_direction, uint32_t read_index,
       const SequenceBatch &read_batch, const SequenceBatch &reference,
@@ -132,17 +136,6 @@ template <typename MappingRecord>
 void MappingGenerator<MappingRecord>::VerifyCandidates(
     const SequenceBatch &read_batch, uint32_t read_index,
     const SequenceBatch &reference, MappingMetadata &mapping_metadata) {
-  const std::vector<std::pair<uint64_t, uint64_t>> &minimizers =
-      mapping_metadata.minimizers_;
-  const std::vector<Candidate> &positive_candidates =
-      mapping_metadata.positive_candidates_;
-  const std::vector<Candidate> &negative_candidates =
-      mapping_metadata.negative_candidates_;
-  std::vector<std::pair<int, uint64_t>> &positive_mappings =
-      mapping_metadata.positive_mappings_;
-  std::vector<std::pair<int, uint64_t>> &negative_mappings =
-      mapping_metadata.negative_mappings_;
-
   int &min_num_errors = mapping_metadata.min_num_errors_;
   int &num_best_mappings = mapping_metadata.num_best_mappings_;
   int &second_min_num_errors = mapping_metadata.second_min_num_errors_;
@@ -155,78 +148,11 @@ void MappingGenerator<MappingRecord>::VerifyCandidates(
 
   // Directly obtain the non-split mapping in ideal case and return without
   // running actual verification.
-  const bool has_one_candidate =
-      (positive_candidates.size() + negative_candidates.size() == 1);
-  if (!mapping_parameters_.split_alignment && has_one_candidate) {
-    uint32_t num_all_minimizer_candidates = 0;
-    uint32_t all_minimizer_candidate_index = 0;
-    Direction all_minimizer_candidate_direction = kPositive;
-
-    for (uint32_t i = 0; i < positive_candidates.size(); ++i) {
-#ifdef LI_DEBUG
-      printf("%s + %u %u %d:%d\n", __func__, i, positive_candidates[i].count,
-             (int)(positive_candidates[i].position >> 32),
-             (int)positive_candidates[i].position);
-#endif
-      if (positive_candidates[i].count == minimizers.size()) {
-        all_minimizer_candidate_index = i;
-        ++num_all_minimizer_candidates;
-      }
-    }
-
-    for (uint32_t i = 0; i < negative_candidates.size(); ++i) {
-#ifdef LI_DEBUG
-      printf("%s - %u %u %d:%d\n", __func__, i, negative_candidates[i].count,
-             (int)(negative_candidates[i].position >> 32),
-             (int)negative_candidates[i].position);
-#endif
-      if (negative_candidates[i].count == minimizers.size()) {
-        all_minimizer_candidate_index = i;
-        all_minimizer_candidate_direction = kNegative;
-        ++num_all_minimizer_candidates;
-      }
-    }
-
-    if (num_all_minimizer_candidates == 1) {
-      num_best_mappings = 1;
-      num_second_best_mappings = 0;
-      min_num_errors = 0;
-
-      uint32_t rid = 0;
-      uint32_t position = 0;
-      uint32_t read_length = read_batch.GetSequenceLengthAt(read_index);
-
-      if (all_minimizer_candidate_direction == kPositive) {
-        rid = positive_candidates[all_minimizer_candidate_index].position >> 32;
-        position = positive_candidates[all_minimizer_candidate_index].position;
-      } else {
-        rid = negative_candidates[all_minimizer_candidate_index].position >> 32;
-        position = (uint32_t)negative_candidates[all_minimizer_candidate_index]
-                       .position -
-                   read_length + 1;
-      }
-
-      bool is_valid_candidate = true;
-      if (position < (uint32_t)mapping_parameters_.error_threshold ||
-          position >= reference.GetSequenceLengthAt(rid) ||
-          position + read_length + mapping_parameters_.error_threshold >=
-              reference.GetSequenceLengthAt(rid)) {
-        is_valid_candidate = false;
-      }
-
-      if (is_valid_candidate) {
-        if (all_minimizer_candidate_direction == kPositive) {
-          positive_mappings.emplace_back(
-              0, positive_candidates[all_minimizer_candidate_index].position +
-                     read_length - 1);
-        } else {
-          negative_mappings.emplace_back(
-              0, negative_candidates[all_minimizer_candidate_index].position);
-        }
-
-        return;
-      }
-    }
+  const bool is_mapping_generated =
+      DirectlyGenerateOneNonSplitMappingSupportedByAllMinimizers(
+          read_batch, read_index, reference, mapping_metadata);
+  if (is_mapping_generated) {
+    return;
   }
 
   // Use more sophicated approach to obtain the mapping.
@@ -244,8 +170,13 @@ void MappingGenerator<MappingRecord>::VerifyCandidates(
     return;
   }
 
+  const size_t num_positive_candidates =
+      mapping_metadata.positive_candidates_.size();
+  const size_t num_negative_candidates =
+      mapping_metadata.negative_candidates_.size();
+
   // For non-split alignments, use SIMD when possible.
-  if (positive_candidates.size() < (size_t)NUM_VPU_LANES_) {
+  if (num_positive_candidates < (size_t)NUM_VPU_LANES_) {
     VerifyCandidatesOnOneDirection(kPositive, read_index, read_batch, reference,
                                    mapping_metadata);
   } else {
@@ -253,13 +184,118 @@ void MappingGenerator<MappingRecord>::VerifyCandidates(
                                             reference, mapping_metadata);
   }
 
-  if (negative_candidates.size() < (size_t)NUM_VPU_LANES_) {
+  if (num_negative_candidates < (size_t)NUM_VPU_LANES_) {
     VerifyCandidatesOnOneDirection(kNegative, read_index, read_batch, reference,
                                    mapping_metadata);
   } else {
     VerifyCandidatesOnOneDirectionUsingSIMD(kNegative, read_index, read_batch,
                                             reference, mapping_metadata);
   }
+}
+
+// Return true when there is one non-split mapping generated and the mapping is
+// supported by all the minimizers.
+template <typename MappingRecord>
+bool MappingGenerator<MappingRecord>::
+    DirectlyGenerateOneNonSplitMappingSupportedByAllMinimizers(
+        const SequenceBatch &read_batch, uint32_t read_index,
+        const SequenceBatch &reference, MappingMetadata &mapping_metadata) {
+  if (mapping_parameters_.split_alignment) {
+    return false;
+  }
+
+  const std::vector<Candidate> &positive_candidates =
+      mapping_metadata.positive_candidates_;
+  const std::vector<Candidate> &negative_candidates =
+      mapping_metadata.negative_candidates_;
+
+  const bool has_one_candidate =
+      (positive_candidates.size() + negative_candidates.size() == 1);
+
+  if (!has_one_candidate) {
+    return false;
+  }
+
+  const std::vector<std::pair<uint64_t, uint64_t>> &minimizers =
+      mapping_metadata.minimizers_;
+
+  std::vector<std::pair<int, uint64_t>> &positive_mappings =
+      mapping_metadata.positive_mappings_;
+  std::vector<std::pair<int, uint64_t>> &negative_mappings =
+      mapping_metadata.negative_mappings_;
+
+  uint32_t num_all_minimizer_candidates = 0;
+  uint32_t all_minimizer_candidate_index = 0;
+  Direction all_minimizer_candidate_direction = kPositive;
+
+  for (uint32_t i = 0; i < positive_candidates.size(); ++i) {
+#ifdef LI_DEBUG
+    printf("%s + %u %u %d:%d\n", __func__, i, positive_candidates[i].count,
+           (int)(positive_candidates[i].position >> 32),
+           (int)positive_candidates[i].position);
+#endif
+    if (positive_candidates[i].count == minimizers.size()) {
+      all_minimizer_candidate_index = i;
+      ++num_all_minimizer_candidates;
+    }
+  }
+
+  for (uint32_t i = 0; i < negative_candidates.size(); ++i) {
+#ifdef LI_DEBUG
+    printf("%s - %u %u %d:%d\n", __func__, i, negative_candidates[i].count,
+           (int)(negative_candidates[i].position >> 32),
+           (int)negative_candidates[i].position);
+#endif
+    if (negative_candidates[i].count == minimizers.size()) {
+      all_minimizer_candidate_index = i;
+      all_minimizer_candidate_direction = kNegative;
+      ++num_all_minimizer_candidates;
+    }
+  }
+
+  if (num_all_minimizer_candidates != 1) {
+    return false;
+  }
+
+  mapping_metadata.min_num_errors_ = 0;
+  mapping_metadata.num_best_mappings_ = 1;
+  mapping_metadata.num_second_best_mappings_ = 0;
+
+  uint32_t rid = 0;
+  uint32_t position = 0;
+  uint32_t read_length = read_batch.GetSequenceLengthAt(read_index);
+
+  if (all_minimizer_candidate_direction == kPositive) {
+    rid = positive_candidates[all_minimizer_candidate_index].position >> 32;
+    position = positive_candidates[all_minimizer_candidate_index].position;
+  } else {
+    rid = negative_candidates[all_minimizer_candidate_index].position >> 32;
+    position =
+        (uint32_t)negative_candidates[all_minimizer_candidate_index].position -
+        read_length + 1;
+  }
+
+  bool is_valid_candidate = true;
+  if (position < (uint32_t)mapping_parameters_.error_threshold ||
+      position >= reference.GetSequenceLengthAt(rid) ||
+      position + read_length + mapping_parameters_.error_threshold >=
+          reference.GetSequenceLengthAt(rid)) {
+    is_valid_candidate = false;
+  }
+
+  if (is_valid_candidate) {
+    if (all_minimizer_candidate_direction == kPositive) {
+      positive_mappings.emplace_back(
+          0, positive_candidates[all_minimizer_candidate_index].position +
+                 read_length - 1);
+    } else {
+      negative_mappings.emplace_back(
+          0, negative_candidates[all_minimizer_candidate_index].position);
+    }
+    return true;
+  }
+
+  return false;
 }
 
 template <typename MappingRecord>
