@@ -104,7 +104,7 @@ class MappingGenerator {
       std::vector<std::vector<MappingRecord>> &mappings_on_diff_ref_seqs);
 
   void GetRefStartEndPositionForReadFromMapping(
-      const std::pair<int, uint64_t> &mapping, const SequenceBatch &reference,
+      const DraftMapping &mapping, const SequenceBatch &reference,
       MappingInMemory &mapping_in_memory);
 
   // For single-end. It should be fully specialized.
@@ -372,9 +372,9 @@ bool MappingGenerator<MappingRecord>::
   const std::vector<std::pair<uint64_t, uint64_t>> &minimizers =
       mapping_metadata.minimizers_;
 
-  std::vector<std::pair<int, uint64_t>> &positive_mappings =
+  std::vector<DraftMapping> &positive_mappings =
       mapping_metadata.positive_mappings_;
-  std::vector<std::pair<int, uint64_t>> &negative_mappings =
+  std::vector<DraftMapping> &negative_mappings =
       mapping_metadata.negative_mappings_;
 
   uint32_t num_all_minimizer_candidates = 0;
@@ -461,7 +461,7 @@ void MappingGenerator<MappingRecord>::VerifyCandidatesOnOneDirectionUsingSIMD(
   const std::vector<Candidate> &candidates =
       candidate_direction == kPositive ? mapping_metadata.positive_candidates_
                                        : mapping_metadata.negative_candidates_;
-  std::vector<std::pair<int, uint64_t>> &mappings =
+  std::vector<DraftMapping> &mappings =
       candidate_direction == kPositive ? mapping_metadata.positive_mappings_
                                        : mapping_metadata.negative_mappings_;
   int &min_num_errors = mapping_metadata.min_num_errors_;
@@ -536,12 +536,12 @@ void MappingGenerator<MappingRecord>::VerifyCandidatesOnOneDirectionUsingSIMD(
             second_min_num_errors = mapping_edit_distances[mi];
           }
           if (candidate_direction == kPositive) {
-            mappings.emplace_back((uint8_t)mapping_edit_distances[mi],
+            mappings.emplace_back(mapping_edit_distances[mi],
                                   valid_candidates[mi].position -
                                       mapping_parameters_.error_threshold +
                                       mapping_end_positions[mi]);
           } else {
-            mappings.emplace_back((uint8_t)mapping_edit_distances[mi],
+            mappings.emplace_back(mapping_edit_distances[mi],
                                   valid_candidates[mi].position - read_length +
                                       1 - mapping_parameters_.error_threshold +
                                       mapping_end_positions[mi]);
@@ -582,12 +582,12 @@ void MappingGenerator<MappingRecord>::VerifyCandidatesOnOneDirectionUsingSIMD(
             second_min_num_errors = mapping_edit_distances[mi];
           }
           if (candidate_direction == kPositive) {
-            mappings.emplace_back((uint8_t)mapping_edit_distances[mi],
+            mappings.emplace_back(mapping_edit_distances[mi],
                                   valid_candidates[mi].position -
                                       mapping_parameters_.error_threshold +
                                       mapping_end_positions[mi]);
           } else {
-            mappings.emplace_back((uint8_t)mapping_edit_distances[mi],
+            mappings.emplace_back(mapping_edit_distances[mi],
                                   valid_candidates[mi].position - read_length +
                                       1 - mapping_parameters_.error_threshold +
                                       mapping_end_positions[mi]);
@@ -669,7 +669,7 @@ void MappingGenerator<MappingRecord>::VerifyCandidatesOnOneDirection(
   const std::vector<Candidate> &candidates =
       candidate_direction == kPositive ? mapping_metadata.positive_candidates_
                                        : mapping_metadata.negative_candidates_;
-  std::vector<std::pair<int, uint64_t>> &mappings =
+  std::vector<DraftMapping> &mappings =
       candidate_direction == kPositive ? mapping_metadata.positive_mappings_
                                        : mapping_metadata.negative_mappings_;
   std::vector<int> &split_sites = candidate_direction == kPositive
@@ -877,7 +877,7 @@ void MappingGenerator<MappingRecord>::ProcessBestMappingsForSingleEndRead(
     const std::vector<int> &best_mapping_indices, int &best_mapping_index,
     int &num_best_mappings_reported,
     std::vector<std::vector<MappingRecord>> &mappings_on_diff_ref_seqs) {
-  const std::vector<std::pair<int, uint64_t>> &mappings =
+  const std::vector<DraftMapping> &mappings =
       mapping_direction == kPositive ? mapping_metadata.positive_mappings_
                                      : mapping_metadata.negative_mappings_;
   const std::vector<int> &split_sites =
@@ -910,13 +910,13 @@ void MappingGenerator<MappingRecord>::ProcessBestMappingsForSingleEndRead(
   mapping_in_memory.read_length = read_length;
 
   for (uint32_t mi = 0; mi < mappings.size(); ++mi) {
-    if (mappings[mi].first > mapping_metadata.min_num_errors_) {
+    if (mappings[mi].GetNumErrors() > mapping_metadata.min_num_errors_) {
       continue;
     }
 
     if (best_mapping_index ==
         best_mapping_indices[num_best_mappings_reported]) {
-      mapping_in_memory.rid = mappings[mi].second >> 32;
+      mapping_in_memory.rid = mappings[mi].GetReferenceSequenceIndex();
 
       if (mapping_parameters_.split_alignment) {
         mapping_in_memory.read_split_site = split_sites[mi];
@@ -929,7 +929,7 @@ void MappingGenerator<MappingRecord>::ProcessBestMappingsForSingleEndRead(
                                         mapping_in_memory.ref_start_position +
                                         1;
       const uint8_t mapq = GetMAPQForSingleEndRead(
-          mapping_direction, /*num_errors=*/mappings[mi].first,
+          mapping_direction, /*num_errors=*/mappings[mi].GetNumErrors(),
           alignment_length, read_length,
           /*max_num_error_difference=*/mapping_parameters_.error_threshold,
           mapping_metadata);
@@ -973,11 +973,11 @@ void MappingGenerator<MappingRecord>::
   uint32_t read1_length = read_batch1.GetSequenceLengthAt(pair_index);
   uint32_t read2_length = read_batch2.GetSequenceLengthAt(pair_index);
 
-  const std::vector<std::pair<int, uint64_t>> &mappings1 =
+  const std::vector<DraftMapping> &mappings1 =
       first_read_direction == kPositive
           ? paired_end_mapping_metadata.mapping_metadata1_.positive_mappings_
           : paired_end_mapping_metadata.mapping_metadata1_.negative_mappings_;
-  const std::vector<std::pair<int, uint64_t>> &mappings2 =
+  const std::vector<DraftMapping> &mappings2 =
       second_read_direction == kPositive
           ? paired_end_mapping_metadata.mapping_metadata2_.positive_mappings_
           : paired_end_mapping_metadata.mapping_metadata2_.negative_mappings_;
@@ -994,11 +994,13 @@ void MappingGenerator<MappingRecord>::
 
 #ifdef LI_DEBUG
   for (int i = 0; i < mappings1.size(); ++i)
-    printf("mappings1 %d %d:%d\n", i, (int)(mappings1[i].second >> 32),
-           (int)mappings1[i].second);
+    printf("mappings1 %d %d:%d\n", i,
+           (int)(mappings1[i].GetReferenceSequenceIndex()),
+           (int)mappings1[i].GetReferenceSequencePosition());
   for (int i = 0; i < mappings1.size(); ++i)
-    printf("mappings2 %d %d:%d\n", i, (int)(mappings2[i].second >> 32),
-           (int)mappings2[i].second);
+    printf("mappings2 %d %d:%d\n", i,
+           (int)(mappings2[i].GetReferenceSequenceIndex()),
+           (int)mappings2[i].GetReferenceSequencePosition());
 #endif
 
   if (mapping_parameters_.split_alignment) {
@@ -1008,12 +1010,12 @@ void MappingGenerator<MappingRecord>::
     // For split alignment, selecting the pairs whose both single-end are the
     // best.
     for (i1 = 0; i1 < mappings1.size(); ++i1) {
-      if (mappings1[i1].first !=
+      if (mappings1[i1].GetNumErrors() !=
           paired_end_mapping_metadata.mapping_metadata1_.min_num_errors_) {
         continue;
       }
       for (i2 = 0; i2 < mappings2.size(); ++i2) {
-        if (mappings2[i2].first !=
+        if (mappings2[i2].GetNumErrors() !=
             paired_end_mapping_metadata.mapping_metadata2_.min_num_errors_) {
           continue;
         }
@@ -1031,45 +1033,48 @@ void MappingGenerator<MappingRecord>::
 
   while (i1 < mappings1.size() && i2 < mappings2.size()) {
     if ((first_read_direction == kNegative &&
-         mappings1[i1].second > mappings2[i2].second +
-                                    mapping_parameters_.max_insert_size -
-                                    read1_length) ||
+         mappings1[i1].position > mappings2[i2].position +
+                                      mapping_parameters_.max_insert_size -
+                                      read1_length) ||
         (first_read_direction == kPositive &&
-         mappings1[i1].second >
-             mappings2[i2].second + read2_length - min_overlap_length)) {
+         mappings1[i1].position >
+             mappings2[i2].position + read2_length - min_overlap_length)) {
       ++i2;
     } else if ((first_read_direction == kPositive &&
-                mappings2[i2].second > mappings1[i1].second +
-                                           mapping_parameters_.max_insert_size -
-                                           read2_length) ||
+                mappings2[i2].position >
+                    mappings1[i1].position +
+                        mapping_parameters_.max_insert_size - read2_length) ||
                (first_read_direction == kNegative &&
-                mappings2[i2].second >
-                    mappings1[i1].second + read1_length - min_overlap_length)) {
+                mappings2[i2].position > mappings1[i1].position + read1_length -
+                                             min_overlap_length)) {
       ++i1;
     } else {
       // Ok, find a pair, we store current ni2 somewhere and keep looking until
       // we go out of the range, then we go back and then move to next pi1 and
       // keep doing the similar thing.
       uint32_t current_i2 = i2;
-      while (current_i2 < mappings2.size() &&
-             ((first_read_direction == kPositive &&
-               mappings2[current_i2].second <=
-                   mappings1[i1].second + mapping_parameters_.max_insert_size -
-                       read2_length) ||
-              (first_read_direction == kNegative &&
-               mappings2[current_i2].second <=
-                   mappings1[i1].second + read1_length - min_overlap_length))) {
+      while (
+          current_i2 < mappings2.size() &&
+          ((first_read_direction == kPositive &&
+            mappings2[current_i2].position <=
+                mappings1[i1].position + mapping_parameters_.max_insert_size -
+                    read2_length) ||
+           (first_read_direction == kNegative &&
+            mappings2[current_i2].position <=
+                mappings1[i1].position + read1_length - min_overlap_length))) {
 #ifdef LI_DEBUG
-        printf("%s passed: %llu %d %llu %d: %d %d %d\n", __func__,
-               mappings1[i1].second >> 32, int(mappings1[i1].second),
-               mappings2[current_i2].second >> 32,
-               int(mappings2[current_i2].second),
-               mappings1[i1].first + mappings2[current_i2].first,
-               mappings1[i1].first, mappings2[current_i2].first);
+        printf(
+            "%s passed: %llu %d %llu %d: %d %d %d\n", __func__,
+            mappings1[i1].GetReferenceSequenceIndex(),
+            int(mappings1[i1].GetReferenceSequencePosition()),
+            mappings2[current_i2].GetReferenceSequenceIndex(),
+            int(mappings2[current_i2].GetReferenceSequencePosition()),
+            mappings1[i1].GetNumErrors() + mappings2[current_i2].GetNumErrors(),
+            mappings1[i1].GetNumErrors(), mappings2[current_i2].GetNumErrors());
 #endif
 
         int current_sum_errors =
-            mappings1[i1].first + mappings2[current_i2].first;
+            mappings1[i1].GetNumErrors() + mappings2[current_i2].GetNumErrors();
         if (current_sum_errors < min_sum_errors) {
           second_min_sum_errors = min_sum_errors;
           num_second_best_mappings = num_best_mappings;
@@ -1137,10 +1142,10 @@ void MappingGenerator<MappingRecord>::
   const MappingMetadata &mapping_metadata2 =
       paired_end_mapping_metadata.mapping_metadata2_;
 
-  const std::vector<std::pair<int, uint64_t>> &mappings1 =
+  const std::vector<DraftMapping> &mappings1 =
       first_read_direction == kPositive ? mapping_metadata1.positive_mappings_
                                         : mapping_metadata1.negative_mappings_;
-  const std::vector<std::pair<int, uint64_t>> &mappings2 =
+  const std::vector<DraftMapping> &mappings2 =
       second_read_direction == kPositive ? mapping_metadata2.positive_mappings_
                                          : mapping_metadata2.negative_mappings_;
 
@@ -1177,7 +1182,8 @@ void MappingGenerator<MappingRecord>::
   for (uint32_t mi = 0; mi < best_mappings.size(); ++mi) {
     const uint32_t i1 = best_mappings[mi].first;
     const uint32_t i2 = best_mappings[mi].second;
-    const int current_sum_errors = mappings1[i1].first + mappings2[i2].first;
+    const int current_sum_errors =
+        mappings1[i1].GetNumErrors() + mappings2[i2].GetNumErrors();
 
     if (current_sum_errors > paired_end_mapping_metadata.min_sum_errors_) {
       continue;
@@ -1185,8 +1191,8 @@ void MappingGenerator<MappingRecord>::
 
     if (best_mapping_index ==
         best_mapping_indices[num_best_mappings_reported]) {
-      const uint32_t rid1 = mappings1[i1].second >> 32;
-      const uint32_t rid2 = mappings2[i2].second >> 32;
+      const uint32_t rid1 = mappings1[i1].GetReferenceSequenceIndex();
+      const uint32_t rid2 = mappings2[i2].GetReferenceSequenceIndex();
 
       paired_end_mapping_in_memory.mapping_in_memory1.rid = rid1;
       paired_end_mapping_in_memory.mapping_in_memory2.rid = rid2;
@@ -1214,8 +1220,8 @@ void MappingGenerator<MappingRecord>::
       uint8_t mapq2 = 0;
       const uint8_t mapq = GetMAPQForPairedEndRead(
           first_read_direction, second_read_direction,
-          /*read1_num_errors=*/mappings1[i1].first,
-          /*read2_num_errors=*/mappings2[i2].first,
+          /*read1_num_errors=*/mappings1[i1].GetNumErrors(),
+          /*read2_num_errors=*/mappings2[i2].GetNumErrors(),
           paired_end_mapping_in_memory.mapping_in_memory1.GetFragmentLength(),
           paired_end_mapping_in_memory.mapping_in_memory2.GetFragmentLength(),
           read1_length, read2_length, force_mapq, paired_end_mapping_metadata,
@@ -1269,7 +1275,7 @@ void MappingGenerator<MappingRecord>::
 // The computed ref start and end coordinates are left closed and right closed.
 template <typename MappingRecord>
 void MappingGenerator<MappingRecord>::GetRefStartEndPositionForReadFromMapping(
-    const std::pair<int, uint64_t> &mapping, const SequenceBatch &reference,
+    const DraftMapping &mapping, const SequenceBatch &reference,
     MappingInMemory &mapping_in_memory) {
   // For now this mat is only used by ksw to generate mappings in SAM format.
   int8_t mat[25];
@@ -1284,13 +1290,13 @@ void MappingGenerator<MappingRecord>::GetRefStartEndPositionForReadFromMapping(
   for (j = 0; j < 5; ++j) mat[k++] = 0;
   //}
 
-  const uint32_t rid = mapping.second >> 32;
-  const uint32_t ref_position = mapping.second;
+  const uint32_t rid = mapping.GetReferenceSequenceIndex();
+  const uint32_t ref_position = mapping.GetReferenceSequencePosition();
 
   const int full_read_length = mapping_in_memory.read_length;
   int read_length = mapping_in_memory.read_length;
 
-  const int min_num_errors = mapping.first;
+  const int min_num_errors = mapping.GetNumErrors();
 
   int split_site = mapping_in_memory.direction == kPositive
                        ? 0
