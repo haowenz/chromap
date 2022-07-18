@@ -13,7 +13,7 @@ struct DraftMapping {
   // reference sequence.
   uint64_t position = 0;
 
-  DraftMapping(int num_errors, int position)
+  DraftMapping(int num_errors, uint64_t position)
       : num_errors(num_errors), position(position) {}
 
   inline int GetNumErrors() const { return num_errors; }
