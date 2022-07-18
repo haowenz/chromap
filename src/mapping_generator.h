@@ -187,6 +187,147 @@ void MappingGenerator<MappingRecord>::VerifyCandidates(
   }
 }
 
+template <typename MappingRecord>
+void MappingGenerator<MappingRecord>::GenerateBestMappingsForSingleEndRead(
+    const SequenceBatch &read_batch, uint32_t read_index,
+    const SequenceBatch &reference, const SequenceBatch &barcode_batch,
+    MappingMetadata &mapping_metadata,
+    std::vector<std::vector<MappingRecord>> &mappings_on_diff_ref_seqs) {
+  int num_best_mappings = mapping_metadata.num_best_mappings_;
+
+  // We will use reservoir sampling.
+  std::vector<int> best_mapping_indices(
+      mapping_parameters_.max_num_best_mappings);
+  std::iota(best_mapping_indices.begin(), best_mapping_indices.end(), 0);
+  if (num_best_mappings > mapping_parameters_.max_num_best_mappings) {
+    std::mt19937 generator(11);
+    for (int i = mapping_parameters_.max_num_best_mappings;
+         i < num_best_mappings; ++i) {
+      // important: inclusive range
+      std::uniform_int_distribution<int> distribution(0, i);
+      int j = distribution(generator);
+      if (j < mapping_parameters_.max_num_best_mappings) {
+        best_mapping_indices[j] = i;
+      }
+    }
+    std::sort(best_mapping_indices.begin(), best_mapping_indices.end());
+  }
+
+  int best_mapping_index = 0;
+  int num_best_mappings_reported = 0;
+
+  ProcessBestMappingsForSingleEndRead(
+      kPositive, read_index, read_batch, barcode_batch, reference,
+      mapping_metadata, best_mapping_indices, best_mapping_index,
+      num_best_mappings_reported, mappings_on_diff_ref_seqs);
+
+  if (num_best_mappings_reported !=
+      std::min(num_best_mappings, mapping_parameters_.max_num_best_mappings)) {
+    ProcessBestMappingsForSingleEndRead(
+        kNegative, read_index, read_batch, barcode_batch, reference,
+        mapping_metadata, best_mapping_indices, best_mapping_index,
+        num_best_mappings_reported, mappings_on_diff_ref_seqs);
+  }
+}
+
+template <typename MappingRecord>
+void MappingGenerator<MappingRecord>::GenerateBestMappingsForPairedEndRead(
+    uint32_t pair_index, const SequenceBatch &read_batch1,
+    const SequenceBatch &read_batch2, const SequenceBatch &barcode_batch,
+    const SequenceBatch &reference, std::vector<int> &best_mapping_indices,
+    std::mt19937 &generator, int force_mapq,
+    PairedEndMappingMetadata &paired_end_mapping_metadata,
+    std::vector<std::vector<MappingRecord>> &mappings_on_diff_ref_seqs) {
+  int &min_sum_errors = paired_end_mapping_metadata.min_sum_errors_;
+  int &num_best_mappings = paired_end_mapping_metadata.num_best_mappings_;
+  int &second_min_sum_errors =
+      paired_end_mapping_metadata.second_min_sum_errors_;
+  int &num_second_best_mappings =
+      paired_end_mapping_metadata.num_second_best_mappings_;
+
+  min_sum_errors = 2 * mapping_parameters_.error_threshold + 1;
+  num_best_mappings = 0;
+  second_min_sum_errors = min_sum_errors;
+  num_second_best_mappings = 0;
+
+  GenerateBestMappingsForPairedEndReadOnOneDirection(
+      kPositive, kNegative, pair_index, read_batch1, read_batch2, reference,
+      paired_end_mapping_metadata);
+  GenerateBestMappingsForPairedEndReadOnOneDirection(
+      kNegative, kPositive, pair_index, read_batch1, read_batch2, reference,
+      paired_end_mapping_metadata);
+
+  if (mapping_parameters_.split_alignment) {
+    GenerateBestMappingsForPairedEndReadOnOneDirection(
+        kPositive, kPositive, pair_index, read_batch1, read_batch2, reference,
+        paired_end_mapping_metadata);
+    GenerateBestMappingsForPairedEndReadOnOneDirection(
+        kNegative, kNegative, pair_index, read_batch1, read_batch2, reference,
+        paired_end_mapping_metadata);
+  }
+
+  if (num_best_mappings <= mapping_parameters_.drop_repetitive_reads) {
+    // We will use reservoir sampling.
+    // std::vector<int>
+    // best_mapping_indices(mapping_parameters_.max_num_best_mappings);
+    std::iota(best_mapping_indices.begin(), best_mapping_indices.end(), 0);
+    if (num_best_mappings > mapping_parameters_.max_num_best_mappings) {
+      // std::mt19937 generator(11);
+      for (int i = mapping_parameters_.max_num_best_mappings;
+           i < num_best_mappings; ++i) {
+        // Important: inclusive range.
+        std::uniform_int_distribution<int> distribution(0, i);
+        int j = distribution(generator);
+        // int j = distribution(tmp_generator);
+        if (j < mapping_parameters_.max_num_best_mappings) {
+          best_mapping_indices[j] = i;
+        }
+      }
+      std::sort(best_mapping_indices.begin(), best_mapping_indices.end());
+    }
+
+    int best_mapping_index = 0;
+    int num_best_mappings_reported = 0;
+    ProcessBestMappingsForPairedEndReadOnOneDirection(
+        kPositive, kNegative, pair_index, read_batch1, read_batch2,
+        barcode_batch, reference, best_mapping_indices, best_mapping_index,
+        num_best_mappings_reported, force_mapq, paired_end_mapping_metadata,
+        mappings_on_diff_ref_seqs);
+
+    if (num_best_mappings_reported !=
+        std::min(mapping_parameters_.max_num_best_mappings,
+                 num_best_mappings)) {
+      ProcessBestMappingsForPairedEndReadOnOneDirection(
+          kNegative, kPositive, pair_index, read_batch1, read_batch2,
+          barcode_batch, reference, best_mapping_indices, best_mapping_index,
+          num_best_mappings_reported, force_mapq, paired_end_mapping_metadata,
+          mappings_on_diff_ref_seqs);
+    }
+
+    if (mapping_parameters_.split_alignment &&
+        num_best_mappings_reported !=
+            std::min(mapping_parameters_.max_num_best_mappings,
+                     num_best_mappings)) {
+      ProcessBestMappingsForPairedEndReadOnOneDirection(
+          kPositive, kPositive, pair_index, read_batch1, read_batch2,
+          barcode_batch, reference, best_mapping_indices, best_mapping_index,
+          num_best_mappings_reported, force_mapq, paired_end_mapping_metadata,
+          mappings_on_diff_ref_seqs);
+    }
+
+    if (mapping_parameters_.split_alignment &&
+        num_best_mappings_reported !=
+            std::min(mapping_parameters_.max_num_best_mappings,
+                     num_best_mappings)) {
+      ProcessBestMappingsForPairedEndReadOnOneDirection(
+          kNegative, kNegative, pair_index, read_batch1, read_batch2,
+          barcode_batch, reference, best_mapping_indices, best_mapping_index,
+          num_best_mappings_reported, force_mapq, paired_end_mapping_metadata,
+          mappings_on_diff_ref_seqs);
+    }
+  }
+}
+
 // Return true if the candidate position is valid on the reference with rid.
 // Note only the position is checked and the input rid is not checked in this
 // function. So the input rid must be valid.
@@ -720,147 +861,6 @@ void MappingGenerator<MappingRecord>::VerifyCandidatesOnOneDirection(
                                  ((gap_beginning & 0xff) << 16) |
                                  (read_mapping_length & 0xffff));
       }
-    }
-  }
-}
-
-template <typename MappingRecord>
-void MappingGenerator<MappingRecord>::GenerateBestMappingsForSingleEndRead(
-    const SequenceBatch &read_batch, uint32_t read_index,
-    const SequenceBatch &reference, const SequenceBatch &barcode_batch,
-    MappingMetadata &mapping_metadata,
-    std::vector<std::vector<MappingRecord>> &mappings_on_diff_ref_seqs) {
-  int num_best_mappings = mapping_metadata.num_best_mappings_;
-
-  // We will use reservoir sampling.
-  std::vector<int> best_mapping_indices(
-      mapping_parameters_.max_num_best_mappings);
-  std::iota(best_mapping_indices.begin(), best_mapping_indices.end(), 0);
-  if (num_best_mappings > mapping_parameters_.max_num_best_mappings) {
-    std::mt19937 generator(11);
-    for (int i = mapping_parameters_.max_num_best_mappings;
-         i < num_best_mappings; ++i) {
-      // important: inclusive range
-      std::uniform_int_distribution<int> distribution(0, i);
-      int j = distribution(generator);
-      if (j < mapping_parameters_.max_num_best_mappings) {
-        best_mapping_indices[j] = i;
-      }
-    }
-    std::sort(best_mapping_indices.begin(), best_mapping_indices.end());
-  }
-
-  int best_mapping_index = 0;
-  int num_best_mappings_reported = 0;
-
-  ProcessBestMappingsForSingleEndRead(
-      kPositive, read_index, read_batch, barcode_batch, reference,
-      mapping_metadata, best_mapping_indices, best_mapping_index,
-      num_best_mappings_reported, mappings_on_diff_ref_seqs);
-
-  if (num_best_mappings_reported !=
-      std::min(num_best_mappings, mapping_parameters_.max_num_best_mappings)) {
-    ProcessBestMappingsForSingleEndRead(
-        kNegative, read_index, read_batch, barcode_batch, reference,
-        mapping_metadata, best_mapping_indices, best_mapping_index,
-        num_best_mappings_reported, mappings_on_diff_ref_seqs);
-  }
-}
-
-template <typename MappingRecord>
-void MappingGenerator<MappingRecord>::GenerateBestMappingsForPairedEndRead(
-    uint32_t pair_index, const SequenceBatch &read_batch1,
-    const SequenceBatch &read_batch2, const SequenceBatch &barcode_batch,
-    const SequenceBatch &reference, std::vector<int> &best_mapping_indices,
-    std::mt19937 &generator, int force_mapq,
-    PairedEndMappingMetadata &paired_end_mapping_metadata,
-    std::vector<std::vector<MappingRecord>> &mappings_on_diff_ref_seqs) {
-  int &min_sum_errors = paired_end_mapping_metadata.min_sum_errors_;
-  int &num_best_mappings = paired_end_mapping_metadata.num_best_mappings_;
-  int &second_min_sum_errors =
-      paired_end_mapping_metadata.second_min_sum_errors_;
-  int &num_second_best_mappings =
-      paired_end_mapping_metadata.num_second_best_mappings_;
-
-  min_sum_errors = 2 * mapping_parameters_.error_threshold + 1;
-  num_best_mappings = 0;
-  second_min_sum_errors = min_sum_errors;
-  num_second_best_mappings = 0;
-
-  GenerateBestMappingsForPairedEndReadOnOneDirection(
-      kPositive, kNegative, pair_index, read_batch1, read_batch2, reference,
-      paired_end_mapping_metadata);
-  GenerateBestMappingsForPairedEndReadOnOneDirection(
-      kNegative, kPositive, pair_index, read_batch1, read_batch2, reference,
-      paired_end_mapping_metadata);
-
-  if (mapping_parameters_.split_alignment) {
-    GenerateBestMappingsForPairedEndReadOnOneDirection(
-        kPositive, kPositive, pair_index, read_batch1, read_batch2, reference,
-        paired_end_mapping_metadata);
-    GenerateBestMappingsForPairedEndReadOnOneDirection(
-        kNegative, kNegative, pair_index, read_batch1, read_batch2, reference,
-        paired_end_mapping_metadata);
-  }
-
-  if (num_best_mappings <= mapping_parameters_.drop_repetitive_reads) {
-    // We will use reservoir sampling.
-    // std::vector<int>
-    // best_mapping_indices(mapping_parameters_.max_num_best_mappings);
-    std::iota(best_mapping_indices.begin(), best_mapping_indices.end(), 0);
-    if (num_best_mappings > mapping_parameters_.max_num_best_mappings) {
-      // std::mt19937 generator(11);
-      for (int i = mapping_parameters_.max_num_best_mappings;
-           i < num_best_mappings; ++i) {
-        // Important: inclusive range.
-        std::uniform_int_distribution<int> distribution(0, i);
-        int j = distribution(generator);
-        // int j = distribution(tmp_generator);
-        if (j < mapping_parameters_.max_num_best_mappings) {
-          best_mapping_indices[j] = i;
-        }
-      }
-      std::sort(best_mapping_indices.begin(), best_mapping_indices.end());
-    }
-
-    int best_mapping_index = 0;
-    int num_best_mappings_reported = 0;
-    ProcessBestMappingsForPairedEndReadOnOneDirection(
-        kPositive, kNegative, pair_index, read_batch1, read_batch2,
-        barcode_batch, reference, best_mapping_indices, best_mapping_index,
-        num_best_mappings_reported, force_mapq, paired_end_mapping_metadata,
-        mappings_on_diff_ref_seqs);
-
-    if (num_best_mappings_reported !=
-        std::min(mapping_parameters_.max_num_best_mappings,
-                 num_best_mappings)) {
-      ProcessBestMappingsForPairedEndReadOnOneDirection(
-          kNegative, kPositive, pair_index, read_batch1, read_batch2,
-          barcode_batch, reference, best_mapping_indices, best_mapping_index,
-          num_best_mappings_reported, force_mapq, paired_end_mapping_metadata,
-          mappings_on_diff_ref_seqs);
-    }
-
-    if (mapping_parameters_.split_alignment &&
-        num_best_mappings_reported !=
-            std::min(mapping_parameters_.max_num_best_mappings,
-                     num_best_mappings)) {
-      ProcessBestMappingsForPairedEndReadOnOneDirection(
-          kPositive, kPositive, pair_index, read_batch1, read_batch2,
-          barcode_batch, reference, best_mapping_indices, best_mapping_index,
-          num_best_mappings_reported, force_mapq, paired_end_mapping_metadata,
-          mappings_on_diff_ref_seqs);
-    }
-
-    if (mapping_parameters_.split_alignment &&
-        num_best_mappings_reported !=
-            std::min(mapping_parameters_.max_num_best_mappings,
-                     num_best_mappings)) {
-      ProcessBestMappingsForPairedEndReadOnOneDirection(
-          kNegative, kNegative, pair_index, read_batch1, read_batch2,
-          barcode_batch, reference, best_mapping_indices, best_mapping_index,
-          num_best_mappings_reported, force_mapq, paired_end_mapping_metadata,
-          mappings_on_diff_ref_seqs);
     }
   }
 }
