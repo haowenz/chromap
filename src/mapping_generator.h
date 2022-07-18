@@ -217,17 +217,16 @@ bool MappingGenerator<MappingRecord>::
     return false;
   }
 
-  const std::vector<Candidate> &positive_candidates =
-      mapping_metadata.positive_candidates_;
-  const std::vector<Candidate> &negative_candidates =
-      mapping_metadata.negative_candidates_;
-
-  const bool has_one_candidate =
-      (positive_candidates.size() + negative_candidates.size() == 1);
+  const bool has_one_candidate = (mapping_metadata.GetNumCandidates() == 1);
 
   if (!has_one_candidate) {
     return false;
   }
+
+  const std::vector<Candidate> &positive_candidates =
+      mapping_metadata.positive_candidates_;
+  const std::vector<Candidate> &negative_candidates =
+      mapping_metadata.negative_candidates_;
 
   const std::vector<std::pair<uint64_t, uint64_t>> &minimizers =
       mapping_metadata.minimizers_;
@@ -279,13 +278,16 @@ bool MappingGenerator<MappingRecord>::
   uint32_t read_length = read_batch.GetSequenceLengthAt(read_index);
 
   if (all_minimizer_candidate_direction == kPositive) {
-    rid = positive_candidates[all_minimizer_candidate_index].position >> 32;
-    position = positive_candidates[all_minimizer_candidate_index].position;
+    rid = positive_candidates[all_minimizer_candidate_index]
+              .GetReferenceSequenceIndex();
+    position = positive_candidates[all_minimizer_candidate_index]
+                   .GetReferenceSequencePosition();
   } else {
-    rid = negative_candidates[all_minimizer_candidate_index].position >> 32;
-    position =
-        (uint32_t)negative_candidates[all_minimizer_candidate_index].position -
-        read_length + 1;
+    rid = negative_candidates[all_minimizer_candidate_index]
+              .GetReferenceSequenceIndex();
+    position = negative_candidates[all_minimizer_candidate_index]
+                   .GetReferenceSequencePosition() -
+               read_length + 1;
   }
 
   const bool is_valid_candidate =
@@ -334,8 +336,9 @@ void MappingGenerator<MappingRecord>::VerifyCandidatesOnOneDirectionUsingSIMD(
   uint32_t candidate_count_threshold = 0;
   while (candidate_index < num_candidates) {
     if (candidates[candidate_index].count < candidate_count_threshold) break;
-    uint32_t rid = candidates[candidate_index].position >> 32;
-    uint32_t position = candidates[candidate_index].position;
+    uint32_t rid = candidates[candidate_index].GetReferenceSequenceIndex();
+    uint32_t position =
+        candidates[candidate_index].GetReferenceSequencePosition();
     if (candidate_direction == kNegative) {
       position = position - read_length + 1;
     }
@@ -457,8 +460,8 @@ void MappingGenerator<MappingRecord>::VerifyCandidatesOnOneDirectionUsingSIMD(
   }
 
   for (uint32_t ci = 0; ci < valid_candidate_index; ++ci) {
-    uint32_t rid = valid_candidates[ci].position >> 32;
-    uint32_t position = valid_candidates[ci].position;
+    uint32_t rid = valid_candidates[ci].GetReferenceSequenceIndex();
+    uint32_t position = valid_candidates[ci].GetReferenceSequencePosition();
     if (candidate_direction == kNegative) {
       position = position - read_length + 1;
     }
@@ -539,8 +542,8 @@ void MappingGenerator<MappingRecord>::VerifyCandidatesOnOneDirection(
 
   for (uint32_t ci = 0; ci < candidates.size(); ++ci) {
     if (candidates[ci].count < candidate_count_threshold) break;
-    uint32_t rid = candidates[ci].position >> 32;
-    uint32_t position = candidates[ci].position;
+    uint32_t rid = candidates[ci].GetReferenceSequenceIndex();
+    uint32_t position = candidates[ci].GetReferenceSequencePosition();
     if (candidate_direction == kNegative) {
       position = position - read_length + 1;
     }

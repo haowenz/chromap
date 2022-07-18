@@ -4,12 +4,21 @@
 namespace chromap {
 
 struct Candidate {
-  uint64_t position;
-  uint8_t count;
+  // The high 32 bits save the reference sequence index in the reference
+  // sequence batch. The low 32 bits save the reference position on that
+  // sequence.
+  uint64_t position = 0;
 
-  bool operator<(const Candidate &c) const {
-    if (count != c.count) {
-      return count > c.count;
+  // The number of minimizers supports the position.
+  uint8_t count = 0;
+
+  inline uint32_t GetReferenceSequenceIndex() const { return (position >> 32); }
+
+  inline uint32_t GetReferenceSequencePosition() const { return position; }
+
+  inline bool operator<(const Candidate &c) const {
+    if (count > c.count) {
+      return true;
     }
 
     return position < c.position;
