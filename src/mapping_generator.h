@@ -193,9 +193,10 @@ void MappingGenerator<MappingRecord>::GenerateBestMappingsForSingleEndRead(
     const SequenceBatch &reference, const SequenceBatch &barcode_batch,
     MappingMetadata &mapping_metadata,
     std::vector<std::vector<MappingRecord>> &mappings_on_diff_ref_seqs) {
-  int num_best_mappings = mapping_metadata.num_best_mappings_;
+  const int num_best_mappings = mapping_metadata.num_best_mappings_;
 
-  // We will use reservoir sampling.
+  // We use reservoir sampling when the number of best mappings exceeds the
+  // threshold.
   std::vector<int> best_mapping_indices(
       mapping_parameters_.max_num_best_mappings);
   std::iota(best_mapping_indices.begin(), best_mapping_indices.end(), 0);
@@ -203,7 +204,7 @@ void MappingGenerator<MappingRecord>::GenerateBestMappingsForSingleEndRead(
     std::mt19937 generator(11);
     for (int i = mapping_parameters_.max_num_best_mappings;
          i < num_best_mappings; ++i) {
-      // important: inclusive range
+      // Important: inclusive range.
       std::uniform_int_distribution<int> distribution(0, i);
       int j = distribution(generator);
       if (j < mapping_parameters_.max_num_best_mappings) {
@@ -215,14 +216,15 @@ void MappingGenerator<MappingRecord>::GenerateBestMappingsForSingleEndRead(
 
   int best_mapping_index = 0;
   int num_best_mappings_reported = 0;
+  const int num_best_mappings_to_report =
+      std::min(num_best_mappings, mapping_parameters_.max_num_best_mappings);
 
   ProcessBestMappingsForSingleEndRead(
       kPositive, read_index, read_batch, barcode_batch, reference,
       mapping_metadata, best_mapping_indices, best_mapping_index,
       num_best_mappings_reported, mappings_on_diff_ref_seqs);
 
-  if (num_best_mappings_reported !=
-      std::min(num_best_mappings, mapping_parameters_.max_num_best_mappings)) {
+  if (num_best_mappings_reported != num_best_mappings_to_report) {
     ProcessBestMappingsForSingleEndRead(
         kNegative, read_index, read_batch, barcode_batch, reference,
         mapping_metadata, best_mapping_indices, best_mapping_index,
@@ -238,17 +240,12 @@ void MappingGenerator<MappingRecord>::GenerateBestMappingsForPairedEndRead(
     std::mt19937 &generator, int force_mapq,
     PairedEndMappingMetadata &paired_end_mapping_metadata,
     std::vector<std::vector<MappingRecord>> &mappings_on_diff_ref_seqs) {
-  int &min_sum_errors = paired_end_mapping_metadata.min_sum_errors_;
-  int &num_best_mappings = paired_end_mapping_metadata.num_best_mappings_;
-  int &second_min_sum_errors =
-      paired_end_mapping_metadata.second_min_sum_errors_;
-  int &num_second_best_mappings =
-      paired_end_mapping_metadata.num_second_best_mappings_;
-
-  min_sum_errors = 2 * mapping_parameters_.error_threshold + 1;
-  num_best_mappings = 0;
-  second_min_sum_errors = min_sum_errors;
-  num_second_best_mappings = 0;
+  paired_end_mapping_metadata.SetMinSumErrors(
+      2 * mapping_parameters_.error_threshold + 1);
+  paired_end_mapping_metadata.SetNumBestMappings(0);
+  paired_end_mapping_metadata.SetSecondMinSumErrors(
+      2 * mapping_parameters_.error_threshold + 1);
+  paired_end_mapping_metadata.SetNumSecondBestMappings(0);
 
   GenerateBestMappingsForPairedEndReadOnOneDirection(
       kPositive, kNegative, pair_index, read_batch1, read_batch2, reference,
@@ -266,65 +263,68 @@ void MappingGenerator<MappingRecord>::GenerateBestMappingsForPairedEndRead(
         paired_end_mapping_metadata);
   }
 
-  if (num_best_mappings <= mapping_parameters_.drop_repetitive_reads) {
-    // We will use reservoir sampling.
-    // std::vector<int>
-    // best_mapping_indices(mapping_parameters_.max_num_best_mappings);
-    std::iota(best_mapping_indices.begin(), best_mapping_indices.end(), 0);
-    if (num_best_mappings > mapping_parameters_.max_num_best_mappings) {
-      // std::mt19937 generator(11);
-      for (int i = mapping_parameters_.max_num_best_mappings;
-           i < num_best_mappings; ++i) {
-        // Important: inclusive range.
-        std::uniform_int_distribution<int> distribution(0, i);
-        int j = distribution(generator);
-        // int j = distribution(tmp_generator);
-        if (j < mapping_parameters_.max_num_best_mappings) {
-          best_mapping_indices[j] = i;
-        }
-      }
-      std::sort(best_mapping_indices.begin(), best_mapping_indices.end());
-    }
+  if (paired_end_mapping_metadata.GetNumBestMappings() >
+      mapping_parameters_.drop_repetitive_reads) {
+    return;
+  }
 
-    int best_mapping_index = 0;
-    int num_best_mappings_reported = 0;
+  // We use reservoir sampling when the number of best mappings exceeds the
+  // threshold.
+  // std::vector<int>
+  // best_mapping_indices(mapping_parameters_.max_num_best_mappings);
+  std::iota(best_mapping_indices.begin(), best_mapping_indices.end(), 0);
+  if (paired_end_mapping_metadata.GetNumBestMappings() >
+      mapping_parameters_.max_num_best_mappings) {
+    // std::mt19937 generator(11);
+    for (int i = mapping_parameters_.max_num_best_mappings;
+         i < paired_end_mapping_metadata.GetNumBestMappings(); ++i) {
+      // Important: inclusive range.
+      std::uniform_int_distribution<int> distribution(0, i);
+      int j = distribution(generator);
+      // int j = distribution(tmp_generator);
+      if (j < mapping_parameters_.max_num_best_mappings) {
+        best_mapping_indices[j] = i;
+      }
+    }
+    std::sort(best_mapping_indices.begin(), best_mapping_indices.end());
+  }
+
+  int best_mapping_index = 0;
+  int num_best_mappings_reported = 0;
+  const int num_best_mappings_to_report =
+      std::min(mapping_parameters_.max_num_best_mappings,
+               paired_end_mapping_metadata.GetNumBestMappings());
+
+  ProcessBestMappingsForPairedEndReadOnOneDirection(
+      kPositive, kNegative, pair_index, read_batch1, read_batch2, barcode_batch,
+      reference, best_mapping_indices, best_mapping_index,
+      num_best_mappings_reported, force_mapq, paired_end_mapping_metadata,
+      mappings_on_diff_ref_seqs);
+
+  if (num_best_mappings_reported != num_best_mappings_to_report) {
     ProcessBestMappingsForPairedEndReadOnOneDirection(
-        kPositive, kNegative, pair_index, read_batch1, read_batch2,
+        kNegative, kPositive, pair_index, read_batch1, read_batch2,
         barcode_batch, reference, best_mapping_indices, best_mapping_index,
         num_best_mappings_reported, force_mapq, paired_end_mapping_metadata,
         mappings_on_diff_ref_seqs);
+  }
 
-    if (num_best_mappings_reported !=
-        std::min(mapping_parameters_.max_num_best_mappings,
-                 num_best_mappings)) {
-      ProcessBestMappingsForPairedEndReadOnOneDirection(
-          kNegative, kPositive, pair_index, read_batch1, read_batch2,
-          barcode_batch, reference, best_mapping_indices, best_mapping_index,
-          num_best_mappings_reported, force_mapq, paired_end_mapping_metadata,
-          mappings_on_diff_ref_seqs);
-    }
+  if (mapping_parameters_.split_alignment &&
+      num_best_mappings_reported != num_best_mappings_to_report) {
+    ProcessBestMappingsForPairedEndReadOnOneDirection(
+        kPositive, kPositive, pair_index, read_batch1, read_batch2,
+        barcode_batch, reference, best_mapping_indices, best_mapping_index,
+        num_best_mappings_reported, force_mapq, paired_end_mapping_metadata,
+        mappings_on_diff_ref_seqs);
+  }
 
-    if (mapping_parameters_.split_alignment &&
-        num_best_mappings_reported !=
-            std::min(mapping_parameters_.max_num_best_mappings,
-                     num_best_mappings)) {
-      ProcessBestMappingsForPairedEndReadOnOneDirection(
-          kPositive, kPositive, pair_index, read_batch1, read_batch2,
-          barcode_batch, reference, best_mapping_indices, best_mapping_index,
-          num_best_mappings_reported, force_mapq, paired_end_mapping_metadata,
-          mappings_on_diff_ref_seqs);
-    }
-
-    if (mapping_parameters_.split_alignment &&
-        num_best_mappings_reported !=
-            std::min(mapping_parameters_.max_num_best_mappings,
-                     num_best_mappings)) {
-      ProcessBestMappingsForPairedEndReadOnOneDirection(
-          kNegative, kNegative, pair_index, read_batch1, read_batch2,
-          barcode_batch, reference, best_mapping_indices, best_mapping_index,
-          num_best_mappings_reported, force_mapq, paired_end_mapping_metadata,
-          mappings_on_diff_ref_seqs);
-    }
+  if (mapping_parameters_.split_alignment &&
+      num_best_mappings_reported != num_best_mappings_to_report) {
+    ProcessBestMappingsForPairedEndReadOnOneDirection(
+        kNegative, kNegative, pair_index, read_batch1, read_batch2,
+        barcode_batch, reference, best_mapping_indices, best_mapping_index,
+        num_best_mappings_reported, force_mapq, paired_end_mapping_metadata,
+        mappings_on_diff_ref_seqs);
   }
 }
 
@@ -416,7 +416,7 @@ bool MappingGenerator<MappingRecord>::
 
   uint32_t rid = 0;
   uint32_t position = 0;
-  uint32_t read_length = read_batch.GetSequenceLengthAt(read_index);
+  const uint32_t read_length = read_batch.GetSequenceLengthAt(read_index);
 
   if (all_minimizer_candidate_direction == kPositive) {
     rid = positive_candidates[all_minimizer_candidate_index]
@@ -454,7 +454,7 @@ void MappingGenerator<MappingRecord>::VerifyCandidatesOnOneDirectionUsingSIMD(
     const SequenceBatch &read_batch, const SequenceBatch &reference,
     MappingMetadata &mapping_metadata) {
   const char *read = read_batch.GetSequenceAt(read_index);
-  uint32_t read_length = read_batch.GetSequenceLengthAt(read_index);
+  const uint32_t read_length = read_batch.GetSequenceLengthAt(read_index);
   const std::string &negative_read =
       read_batch.GetNegativeSequenceAt(read_index);
 
@@ -469,17 +469,21 @@ void MappingGenerator<MappingRecord>::VerifyCandidatesOnOneDirectionUsingSIMD(
   int &second_min_num_errors = mapping_metadata.second_min_num_errors_;
   int &num_second_best_mappings = mapping_metadata.num_second_best_mappings_;
 
-  size_t num_candidates = candidates.size();
   Candidate valid_candidates[NUM_VPU_LANES_];
   const char *valid_candidate_starts[NUM_VPU_LANES_];
   uint32_t valid_candidate_index = 0;
   size_t candidate_index = 0;
   uint32_t candidate_count_threshold = 0;
-  while (candidate_index < num_candidates) {
-    if (candidates[candidate_index].count < candidate_count_threshold) break;
+
+  while (candidate_index < candidates.size()) {
+    if (candidates[candidate_index].count < candidate_count_threshold) {
+      break;
+    }
+
     uint32_t rid = candidates[candidate_index].GetReferenceSequenceIndex();
     uint32_t position =
         candidates[candidate_index].GetReferenceSequencePosition();
+
     if (candidate_direction == kNegative) {
       position = position - read_length + 1;
     }
@@ -487,117 +491,114 @@ void MappingGenerator<MappingRecord>::VerifyCandidatesOnOneDirectionUsingSIMD(
     if (!IsValidCandidate(rid, position, read_length, reference)) {
       ++candidate_index;
       continue;
-    } else {
-      valid_candidates[valid_candidate_index] =
-          candidates[candidate_index];  // reference.GetSequenceAt(rid) +
-                                        // position -
-                                        // mapping_parameters_.error_threshold;
-      valid_candidate_starts[valid_candidate_index] =
-          reference.GetSequenceAt(rid) + position -
-          mapping_parameters_.error_threshold;
-      ++valid_candidate_index;
     }
-    if (valid_candidate_index == (uint32_t)NUM_VPU_LANES_) {
-      if (NUM_VPU_LANES_ == 8) {
-        int16_t mapping_edit_distances[NUM_VPU_LANES_];
-        int16_t mapping_end_positions[NUM_VPU_LANES_];
-        for (int li = 0; li < NUM_VPU_LANES_; ++li) {
-          mapping_end_positions[li] = read_length - 1;
-        }
-        if (candidate_direction == kPositive) {
-          BandedAlign8PatternsToText(
-              mapping_parameters_.error_threshold, valid_candidate_starts, read,
-              read_length, mapping_edit_distances, mapping_end_positions);
-        } else {
-          BandedAlign8PatternsToText(
-              mapping_parameters_.error_threshold, valid_candidate_starts,
-              negative_read.data(), read_length, mapping_edit_distances,
-              mapping_end_positions);
-        }
-        for (int mi = 0; mi < NUM_VPU_LANES_; ++mi) {
-          if (mapping_edit_distances[mi] <=
-              mapping_parameters_.error_threshold) {
-            if (mapping_edit_distances[mi] < min_num_errors) {
-              second_min_num_errors = min_num_errors;
-              num_second_best_mappings = num_best_mappings;
-              min_num_errors = mapping_edit_distances[mi];
-              num_best_mappings = 1;
-            } else if (mapping_edit_distances[mi] == min_num_errors) {
-              num_best_mappings++;
-            } else if (mapping_edit_distances[mi] == second_min_num_errors) {
-              num_second_best_mappings++;
-            } else if (mapping_edit_distances[mi] < second_min_num_errors) {
-              num_second_best_mappings = 1;
-              second_min_num_errors = mapping_edit_distances[mi];
-            }
-            if (candidate_direction == kPositive) {
-              mappings.emplace_back((uint8_t)mapping_edit_distances[mi],
-                                    valid_candidates[mi].position -
-                                        mapping_parameters_.error_threshold +
-                                        mapping_end_positions[mi]);
-            } else {
-              mappings.emplace_back((uint8_t)mapping_edit_distances[mi],
-                                    valid_candidates[mi].position -
-                                        read_length + 1 -
-                                        mapping_parameters_.error_threshold +
-                                        mapping_end_positions[mi]);
-            }
-          } else {
-            candidate_count_threshold = valid_candidates[mi].count;
+
+    valid_candidates[valid_candidate_index] = candidates[candidate_index];
+    valid_candidate_starts[valid_candidate_index] =
+        reference.GetSequenceAt(rid) + position -
+        mapping_parameters_.error_threshold;
+    ++valid_candidate_index;
+    ++candidate_index;
+
+    if (valid_candidate_index < (uint32_t)NUM_VPU_LANES_) {
+      continue;
+    }
+
+    if (NUM_VPU_LANES_ == 8) {
+      int16_t mapping_edit_distances[NUM_VPU_LANES_];
+      int16_t mapping_end_positions[NUM_VPU_LANES_];
+      for (int li = 0; li < NUM_VPU_LANES_; ++li) {
+        mapping_end_positions[li] = read_length - 1;
+      }
+      if (candidate_direction == kPositive) {
+        BandedAlign8PatternsToText(
+            mapping_parameters_.error_threshold, valid_candidate_starts, read,
+            read_length, mapping_edit_distances, mapping_end_positions);
+      } else {
+        BandedAlign8PatternsToText(mapping_parameters_.error_threshold,
+                                   valid_candidate_starts, negative_read.data(),
+                                   read_length, mapping_edit_distances,
+                                   mapping_end_positions);
+      }
+      for (int mi = 0; mi < NUM_VPU_LANES_; ++mi) {
+        if (mapping_edit_distances[mi] <= mapping_parameters_.error_threshold) {
+          if (mapping_edit_distances[mi] < min_num_errors) {
+            second_min_num_errors = min_num_errors;
+            num_second_best_mappings = num_best_mappings;
+            min_num_errors = mapping_edit_distances[mi];
+            num_best_mappings = 1;
+          } else if (mapping_edit_distances[mi] == min_num_errors) {
+            num_best_mappings++;
+          } else if (mapping_edit_distances[mi] == second_min_num_errors) {
+            num_second_best_mappings++;
+          } else if (mapping_edit_distances[mi] < second_min_num_errors) {
+            num_second_best_mappings = 1;
+            second_min_num_errors = mapping_edit_distances[mi];
           }
-        }
-      } else if (NUM_VPU_LANES_ == 4) {
-        int32_t mapping_edit_distances[NUM_VPU_LANES_];
-        int32_t mapping_end_positions[NUM_VPU_LANES_];
-        for (int li = 0; li < NUM_VPU_LANES_; ++li) {
-          mapping_end_positions[li] = read_length - 1;
-        }
-        if (candidate_direction == kPositive) {
-          BandedAlign4PatternsToText(
-              mapping_parameters_.error_threshold, valid_candidate_starts, read,
-              read_length, mapping_edit_distances, mapping_end_positions);
-        } else {
-          BandedAlign4PatternsToText(
-              mapping_parameters_.error_threshold, valid_candidate_starts,
-              negative_read.data(), read_length, mapping_edit_distances,
-              mapping_end_positions);
-        }
-        for (int mi = 0; mi < NUM_VPU_LANES_; ++mi) {
-          if (mapping_edit_distances[mi] <=
-              mapping_parameters_.error_threshold) {
-            if (mapping_edit_distances[mi] < min_num_errors) {
-              second_min_num_errors = min_num_errors;
-              num_second_best_mappings = num_best_mappings;
-              min_num_errors = mapping_edit_distances[mi];
-              num_best_mappings = 1;
-            } else if (mapping_edit_distances[mi] == min_num_errors) {
-              num_best_mappings++;
-            } else if (mapping_edit_distances[mi] == second_min_num_errors) {
-              num_second_best_mappings++;
-            } else if (mapping_edit_distances[mi] < second_min_num_errors) {
-              num_second_best_mappings = 1;
-              second_min_num_errors = mapping_edit_distances[mi];
-            }
-            if (candidate_direction == kPositive) {
-              mappings.emplace_back((uint8_t)mapping_edit_distances[mi],
-                                    valid_candidates[mi].position -
-                                        mapping_parameters_.error_threshold +
-                                        mapping_end_positions[mi]);
-            } else {
-              mappings.emplace_back((uint8_t)mapping_edit_distances[mi],
-                                    valid_candidates[mi].position -
-                                        read_length + 1 -
-                                        mapping_parameters_.error_threshold +
-                                        mapping_end_positions[mi]);
-            }
+          if (candidate_direction == kPositive) {
+            mappings.emplace_back((uint8_t)mapping_edit_distances[mi],
+                                  valid_candidates[mi].position -
+                                      mapping_parameters_.error_threshold +
+                                      mapping_end_positions[mi]);
           } else {
-            candidate_count_threshold = valid_candidates[mi].count;
+            mappings.emplace_back((uint8_t)mapping_edit_distances[mi],
+                                  valid_candidates[mi].position - read_length +
+                                      1 - mapping_parameters_.error_threshold +
+                                      mapping_end_positions[mi]);
           }
+        } else {
+          candidate_count_threshold = valid_candidates[mi].count;
         }
       }
-      valid_candidate_index = 0;
+    } else if (NUM_VPU_LANES_ == 4) {
+      int32_t mapping_edit_distances[NUM_VPU_LANES_];
+      int32_t mapping_end_positions[NUM_VPU_LANES_];
+      for (int li = 0; li < NUM_VPU_LANES_; ++li) {
+        mapping_end_positions[li] = read_length - 1;
+      }
+      if (candidate_direction == kPositive) {
+        BandedAlign4PatternsToText(
+            mapping_parameters_.error_threshold, valid_candidate_starts, read,
+            read_length, mapping_edit_distances, mapping_end_positions);
+      } else {
+        BandedAlign4PatternsToText(mapping_parameters_.error_threshold,
+                                   valid_candidate_starts, negative_read.data(),
+                                   read_length, mapping_edit_distances,
+                                   mapping_end_positions);
+      }
+      for (int mi = 0; mi < NUM_VPU_LANES_; ++mi) {
+        if (mapping_edit_distances[mi] <= mapping_parameters_.error_threshold) {
+          if (mapping_edit_distances[mi] < min_num_errors) {
+            second_min_num_errors = min_num_errors;
+            num_second_best_mappings = num_best_mappings;
+            min_num_errors = mapping_edit_distances[mi];
+            num_best_mappings = 1;
+          } else if (mapping_edit_distances[mi] == min_num_errors) {
+            num_best_mappings++;
+          } else if (mapping_edit_distances[mi] == second_min_num_errors) {
+            num_second_best_mappings++;
+          } else if (mapping_edit_distances[mi] < second_min_num_errors) {
+            num_second_best_mappings = 1;
+            second_min_num_errors = mapping_edit_distances[mi];
+          }
+          if (candidate_direction == kPositive) {
+            mappings.emplace_back((uint8_t)mapping_edit_distances[mi],
+                                  valid_candidates[mi].position -
+                                      mapping_parameters_.error_threshold +
+                                      mapping_end_positions[mi]);
+          } else {
+            mappings.emplace_back((uint8_t)mapping_edit_distances[mi],
+                                  valid_candidates[mi].position - read_length +
+                                      1 - mapping_parameters_.error_threshold +
+                                      mapping_end_positions[mi]);
+          }
+        } else {
+          candidate_count_threshold = valid_candidates[mi].count;
+        }
+      }
     }
-    ++candidate_index;
+
+    valid_candidate_index = 0;
   }
 
   for (uint32_t ci = 0; ci < valid_candidate_index; ++ci) {
@@ -661,7 +662,7 @@ void MappingGenerator<MappingRecord>::VerifyCandidatesOnOneDirection(
     const SequenceBatch &read_batch, const SequenceBatch &reference,
     MappingMetadata &mapping_metadata) {
   const char *read = read_batch.GetSequenceAt(read_index);
-  uint32_t read_length = read_batch.GetSequenceLengthAt(read_index);
+  const uint32_t read_length = read_batch.GetSequenceLengthAt(read_index);
   const std::string &negative_read =
       read_batch.GetNegativeSequenceAt(read_index);
 
@@ -682,7 +683,10 @@ void MappingGenerator<MappingRecord>::VerifyCandidatesOnOneDirection(
   uint32_t candidate_count_threshold = 0;
 
   for (uint32_t ci = 0; ci < candidates.size(); ++ci) {
-    if (candidates[ci].count < candidate_count_threshold) break;
+    if (candidates[ci].count < candidate_count_threshold) {
+      break;
+    }
+
     uint32_t rid = candidates[ci].GetReferenceSequenceIndex();
     uint32_t position = candidates[ci].GetReferenceSequencePosition();
     if (candidate_direction == kNegative) {
@@ -695,9 +699,9 @@ void MappingGenerator<MappingRecord>::VerifyCandidatesOnOneDirection(
 
     int mapping_end_position = read_length;
     int gap_beginning = 0;
-    int num_errors;
-    int allow_gap_beginning_ = 20;
-    int mapping_length_threshold = 30;
+    int num_errors = 0;
+    const int allow_gap_beginning_ = 20;
+    const int mapping_length_threshold = 30;
     int allow_gap_beginning =
         allow_gap_beginning_ - mapping_parameters_.error_threshold;
     int actual_num_errors = 0;
@@ -890,7 +894,6 @@ void MappingGenerator<MappingRecord>::ProcessBestMappingsForSingleEndRead(
   MappingInMemory mapping_in_memory;
   mapping_in_memory.read_id = read_id;
   mapping_in_memory.read_name = read_name;
-  // const uint8_t is_unique = mapping_metadata.num_best_mappings_ == 1 ? 1 : 0;
   mapping_in_memory.is_unique = (mapping_metadata.num_best_mappings_ == 1);
 
   uint64_t barcode_key = 0;
@@ -1044,7 +1047,7 @@ void MappingGenerator<MappingRecord>::
                     mappings1[i1].second + read1_length - min_overlap_length)) {
       ++i1;
     } else {
-      // ok, find a pair, we store current ni2 somewhere and keep looking until
+      // Ok, find a pair, we store current ni2 somewhere and keep looking until
       // we go out of the range, then we go back and then move to next pi1 and
       // keep doing the similar thing.
       uint32_t current_i2 = i2;
