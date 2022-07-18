@@ -25,6 +25,14 @@ class MappingMetadata {
     repetitive_seed_length_ = 0;
   }
 
+  inline size_t GetNumPositiveCandidates() const {
+    return positive_candidates_.size();
+  }
+
+  inline size_t GetNumNegativeCandidates() const {
+    return negative_candidates_.size();
+  }
+
   inline size_t GetNumCandidates() const {
     return positive_candidates_.size() + negative_candidates_.size();
   }

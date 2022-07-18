@@ -139,15 +139,11 @@ template <typename MappingRecord>
 void MappingGenerator<MappingRecord>::VerifyCandidates(
     const SequenceBatch &read_batch, uint32_t read_index,
     const SequenceBatch &reference, MappingMetadata &mapping_metadata) {
-  int &min_num_errors = mapping_metadata.min_num_errors_;
-  int &num_best_mappings = mapping_metadata.num_best_mappings_;
-  int &second_min_num_errors = mapping_metadata.second_min_num_errors_;
-  int &num_second_best_mappings = mapping_metadata.num_second_best_mappings_;
-
-  min_num_errors = mapping_parameters_.error_threshold + 1;
-  num_best_mappings = 0;
-  second_min_num_errors = mapping_parameters_.error_threshold + 1;
-  num_second_best_mappings = 0;
+  mapping_metadata.SetMinNumErrors(mapping_parameters_.error_threshold + 1);
+  mapping_metadata.SetNumBestMappings(0);
+  mapping_metadata.SetSecondMinNumErrors(mapping_parameters_.error_threshold +
+                                         1);
+  mapping_metadata.SetNumSecondBestMappings(0);
 
   // Directly obtain the non-split mapping in ideal case and return without
   // running actual verification.
@@ -173,13 +169,8 @@ void MappingGenerator<MappingRecord>::VerifyCandidates(
     return;
   }
 
-  const size_t num_positive_candidates =
-      mapping_metadata.positive_candidates_.size();
-  const size_t num_negative_candidates =
-      mapping_metadata.negative_candidates_.size();
-
   // For non-split alignments, use SIMD when possible.
-  if (num_positive_candidates < (size_t)NUM_VPU_LANES_) {
+  if (mapping_metadata.GetNumPositiveCandidates() < (size_t)NUM_VPU_LANES_) {
     VerifyCandidatesOnOneDirection(kPositive, read_index, read_batch, reference,
                                    mapping_metadata);
   } else {
@@ -187,7 +178,7 @@ void MappingGenerator<MappingRecord>::VerifyCandidates(
                                             reference, mapping_metadata);
   }
 
-  if (num_negative_candidates < (size_t)NUM_VPU_LANES_) {
+  if (mapping_metadata.GetNumNegativeCandidates() < (size_t)NUM_VPU_LANES_) {
     VerifyCandidatesOnOneDirection(kNegative, read_index, read_batch, reference,
                                    mapping_metadata);
   } else {
@@ -279,9 +270,9 @@ bool MappingGenerator<MappingRecord>::
     return false;
   }
 
-  mapping_metadata.min_num_errors_ = 0;
-  mapping_metadata.num_best_mappings_ = 1;
-  mapping_metadata.num_second_best_mappings_ = 0;
+  mapping_metadata.SetMinNumErrors(0);
+  mapping_metadata.SetNumBestMappings(1);
+  mapping_metadata.SetNumSecondBestMappings(0);
 
   uint32_t rid = 0;
   uint32_t position = 0;
