@@ -61,6 +61,9 @@ class MappingGenerator {
       std::vector<std::vector<MappingRecord>> &mappings_on_diff_ref_seqs);
 
  private:
+  bool IsValidCandidate(uint32_t rid, uint32_t position, uint32_t read_length,
+                        const SequenceBatch &reference);
+
   bool DirectlyGenerateOneNonSplitMappingSupportedByAllMinimizers(
       const SequenceBatch &read_batch, uint32_t read_index,
       const SequenceBatch &reference, MappingMetadata &mapping_metadata);
@@ -193,6 +196,25 @@ void MappingGenerator<MappingRecord>::VerifyCandidates(
   }
 }
 
+// Return true if the candidate position is valid on the reference with rid.
+// Note only the position is checked and the input rid is not checked in this
+// function. So the input rid must be valid.
+template <typename MappingRecord>
+bool MappingGenerator<MappingRecord>::IsValidCandidate(
+    uint32_t rid, uint32_t position, uint32_t read_length,
+    const SequenceBatch &reference) {
+  const uint32_t reference_length = reference.GetSequenceLengthAt(rid);
+
+  if (position < (uint32_t)mapping_parameters_.error_threshold ||
+      position >= reference_length ||
+      position + read_length + mapping_parameters_.error_threshold >=
+          reference_length) {
+    return false;
+  }
+
+  return true;
+}
+
 // Return true when there is one non-split mapping generated and the mapping is
 // supported by all the minimizers.
 template <typename MappingRecord>
@@ -275,14 +297,8 @@ bool MappingGenerator<MappingRecord>::
         read_length + 1;
   }
 
-  bool is_valid_candidate = true;
-  if (position < (uint32_t)mapping_parameters_.error_threshold ||
-      position >= reference.GetSequenceLengthAt(rid) ||
-      position + read_length + mapping_parameters_.error_threshold >=
-          reference.GetSequenceLengthAt(rid)) {
-    is_valid_candidate = false;
-  }
-
+  const bool is_valid_candidate =
+      IsValidCandidate(rid, position, read_length, reference);
   if (is_valid_candidate) {
     if (all_minimizer_candidate_direction == kPositive) {
       positive_mappings.emplace_back(
@@ -332,11 +348,8 @@ void MappingGenerator<MappingRecord>::VerifyCandidatesOnOneDirectionUsingSIMD(
     if (candidate_direction == kNegative) {
       position = position - read_length + 1;
     }
-    if (position < (uint32_t)mapping_parameters_.error_threshold ||
-        position >= reference.GetSequenceLengthAt(rid) ||
-        position + read_length + mapping_parameters_.error_threshold >=
-            reference.GetSequenceLengthAt(rid)) {
-      // not a valid candidate
+
+    if (!IsValidCandidate(rid, position, read_length, reference)) {
       ++candidate_index;
       continue;
     } else {
@@ -458,12 +471,11 @@ void MappingGenerator<MappingRecord>::VerifyCandidatesOnOneDirectionUsingSIMD(
     if (candidate_direction == kNegative) {
       position = position - read_length + 1;
     }
-    if (position < (uint32_t)mapping_parameters_.error_threshold ||
-        position >= reference.GetSequenceLengthAt(rid) ||
-        position + read_length + mapping_parameters_.error_threshold >=
-            reference.GetSequenceLengthAt(rid)) {
+
+    if (!IsValidCandidate(rid, position, read_length, reference)) {
       continue;
     }
+
     int mapping_end_position;
     int num_errors;
     if (candidate_direction == kPositive) {
@@ -542,10 +554,7 @@ void MappingGenerator<MappingRecord>::VerifyCandidatesOnOneDirection(
       position = position - read_length + 1;
     }
 
-    if (position < (uint32_t)mapping_parameters_.error_threshold ||
-        position >= reference.GetSequenceLengthAt(rid) ||
-        position + read_length + mapping_parameters_.error_threshold >=
-            reference.GetSequenceLengthAt(rid)) {
+    if (!IsValidCandidate(rid, position, read_length, reference)) {
       continue;
     }
 
