@@ -21,6 +21,10 @@ struct Candidate {
       return true;
     }
 
+    if (count < c.count) {
+      return false;
+    }
+
     return position < c.position;
   }
 };
