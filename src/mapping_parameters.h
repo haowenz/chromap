@@ -1,6 +1,9 @@
 #ifndef MAPPING_PARAMETERS_H_
 #define MAPPING_PARAMETERS_H_
 
+#include <cstdint>
+#include <string>
+
 namespace chromap {
 
 enum MappingOutputFormat {
