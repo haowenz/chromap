@@ -101,11 +101,6 @@ bool DraftMappingGenerator::
   Direction all_minimizer_candidate_direction = kPositive;
 
   for (uint32_t i = 0; i < positive_candidates.size(); ++i) {
-#ifdef LI_DEBUG
-    printf("%s + %u %u %d:%d\n", __func__, i, positive_candidates[i].count,
-           (int)(positive_candidates[i].position >> 32),
-           (int)positive_candidates[i].position);
-#endif
     if (positive_candidates[i].count == minimizers.size()) {
       all_minimizer_candidate_index = i;
       ++num_all_minimizer_candidates;
@@ -113,11 +108,6 @@ bool DraftMappingGenerator::
   }
 
   for (uint32_t i = 0; i < negative_candidates.size(); ++i) {
-#ifdef LI_DEBUG
-    printf("%s - %u %u %d:%d\n", __func__, i, negative_candidates[i].count,
-           (int)(negative_candidates[i].position >> 32),
-           (int)negative_candidates[i].position);
-#endif
     if (negative_candidates[i].count == minimizers.size()) {
       all_minimizer_candidate_index = i;
       all_minimizer_candidate_direction = kNegative;
