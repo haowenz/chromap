@@ -109,6 +109,27 @@ inline static char Uint8ToChar(const uint8_t i) {
   return uint8_to_char_table_[i];
 }
 
+// Make sure the length is not greater than 32 before calling this function.
+inline static uint64_t GenerateSeedFromSequence(const char *sequence,
+                                                uint32_t sequence_length,
+                                                uint32_t start_position,
+                                                uint32_t seed_length) {
+  uint64_t seed = 0;
+  for (uint32_t i = 0; i < seed_length; ++i) {
+    if (start_position + i < sequence_length) {
+      uint8_t current_base = CharToUint8(sequence[i + start_position]);
+      if (current_base < 4) {               // not an ambiguous base
+        seed = (seed << 2) | current_base;  // forward k-mer
+      } else {
+        seed = seed << 2;  // N->A
+      }
+    } else {
+      seed = seed << 2;  // Pad A
+    }
+  }
+  return seed;
+}
+
 }  // namespace chromap
 
 #endif  // UTILS_H_
