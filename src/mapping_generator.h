@@ -34,7 +34,6 @@ class MappingGenerator {
   MappingGenerator(const MappingParameters &mapping_parameters,
                    const std::vector<int> &pairs_custom_rid_rank)
       : mapping_parameters_(mapping_parameters),
-        NUM_VPU_LANES_(mapping_parameters.GetNumVPULanes()),
         pairs_custom_rid_rank_(pairs_custom_rid_rank) {}
 
   ~MappingGenerator() = default;
@@ -109,7 +108,6 @@ class MappingGenerator {
       uint8_t &mapq1, uint8_t &mapq2);
 
   const MappingParameters mapping_parameters_;
-  const int NUM_VPU_LANES_;
   const std::vector<int> pairs_custom_rid_rank_;
 };
 
