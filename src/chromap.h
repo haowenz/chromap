@@ -11,6 +11,7 @@
 
 #include "candidate_processor.h"
 #include "cxxopts.hpp"
+#include "draft_mapping_generator.h"
 #include "feature_barcode_matrix.h"
 #include "index.h"
 #include "index_parameters.h"
@@ -216,6 +217,8 @@ void Chromap::MapSingleEndReads() {
   MappingProcessor<MappingRecord> mapping_processor(mapping_parameters_,
                                                     min_unique_mapping_mapq_);
 
+  DraftMappingGenerator draft_mapping_generator(mapping_parameters_);
+
   MappingGenerator<MappingRecord> mapping_generator(mapping_parameters_,
                                                     pairs_custom_rid_rank_);
 
@@ -291,7 +294,7 @@ void Chromap::MapSingleEndReads() {
             mapping_parameters_.num_threads / num_reference_sequences);
       }
     }
-#pragma omp parallel shared(num_reads_, mm_history, reference, index, read_batch, barcode_batch, read_batch_for_loading, barcode_batch_for_loading, std::cerr, num_loaded_reads_for_loading, num_loaded_reads, num_reference_sequences, mappings_on_diff_ref_seqs_for_diff_threads, mappings_on_diff_ref_seqs_for_diff_threads_for_saving, mappings_on_diff_ref_seqs, temp_mapping_file_handles, mm_to_candidates_cache, mapping_writer, candidate_processor, mapping_processor, mapping_generator, num_mappings_in_mem, max_num_mappings_in_mem) num_threads(mapping_parameters_.num_threads) reduction(+:num_candidates_, num_mappings_, num_mapped_reads_, num_uniquely_mapped_reads_, num_barcode_in_whitelist_, num_corrected_barcode_)
+#pragma omp parallel shared(num_reads_, mm_history, reference, index, read_batch, barcode_batch, read_batch_for_loading, barcode_batch_for_loading, std::cerr, num_loaded_reads_for_loading, num_loaded_reads, num_reference_sequences, mappings_on_diff_ref_seqs_for_diff_threads, mappings_on_diff_ref_seqs_for_diff_threads_for_saving, mappings_on_diff_ref_seqs, temp_mapping_file_handles, mm_to_candidates_cache, mapping_writer, candidate_processor, mapping_processor, draft_mapping_generator, mapping_generator, num_mappings_in_mem, max_num_mappings_in_mem) num_threads(mapping_parameters_.num_threads) reduction(+:num_candidates_, num_mappings_, num_mapped_reads_, num_uniquely_mapped_reads_, num_barcode_in_whitelist_, num_corrected_barcode_)
     {
       thread_num_candidates = 0;
       thread_num_mappings = 0;
@@ -368,8 +371,8 @@ void Chromap::MapSingleEndReads() {
                   mapping_metadata.GetNumCandidates();
               if (current_num_candidates > 0) {
                 thread_num_candidates += current_num_candidates;
-                mapping_generator.VerifyCandidates(read_batch, read_index,
-                                                   reference, mapping_metadata);
+                draft_mapping_generator.GenerateDraftMappings(
+                    read_batch, read_index, reference, mapping_metadata);
 
                 const size_t current_num_draft_mappings =
                     mapping_metadata.GetNumDraftMappings();
@@ -593,6 +596,8 @@ void Chromap::MapPairedEndReads() {
   MappingProcessor<MappingRecord> mapping_processor(mapping_parameters_,
                                                     min_unique_mapping_mapq_);
 
+  DraftMappingGenerator draft_mapping_generator(mapping_parameters_);
+
   MappingGenerator<MappingRecord> mapping_generator(mapping_parameters_,
                                                     pairs_custom_rid_rank_);
 
@@ -670,7 +675,7 @@ void Chromap::MapPairedEndReads() {
       }
     }
 
-#pragma omp parallel shared(num_reads_, num_reference_sequences, reference, index, read_batch1, read_batch2, barcode_batch, read_batch1_for_loading, read_batch2_for_loading, barcode_batch_for_loading, candidate_processor, mapping_processor, mapping_generator, mapping_writer, std::cerr, num_loaded_pairs_for_loading, num_loaded_pairs, mappings_on_diff_ref_seqs_for_diff_threads, mappings_on_diff_ref_seqs_for_diff_threads_for_saving, mappings_on_diff_ref_seqs, num_mappings_in_mem, max_num_mappings_in_mem, temp_mapping_file_handles, mm_to_candidates_cache, mm_history1, mm_history2) num_threads(mapping_parameters_.num_threads) reduction(+:num_candidates_, num_mappings_, num_mapped_reads_, num_uniquely_mapped_reads_, num_barcode_in_whitelist_, num_corrected_barcode_)
+#pragma omp parallel shared(num_reads_, num_reference_sequences, reference, index, read_batch1, read_batch2, barcode_batch, read_batch1_for_loading, read_batch2_for_loading, barcode_batch_for_loading, candidate_processor, mapping_processor, draft_mapping_generator, mapping_generator, mapping_writer, std::cerr, num_loaded_pairs_for_loading, num_loaded_pairs, mappings_on_diff_ref_seqs_for_diff_threads, mappings_on_diff_ref_seqs_for_diff_threads_for_saving, mappings_on_diff_ref_seqs, num_mappings_in_mem, max_num_mappings_in_mem, temp_mapping_file_handles, mm_to_candidates_cache, mm_history1, mm_history2) num_threads(mapping_parameters_.num_threads) reduction(+:num_candidates_, num_mappings_, num_mapped_reads_, num_uniquely_mapped_reads_, num_barcode_in_whitelist_, num_corrected_barcode_)
     {
       thread_num_candidates = 0;
       thread_num_mappings = 0;
@@ -844,7 +849,7 @@ void Chromap::MapPairedEndReads() {
                             .negative_candidates_);
                   }
 
-                  mapping_generator.VerifyCandidates(
+                  draft_mapping_generator.GenerateDraftMappings(
                       read_batch1, pair_index, reference,
                       paired_end_mapping_metadata.mapping_metadata1_);
 
@@ -852,7 +857,7 @@ void Chromap::MapPairedEndReads() {
                       paired_end_mapping_metadata.mapping_metadata1_
                           .GetNumDraftMappings();
 
-                  mapping_generator.VerifyCandidates(
+                  draft_mapping_generator.GenerateDraftMappings(
                       read_batch2, pair_index, reference,
                       paired_end_mapping_metadata.mapping_metadata2_);
 

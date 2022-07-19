@@ -2,6 +2,7 @@
 #define MAPPING_METADATA_H_
 
 #include <algorithm>
+#include <cstdio>
 #include <utility>
 #include <vector>
 
@@ -14,6 +15,7 @@ class mm_cache;
 class Index;
 class CandidateProcessor;
 class PairedEndMappingMetadata;
+class DraftMappingGenerator;
 template <typename MappingRecord>
 class MappingGenerator;
 class Chromap;
@@ -161,6 +163,7 @@ class MappingMetadata {
   friend class Index;
   friend class CandidateProcessor;
   friend class PairedEndMappingMetadata;
+  friend class DraftMappingGenerator;
   template <typename MappingRecord>
   friend class MappingGenerator;
   friend class Chromap;
