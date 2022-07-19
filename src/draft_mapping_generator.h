@@ -37,7 +37,7 @@ class DraftMappingGenerator {
 
   // Return true when there is one non-split mapping generated and the mapping
   // is supported by all the minimizers.
-  bool DirectlyGenerateOneNonSplitMappingSupportedByAllMinimizers(
+  bool GenerateNonSplitDraftMappingSupportedByAllMinimizers(
       const SequenceBatch &read_batch, uint32_t read_index,
       const SequenceBatch &reference, MappingMetadata &mapping_metadata);
 
