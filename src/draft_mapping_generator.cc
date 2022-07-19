@@ -17,7 +17,7 @@ void DraftMappingGenerator::GenerateDraftMappings(
   // Directly obtain the non-split mapping in ideal case and return without
   // running actual verification.
   const bool is_mapping_generated =
-      DirectlyGenerateOneNonSplitMappingSupportedByAllMinimizers(
+      GenerateNonSplitDraftMappingSupportedByAllMinimizers(
           read_batch, read_index, reference, mapping_metadata);
   if (is_mapping_generated) {
     return;
@@ -70,7 +70,7 @@ bool DraftMappingGenerator::IsValidCandidate(uint32_t rid, uint32_t position,
 }
 
 bool DraftMappingGenerator::
-    DirectlyGenerateOneNonSplitMappingSupportedByAllMinimizers(
+    GenerateNonSplitDraftMappingSupportedByAllMinimizers(
         const SequenceBatch &read_batch, uint32_t read_index,
         const SequenceBatch &reference, MappingMetadata &mapping_metadata) {
   if (split_alignment_) {
