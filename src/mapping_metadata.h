@@ -38,7 +38,7 @@ class MappingMetadata {
     return positive_candidates_.size() + negative_candidates_.size();
   }
 
-  inline size_t GetNumMappings() const {
+  inline size_t GetNumDraftMappings() const {
     return positive_mappings_.size() + negative_mappings_.size();
   }
 

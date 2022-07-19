@@ -371,8 +371,9 @@ void Chromap::MapSingleEndReads() {
                 mapping_generator.VerifyCandidates(read_batch, read_index,
                                                    reference, mapping_metadata);
 
-                size_t current_num_mappings = mapping_metadata.GetNumMappings();
-                if (current_num_mappings > 0) {
+                const size_t current_num_draft_mappings =
+                    mapping_metadata.GetNumDraftMappings();
+                if (current_num_draft_mappings > 0) {
                   std::vector<std::vector<MappingRecord>>
                       &mappings_on_diff_ref_seqs =
                           mappings_on_diff_ref_seqs_for_diff_threads
@@ -847,19 +848,20 @@ void Chromap::MapPairedEndReads() {
                       read_batch1, pair_index, reference,
                       paired_end_mapping_metadata.mapping_metadata1_);
 
-                  size_t current_num_mappings1 =
+                  const size_t current_num_draft_mappings1 =
                       paired_end_mapping_metadata.mapping_metadata1_
-                          .GetNumMappings();
+                          .GetNumDraftMappings();
 
                   mapping_generator.VerifyCandidates(
                       read_batch2, pair_index, reference,
                       paired_end_mapping_metadata.mapping_metadata2_);
 
-                  size_t current_num_mappings2 =
+                  const size_t current_num_draft_mappings2 =
                       paired_end_mapping_metadata.mapping_metadata2_
-                          .GetNumMappings();
+                          .GetNumDraftMappings();
 
-                  if (current_num_mappings1 > 0 && current_num_mappings2 > 0) {
+                  if (current_num_draft_mappings1 > 0 &&
+                      current_num_draft_mappings2 > 0) {
                     std::vector<std::vector<MappingRecord>>
                         &mappings_on_diff_ref_seqs =
                             mappings_on_diff_ref_seqs_for_diff_threads
