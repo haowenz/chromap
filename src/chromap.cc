@@ -357,7 +357,7 @@ void Chromap::LoadBarcodeWhitelist() {
     //  //first_line = false;
     //}
     // assert(kmer.length() == (size_t)kmer_size_);
-    uint64_t barcode_key = SequenceBatch::GenerateSeedFromSequence(
+    uint64_t barcode_key = GenerateSeedFromSequence(
         barcode.data(), barcode_length, 0, barcode_length);
     // PoreModelParameters &pore_model_parameters =
     // pore_models_[kmer_hash_value]; barcode_whitelist_file_line_string_stream

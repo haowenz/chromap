@@ -10,7 +10,7 @@
 #include <vector>
 
 #include "khash.h"
-#include "sequence_batch.h"
+#include "utils.h"
 
 namespace chromap {
 
@@ -108,8 +108,8 @@ class BarcodeTranslator {
     to = line.substr(0, i);
     // from = line.substr(i + 1, len - i - 1);
     from_bc_length_ = len - i - 1;
-    uint64_t from_seed = SequenceBatch::GenerateSeedFromSequence(
-        line.c_str(), len, i + 1, from_bc_length_);
+    uint64_t from_seed =
+        GenerateSeedFromSequence(line.c_str(), len, i + 1, from_bc_length_);
 
     int khash_return_code;
     khiter_t barcode_translate_table_iter = kh_put(
