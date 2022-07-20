@@ -28,6 +28,10 @@ class MappingMetadata {
     repetitive_seed_length_ = 0;
   }
 
+  inline size_t GetNumMinimizers() const {
+    return minimizers_.size();
+  }
+
   inline size_t GetNumPositiveCandidates() const {
     return positive_candidates_.size();
   }

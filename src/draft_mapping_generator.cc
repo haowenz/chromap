@@ -88,9 +88,6 @@ bool DraftMappingGenerator::
   const std::vector<Candidate> &negative_candidates =
       mapping_metadata.negative_candidates_;
 
-  const std::vector<std::pair<uint64_t, uint64_t>> &minimizers =
-      mapping_metadata.minimizers_;
-
   std::vector<DraftMapping> &positive_mappings =
       mapping_metadata.positive_mappings_;
   std::vector<DraftMapping> &negative_mappings =
@@ -101,14 +98,14 @@ bool DraftMappingGenerator::
   Direction all_minimizer_candidate_direction = kPositive;
 
   for (uint32_t i = 0; i < positive_candidates.size(); ++i) {
-    if (positive_candidates[i].count == minimizers.size()) {
+    if (positive_candidates[i].count == mapping_metadata.GetNumMinimizers()) {
       all_minimizer_candidate_index = i;
       ++num_all_minimizer_candidates;
     }
   }
 
   for (uint32_t i = 0; i < negative_candidates.size(); ++i) {
-    if (negative_candidates[i].count == minimizers.size()) {
+    if (negative_candidates[i].count == mapping_metadata.GetNumMinimizers()) {
       all_minimizer_candidate_index = i;
       all_minimizer_candidate_direction = kNegative;
       ++num_all_minimizer_candidates;
@@ -123,18 +120,20 @@ bool DraftMappingGenerator::
   mapping_metadata.SetNumBestMappings(1);
   mapping_metadata.SetNumSecondBestMappings(0);
 
-  uint32_t rid = 0;
-  uint32_t position = 0;
   const uint32_t read_length = read_batch.GetSequenceLengthAt(read_index);
+  const std::vector<Candidate> &candidates =
+      all_minimizer_candidate_direction == kPositive ? positive_candidates
+                                                     : negative_candidates;
+
+  const uint32_t rid =
+      candidates[all_minimizer_candidate_index].GetReferenceSequenceIndex();
+
+  uint32_t position = 0;
 
   if (all_minimizer_candidate_direction == kPositive) {
-    rid = positive_candidates[all_minimizer_candidate_index]
-              .GetReferenceSequenceIndex();
     position = positive_candidates[all_minimizer_candidate_index]
                    .GetReferenceSequencePosition();
   } else {
-    rid = negative_candidates[all_minimizer_candidate_index]
-              .GetReferenceSequenceIndex();
     position = negative_candidates[all_minimizer_candidate_index]
                    .GetReferenceSequencePosition() -
                read_length + 1;
