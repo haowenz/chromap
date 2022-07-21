@@ -13,7 +13,7 @@ int GetLongestMatchLength(const char *pattern, const char *text,
 
 // Return newly adjusted reference start/end position for kPositive/kNegative
 // mappings.
-int AdjustGapBeginning(Direction mapping_direction, const char *ref,
+int AdjustGapBeginning(const Strand mapping_strand, const char *ref,
                        const char *read, int *gap_beginning, int read_end,
                        int ref_start_position, int ref_end_position,
                        int *n_cigar, uint32_t **cigar);

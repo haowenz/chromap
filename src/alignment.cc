@@ -21,12 +21,12 @@ int GetLongestMatchLength(const char *pattern, const char *text,
   return max_match;
 }
 
-int AdjustGapBeginning(Direction mapping_direction, const char *ref,
+int AdjustGapBeginning(const Strand mapping_strand, const char *ref,
                        const char *read, int *gap_beginning, int read_end,
                        int ref_start_position, int ref_end_position,
                        int *n_cigar, uint32_t **cigar) {
   int i, j;
-  if (mapping_direction == kPositive) {
+  if (mapping_strand == kPositive) {
     if (*gap_beginning <= 0) {
       return ref_start_position;
     }

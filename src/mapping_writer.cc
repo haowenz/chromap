@@ -406,8 +406,8 @@ void MappingWriter<PairsMapping>::AppendMapping(uint32_t rid,
                             std::to_string(mapping.GetPosition(1)) + "\t" +
                             std::string(reference_sequence_name2) + "\t" +
                             std::to_string(mapping.GetPosition(2)) + "\t" +
-                            std::string(1, mapping.GetDirection(1)) + "\t" +
-                            std::string(1, mapping.GetDirection(2)) + "\tUU\n");
+                            std::string(1, mapping.GetStrand(1)) + "\t" +
+                            std::string(1, mapping.GetStrand(2)) + "\tUU\n");
 }
 
 template <>

@@ -2,6 +2,7 @@
 #define CHROMAP_CACHE_H_
 
 #include "index.h"
+#include "minimizer.h"
 
 #define FINGER_PRINT_SIZE 103
 
@@ -33,22 +34,21 @@ class mm_cache {
       head_mm;  // the first and last minimizer for each cached minimizer vector
 
   // 0: not match. -1: opposite order. 1: same order
-  int IsMinimizersMatchCache(
-      const std::vector<std::pair<uint64_t, uint64_t> > &minimizers,
-      const struct _mm_cache_entry &cache) {
+  int IsMinimizersMatchCache(const std::vector<Minimizer> &minimizers,
+                             const struct _mm_cache_entry &cache) {
     if (cache.minimizers.size() != minimizers.size()) return 0;
     int size = minimizers.size();
     int i, j;
     int direction = 0;
     for (i = 0; i < size; ++i) {
-      if (cache.minimizers[i] != minimizers[i].first ||
-          (minimizers[i].second & 1) != cache.strands[i])
+      if (cache.minimizers[i] != minimizers[i].GetHashKey() ||
+          (minimizers[i].GetMinimizer() & 1) != cache.strands[i])
         break;
     }
     if (i >= size) {
       for (i = 0; i < size - 1; ++i) {
-        if (cache.offsets[i] != ((int)minimizers[i + 1].second >> 1) -
-                                    ((int)minimizers[i].second >> 1))
+        if (cache.offsets[i] != ((int)minimizers[i + 1].GetSequencePosition()) -
+                                    ((int)minimizers[i].GetSequencePosition()))
           break;
       }
       if (i >= size - 1) direction = 1;
@@ -57,14 +57,15 @@ class mm_cache {
     if (direction == 1) return 1;
 
     for (i = 0, j = size - 1; i < size; ++i, --j) {
-      if (cache.minimizers[i] != minimizers[j].first ||
-          (minimizers[j].second & 1) == cache.strands[i])
+      if (cache.minimizers[i] != minimizers[j].GetHashKey() ||
+          (minimizers[j].GetMinimizer() & 1) == cache.strands[i])
         break;
     }
     if (i >= size) {
       for (i = 0, j = size - 1; i < size - 1; ++i, --j) {
-        if (cache.offsets[i] != ((int)minimizers[j].second >> 1) -
-                                    ((int)minimizers[j - 1].second >> 1))
+        if (cache.offsets[i] !=
+            ((int)minimizers[j].GetSequencePosition()) -
+                ((int)minimizers[j - 1].GetSequencePosition()))
           break;
       }
 
@@ -102,8 +103,7 @@ class mm_cache {
 
   // Return the hash entry index. -1 if failed.
   int Query(MappingMetadata &mapping_metadata, uint32_t read_len) {
-    const std::vector<std::pair<uint64_t, uint64_t> > &minimizers =
-        mapping_metadata.minimizers_;
+    const std::vector<Minimizer> &minimizers = mapping_metadata.minimizers_;
     std::vector<Candidate> &pos_candidates =
         mapping_metadata.positive_candidates_;
     std::vector<Candidate> &neg_candidates =
@@ -113,16 +113,16 @@ class mm_cache {
     int i;
     int msize = minimizers.size();
     if (msize == 0) return -1;
-    if ((head_mm[(minimizers[0].first >> 6) & HEAD_MM_ARRAY_MASK] &
-         (1ull << (minimizers[0].first & 0x3f))) == 0)
+    if ((head_mm[(minimizers[0].GetHashKey() >> 6) & HEAD_MM_ARRAY_MASK] &
+         (1ull << (minimizers[0].GetHashKey() & 0x3f))) == 0)
       return -1;
     uint64_t h = 0;
     // for (i = 0 ; i < msize; ++i)
     //  h += (minimizers[i].first);
     if (msize == 1) {
-      h = (minimizers[0].first);
+      h = (minimizers[0].GetHashKey());
     } else {
-      h = minimizers[0].first + minimizers[msize - 1].first;
+      h = minimizers[0].GetHashKey() + minimizers[msize - 1].GetHashKey();
     }
 
     int hidx = h % cache_size;
@@ -132,7 +132,7 @@ class mm_cache {
       neg_candidates = cache[hidx].negative_candidates;
       repetitive_seed_length = cache[hidx].repetitive_seed_length;
       int size = pos_candidates.size();
-      int shift = (int)minimizers[0].second >> 1;
+      int shift = (int)minimizers[0].GetSequencePosition();
       for (i = 0; i < size; ++i) {
         uint64_t rid = pos_candidates[i].position >> 32;
         int rpos = (int)pos_candidates[i].position;
@@ -146,14 +146,16 @@ class mm_cache {
       int size = cache[hidx].negative_candidates.size();
       // Start position of the last minimizer shoud equal the first minimizer's
       // end position in rc "read".
-      int shift = read_len - ((int)minimizers[msize - 1].second >> 1) - 1 +
+      int shift = read_len -
+                  ((int)minimizers[msize - 1].GetSequencePosition()) - 1 +
                   kmer_length - 1;
 
       pos_candidates = cache[hidx].negative_candidates;
       for (i = 0; i < size; ++i) {
         uint64_t rid = cache[hidx].negative_candidates[i].position >> 32;
         int rpos = (int)cache[hidx].negative_candidates[i].position;
-        pos_candidates[i].position = (rid << 32) + (uint32_t)(rpos + shift - read_len + 1);
+        pos_candidates[i].position =
+            (rid << 32) + (uint32_t)(rpos + shift - read_len + 1);
       }
       size = cache[hidx].positive_candidates.size();
       neg_candidates = cache[hidx].positive_candidates;
@@ -168,7 +170,7 @@ class mm_cache {
     }
   }
 
-  void Update(const std::vector<std::pair<uint64_t, uint64_t> > &minimizers,
+  void Update(const std::vector<Minimizer> &minimizers,
               std::vector<Candidate> &pos_candidates,
               std::vector<Candidate> &neg_candidates,
               uint32_t repetitive_seed_length) {
@@ -184,10 +186,10 @@ class mm_cache {
     if (msize == 0)
       return;
     else if (msize == 1) {
-      h = f = (minimizers[0].first);
+      h = f = (minimizers[0].GetHashKey());
     } else {
-      h = minimizers[0].first + minimizers[msize - 1].first;
-      f = minimizers[0].first ^ minimizers[msize - 1].first;
+      h = minimizers[0].GetHashKey() + minimizers[msize - 1].GetHashKey();
+      f = minimizers[0].GetHashKey() ^ minimizers[msize - 1].GetHashKey();
     }
     int hidx = h % cache_size;
     int finger_print = f % FINGER_PRINT_SIZE;
@@ -238,9 +240,9 @@ if (cache[hidx].finger_print_cnt_sum <= 5)
         return;
       }
       int size = pos_candidates.size();
-      int shift = (int)minimizers[0].second >> 1;
+      int shift = (int)minimizers[0].GetSequencePosition();
       // Do not cache if it is too near the start.
-      for (i = 0; i < size; ++i) 
+      for (i = 0; i < size; ++i)
         if ((int)pos_candidates[i].position < kmer_length + shift) {
           cache[hidx].offsets.clear();
           cache[hidx].strands.clear();
@@ -249,8 +251,9 @@ if (cache[hidx].finger_print_cnt_sum <= 5)
         }
       size = neg_candidates.size();
       for (i = 0; i < size; ++i)
-        if ((int)neg_candidates[i].position - ((int)minimizers[msize - 1].second>>1)
-            < kmer_length + shift) {
+        if ((int)neg_candidates[i].position -
+                ((int)minimizers[msize - 1].GetSequencePosition()) <
+            kmer_length + shift) {
           cache[hidx].offsets.clear();
           cache[hidx].strands.clear();
           cache[hidx].minimizers.clear();
@@ -259,12 +262,13 @@ if (cache[hidx].finger_print_cnt_sum <= 5)
       cache[hidx].offsets.resize(msize - 1);
       cache[hidx].strands.resize(msize);
       for (i = 0; i < msize; ++i) {
-        cache[hidx].minimizers[i] = minimizers[i].first;
-        cache[hidx].strands[i] = (minimizers[i].second & 1);
+        cache[hidx].minimizers[i] = minimizers[i].GetHashKey();
+        cache[hidx].strands[i] = (minimizers[i].GetMinimizer() & 1);
       }
       for (i = 0; i < msize - 1; ++i) {
-        cache[hidx].offsets[i] = ((int)minimizers[i + 1].second >> 1) -
-                                 ((int)minimizers[i].second >> 1);
+        cache[hidx].offsets[i] =
+            ((int)minimizers[i + 1].GetSequencePosition()) -
+            ((int)minimizers[i].GetSequencePosition());
       }
       std::vector<Candidate>().swap(cache[hidx].positive_candidates);
       std::vector<Candidate>().swap(cache[hidx].negative_candidates);
@@ -274,17 +278,17 @@ if (cache[hidx].finger_print_cnt_sum <= 5)
 
       // adjust the candidate position.
       size = cache[hidx].positive_candidates.size();
-      for (i = 0; i < size; ++i) 
+      for (i = 0; i < size; ++i)
         cache[hidx].positive_candidates[i].position += shift;
       size = cache[hidx].negative_candidates.size();
       for (i = 0; i < size; ++i)
         cache[hidx].negative_candidates[i].position -= shift;
-      
+
       // Update head mm array
-      head_mm[(minimizers[0].first >> 6) & HEAD_MM_ARRAY_MASK] |=
-          (1ull << (minimizers[0].first & 0x3f));
-      head_mm[(minimizers[msize - 1].first >> 6) & HEAD_MM_ARRAY_MASK] |=
-          (1ull << (minimizers[msize - 1].first & 0x3f));
+      head_mm[(minimizers[0].GetHashKey() >> 6) & HEAD_MM_ARRAY_MASK] |=
+          (1ull << (minimizers[0].GetHashKey() & 0x3f));
+      head_mm[(minimizers[msize - 1].GetHashKey() >> 6) & HEAD_MM_ARRAY_MASK] |=
+          (1ull << (minimizers[msize - 1].GetHashKey() & 0x3f));
     }
   }
 
@@ -303,14 +307,15 @@ if (cache[hidx].finger_print_cnt_sum <= 5)
     return ret;
   }
 
-  // How many reads from a batch we want to use to update the cache. 
+  // How many reads from a batch we want to use to update the cache.
   // paired end data has twice the amount reads, so the threshold is lower
-  uint32_t GetUpdateThreshold(uint32_t num_loaded_reads, uint64_t num_reads, bool paired) {
+  uint32_t GetUpdateThreshold(uint32_t num_loaded_reads, uint64_t num_reads,
+                              bool paired) {
     const uint32_t block = paired ? 2500000 : 5000000;
     if (num_reads <= block)
       return num_loaded_reads;
     else
-      return num_loaded_reads / (1 + (num_reads / block));  
+      return num_loaded_reads / (1 + (num_reads / block));
   }
 
   void PrintStats() {

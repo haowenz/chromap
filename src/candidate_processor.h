@@ -13,6 +13,7 @@
 #include "mapping_metadata.h"
 #include "paired_end_mapping_metadata.h"
 #include "sequence_batch.h"
+#include "utils.h"
 
 namespace chromap {
 
@@ -39,16 +40,18 @@ class CandidateProcessor {
       PairedEndMappingMetadata &paired_end_mapping_metadata) const;
 
  private:
-  void GenerateCandidatesOnOneDirection(
-      int error_threshold, int num_seeds_required, uint32_t num_minimizers,
-      std::vector<uint64_t> &hits, std::vector<Candidate> &candidates) const;
+  void GenerateCandidatesOnOneStrand(int error_threshold,
+                                     int num_seeds_required,
+                                     uint32_t num_minimizers,
+                                     std::vector<uint64_t> &hits,
+                                     std::vector<Candidate> &candidates) const;
 
   int GenerateCandidatesFromRepetitiveReadWithMateInfo(
       int error_threshold, const Index &index,
-      const std::vector<std::pair<uint64_t, uint64_t> > &minimizers,
+      const std::vector<Minimizer> &minimizers,
       uint32_t &repetitive_seed_length, std::vector<uint64_t> &hits,
       std::vector<Candidate> &candidates,
-      const std::vector<Candidate> &mate_candidates, const Direction direction,
+      const std::vector<Candidate> &mate_candidates, const Strand strand,
       uint32_t search_range) const;
 
   void MergeCandidates(int error_threshold, std::vector<Candidate> &c1,

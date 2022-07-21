@@ -2,7 +2,7 @@
 
 namespace chromap {
 
-// For direction, kPositive is 1, kNegative is 0;
+// For strand, kPositive is 1, kNegative is 0;
 template <>
 void MappingGenerator<MappingWithoutBarcode>::EmplaceBackSingleEndMappingRecord(
     MappingInMemory &mapping_in_memory,
@@ -11,7 +11,7 @@ void MappingGenerator<MappingWithoutBarcode>::EmplaceBackSingleEndMappingRecord(
   mappings_on_diff_ref_seqs[mapping_in_memory.rid].emplace_back(
       mapping_in_memory.read_id, mapping_in_memory.GetFragmentStartPosition(),
       mapping_in_memory.GetFragmentLength(), mapping_in_memory.mapq,
-      mapping_in_memory.GetDirection(), mapping_in_memory.is_unique,
+      mapping_in_memory.GetStrand(), mapping_in_memory.is_unique,
       /*num_dups=*/1);
 }
 
@@ -23,7 +23,7 @@ void MappingGenerator<MappingWithBarcode>::EmplaceBackSingleEndMappingRecord(
       mapping_in_memory.read_id, mapping_in_memory.barcode_key,
       mapping_in_memory.GetFragmentStartPosition(),
       mapping_in_memory.GetFragmentLength(), mapping_in_memory.mapq,
-      mapping_in_memory.GetDirection(), mapping_in_memory.is_unique,
+      mapping_in_memory.GetStrand(), mapping_in_memory.is_unique,
       /*num_dups=*/1);
 }
 
@@ -36,7 +36,7 @@ void MappingGenerator<PAFMapping>::EmplaceBackSingleEndMappingRecord(
       mapping_in_memory.read_length,
       mapping_in_memory.GetFragmentStartPosition(),
       mapping_in_memory.GetFragmentLength(), mapping_in_memory.mapq,
-      mapping_in_memory.GetDirection(), mapping_in_memory.is_unique,
+      mapping_in_memory.GetStrand(), mapping_in_memory.is_unique,
       /*num_dups=*/1);
 }
 
@@ -48,7 +48,7 @@ void MappingGenerator<SAMMapping>::EmplaceBackSingleEndMappingRecord(
       mapping_in_memory.read_id, std::string(mapping_in_memory.read_name),
       mapping_in_memory.barcode_key, /*num_dups=*/1,
       mapping_in_memory.GetFragmentStartPosition(), mapping_in_memory.rid,
-      mapping_in_memory.SAM_flag, mapping_in_memory.GetDirection(),
+      mapping_in_memory.SAM_flag, mapping_in_memory.GetStrand(),
       /*is_alt=*/0, mapping_in_memory.is_unique, mapping_in_memory.mapq,
       mapping_in_memory.NM, mapping_in_memory.n_cigar, mapping_in_memory.cigar,
       mapping_in_memory.MD_tag, std::string(mapping_in_memory.read_sequence),
@@ -103,7 +103,7 @@ void MappingGenerator<PairedEndMappingWithoutBarcode>::
                     paired_end_mapping_in_memory.GetFragmentStartPosition(),
                     paired_end_mapping_in_memory.GetFragmentLength(),
                     paired_end_mapping_in_memory.mapq,
-                    paired_end_mapping_in_memory.GetDirection(),
+                    paired_end_mapping_in_memory.GetStrand(),
                     paired_end_mapping_in_memory.is_unique, /*num_dups=*/1,
                     paired_end_mapping_in_memory.GetPositiveAlignmentLength(),
                     paired_end_mapping_in_memory.GetNegativeAlignmentLength());
@@ -121,7 +121,7 @@ void MappingGenerator<PairedEndMappingWithBarcode>::
                     paired_end_mapping_in_memory.GetFragmentStartPosition(),
                     paired_end_mapping_in_memory.GetFragmentLength(),
                     paired_end_mapping_in_memory.mapq,
-                    paired_end_mapping_in_memory.GetDirection(),
+                    paired_end_mapping_in_memory.GetStrand(),
                     paired_end_mapping_in_memory.is_unique, /*num_dups=*/1,
                     paired_end_mapping_in_memory.GetPositiveAlignmentLength(),
                     paired_end_mapping_in_memory.GetNegativeAlignmentLength());
@@ -147,7 +147,7 @@ void MappingGenerator<PairedPAFMapping>::EmplaceBackPairedEndMappingRecord(
           paired_end_mapping_in_memory.mapq,
           paired_end_mapping_in_memory.mapping_in_memory1.mapq,
           paired_end_mapping_in_memory.mapping_in_memory2.mapq,
-          paired_end_mapping_in_memory.GetDirection(),
+          paired_end_mapping_in_memory.GetStrand(),
           paired_end_mapping_in_memory.is_unique, /*num_dups=*/1);
 }
 
@@ -155,22 +155,20 @@ template <>
 void MappingGenerator<PairsMapping>::EmplaceBackPairedEndMappingRecord(
     PairedEndMappingInMemory &paired_end_mapping_in_memory,
     std::vector<std::vector<PairsMapping>> &mappings_on_diff_ref_seqs) {
-  uint8_t direction1 =
-      paired_end_mapping_in_memory.mapping_in_memory1.GetDirection();
-  uint8_t direction2 =
-      paired_end_mapping_in_memory.mapping_in_memory2.GetDirection();
+  uint8_t strand1 = paired_end_mapping_in_memory.mapping_in_memory1.GetStrand();
+  uint8_t strand2 = paired_end_mapping_in_memory.mapping_in_memory2.GetStrand();
 
   int position1 =
       paired_end_mapping_in_memory.mapping_in_memory1.ref_start_position;
   int position2 =
       paired_end_mapping_in_memory.mapping_in_memory2.ref_start_position;
 
-  if (paired_end_mapping_in_memory.mapping_in_memory1.direction == kNegative) {
+  if (paired_end_mapping_in_memory.mapping_in_memory1.strand == kNegative) {
     position1 =
         paired_end_mapping_in_memory.mapping_in_memory1.ref_end_position;
   }
 
-  if (paired_end_mapping_in_memory.mapping_in_memory2.direction == kNegative) {
+  if (paired_end_mapping_in_memory.mapping_in_memory2.strand == kNegative) {
     position2 =
         paired_end_mapping_in_memory.mapping_in_memory2.ref_end_position;
   }
@@ -185,14 +183,14 @@ void MappingGenerator<PairsMapping>::EmplaceBackPairedEndMappingRecord(
   if (!is_rid1_rank_smaller) {
     std::swap(rid1, rid2);
     std::swap(position1, position2);
-    std::swap(direction1, direction2);
+    std::swap(strand1, strand2);
   }
 
   mappings_on_diff_ref_seqs[rid1].emplace_back(
       paired_end_mapping_in_memory.GetReadId(),
       std::string(paired_end_mapping_in_memory.mapping_in_memory1.read_name),
       paired_end_mapping_in_memory.GetBarcode(), rid1, rid2, position1,
-      position2, direction1, direction2, paired_end_mapping_in_memory.mapq,
+      position2, strand1, strand2, paired_end_mapping_in_memory.mapq,
       paired_end_mapping_in_memory.is_unique, /*num_dups=*/1);
 }
 
@@ -212,7 +210,5 @@ template <>
 void MappingGenerator<PAFMapping>::EmplaceBackPairedEndMappingRecord(
     PairedEndMappingInMemory &paired_end_mapping_in_memory,
     std::vector<std::vector<PAFMapping>> &mappings_on_diff_ref_seqs) = delete;
-
-
 
 }  // namespace chromap
