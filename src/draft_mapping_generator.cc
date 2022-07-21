@@ -30,29 +30,29 @@ void DraftMappingGenerator::GenerateDraftMappings(
 
   // For split alignments, SIMD cannot be used.
   if (split_alignment_) {
-    GenerateDraftMappingsOnOneDirection(kPositive, read_index, read_batch,
-                                        reference, mapping_metadata);
+    GenerateDraftMappingsOnOneStrand(kPositive, read_index, read_batch,
+                                     reference, mapping_metadata);
 
-    GenerateDraftMappingsOnOneDirection(kNegative, read_index, read_batch,
-                                        reference, mapping_metadata);
+    GenerateDraftMappingsOnOneStrand(kNegative, read_index, read_batch,
+                                     reference, mapping_metadata);
     return;
   }
 
   // For non-split alignments, use SIMD when possible.
   if (mapping_metadata.GetNumPositiveCandidates() < (size_t)num_vpu_lanes_) {
-    GenerateDraftMappingsOnOneDirection(kPositive, read_index, read_batch,
-                                        reference, mapping_metadata);
+    GenerateDraftMappingsOnOneStrand(kPositive, read_index, read_batch,
+                                     reference, mapping_metadata);
   } else {
-    GenerateDraftMappingsOnOneDirectionUsingSIMD(
-        kPositive, read_index, read_batch, reference, mapping_metadata);
+    GenerateDraftMappingsOnOneStrandUsingSIMD(kPositive, read_index, read_batch,
+                                              reference, mapping_metadata);
   }
 
   if (mapping_metadata.GetNumNegativeCandidates() < (size_t)num_vpu_lanes_) {
-    GenerateDraftMappingsOnOneDirection(kNegative, read_index, read_batch,
-                                        reference, mapping_metadata);
+    GenerateDraftMappingsOnOneStrand(kNegative, read_index, read_batch,
+                                     reference, mapping_metadata);
   } else {
-    GenerateDraftMappingsOnOneDirectionUsingSIMD(
-        kNegative, read_index, read_batch, reference, mapping_metadata);
+    GenerateDraftMappingsOnOneStrandUsingSIMD(kNegative, read_index, read_batch,
+                                              reference, mapping_metadata);
   }
 }
 
@@ -95,7 +95,7 @@ bool DraftMappingGenerator::
 
   uint32_t num_all_minimizer_candidates = 0;
   uint32_t all_minimizer_candidate_index = 0;
-  Direction all_minimizer_candidate_direction = kPositive;
+  Strand all_minimizer_candidate_strand = kPositive;
 
   for (uint32_t i = 0; i < positive_candidates.size(); ++i) {
     if (positive_candidates[i].count == mapping_metadata.GetNumMinimizers()) {
@@ -107,7 +107,7 @@ bool DraftMappingGenerator::
   for (uint32_t i = 0; i < negative_candidates.size(); ++i) {
     if (negative_candidates[i].count == mapping_metadata.GetNumMinimizers()) {
       all_minimizer_candidate_index = i;
-      all_minimizer_candidate_direction = kNegative;
+      all_minimizer_candidate_strand = kNegative;
       ++num_all_minimizer_candidates;
     }
   }
@@ -122,15 +122,15 @@ bool DraftMappingGenerator::
 
   const uint32_t read_length = read_batch.GetSequenceLengthAt(read_index);
   const std::vector<Candidate> &candidates =
-      all_minimizer_candidate_direction == kPositive ? positive_candidates
-                                                     : negative_candidates;
+      all_minimizer_candidate_strand == kPositive ? positive_candidates
+                                                  : negative_candidates;
 
   const uint32_t rid =
       candidates[all_minimizer_candidate_index].GetReferenceSequenceIndex();
 
   uint32_t position = 0;
 
-  if (all_minimizer_candidate_direction == kPositive) {
+  if (all_minimizer_candidate_strand == kPositive) {
     position = positive_candidates[all_minimizer_candidate_index]
                    .GetReferenceSequencePosition();
   } else {
@@ -142,7 +142,7 @@ bool DraftMappingGenerator::
   const bool is_valid_candidate =
       IsValidCandidate(rid, position, read_length, reference);
   if (is_valid_candidate) {
-    if (all_minimizer_candidate_direction == kPositive) {
+    if (all_minimizer_candidate_strand == kPositive) {
       positive_mappings.emplace_back(
           0, positive_candidates[all_minimizer_candidate_index].position +
                  read_length - 1);
@@ -156,8 +156,8 @@ bool DraftMappingGenerator::
   return false;
 }
 
-void DraftMappingGenerator::GenerateDraftMappingsOnOneDirectionUsingSIMD(
-    Direction candidate_direction, uint32_t read_index,
+void DraftMappingGenerator::GenerateDraftMappingsOnOneStrandUsingSIMD(
+    const Strand candidate_strand, uint32_t read_index,
     const SequenceBatch &read_batch, const SequenceBatch &reference,
     MappingMetadata &mapping_metadata) {
   const char *read = read_batch.GetSequenceAt(read_index);
@@ -166,11 +166,11 @@ void DraftMappingGenerator::GenerateDraftMappingsOnOneDirectionUsingSIMD(
       read_batch.GetNegativeSequenceAt(read_index);
 
   const std::vector<Candidate> &candidates =
-      candidate_direction == kPositive ? mapping_metadata.positive_candidates_
-                                       : mapping_metadata.negative_candidates_;
+      candidate_strand == kPositive ? mapping_metadata.positive_candidates_
+                                    : mapping_metadata.negative_candidates_;
   std::vector<DraftMapping> &mappings =
-      candidate_direction == kPositive ? mapping_metadata.positive_mappings_
-                                       : mapping_metadata.negative_mappings_;
+      candidate_strand == kPositive ? mapping_metadata.positive_mappings_
+                                    : mapping_metadata.negative_mappings_;
   int &min_num_errors = mapping_metadata.min_num_errors_;
   int &num_best_mappings = mapping_metadata.num_best_mappings_;
   int &second_min_num_errors = mapping_metadata.second_min_num_errors_;
@@ -191,7 +191,7 @@ void DraftMappingGenerator::GenerateDraftMappingsOnOneDirectionUsingSIMD(
     uint32_t position =
         candidates[candidate_index].GetReferenceSequencePosition();
 
-    if (candidate_direction == kNegative) {
+    if (candidate_strand == kNegative) {
       position = position - read_length + 1;
     }
 
@@ -216,7 +216,7 @@ void DraftMappingGenerator::GenerateDraftMappingsOnOneDirectionUsingSIMD(
       for (int li = 0; li < num_vpu_lanes_; ++li) {
         mapping_end_positions[li] = read_length - 1;
       }
-      if (candidate_direction == kPositive) {
+      if (candidate_strand == kPositive) {
         BandedAlign8PatternsToText(error_threshold_, valid_candidate_starts,
                                    read, read_length, mapping_edit_distances,
                                    mapping_end_positions);
@@ -240,7 +240,7 @@ void DraftMappingGenerator::GenerateDraftMappingsOnOneDirectionUsingSIMD(
             num_second_best_mappings = 1;
             second_min_num_errors = mapping_edit_distances[mi];
           }
-          if (candidate_direction == kPositive) {
+          if (candidate_strand == kPositive) {
             mappings.emplace_back(mapping_edit_distances[mi],
                                   valid_candidates[mi].position -
                                       error_threshold_ +
@@ -261,7 +261,7 @@ void DraftMappingGenerator::GenerateDraftMappingsOnOneDirectionUsingSIMD(
       for (int li = 0; li < num_vpu_lanes_; ++li) {
         mapping_end_positions[li] = read_length - 1;
       }
-      if (candidate_direction == kPositive) {
+      if (candidate_strand == kPositive) {
         BandedAlign4PatternsToText(error_threshold_, valid_candidate_starts,
                                    read, read_length, mapping_edit_distances,
                                    mapping_end_positions);
@@ -285,7 +285,7 @@ void DraftMappingGenerator::GenerateDraftMappingsOnOneDirectionUsingSIMD(
             num_second_best_mappings = 1;
             second_min_num_errors = mapping_edit_distances[mi];
           }
-          if (candidate_direction == kPositive) {
+          if (candidate_strand == kPositive) {
             mappings.emplace_back(mapping_edit_distances[mi],
                                   valid_candidates[mi].position -
                                       error_threshold_ +
@@ -308,7 +308,7 @@ void DraftMappingGenerator::GenerateDraftMappingsOnOneDirectionUsingSIMD(
   for (uint32_t ci = 0; ci < valid_candidate_index; ++ci) {
     uint32_t rid = valid_candidates[ci].GetReferenceSequenceIndex();
     uint32_t position = valid_candidates[ci].GetReferenceSequencePosition();
-    if (candidate_direction == kNegative) {
+    if (candidate_strand == kNegative) {
       position = position - read_length + 1;
     }
 
@@ -318,7 +318,7 @@ void DraftMappingGenerator::GenerateDraftMappingsOnOneDirectionUsingSIMD(
 
     int mapping_end_position;
     int num_errors;
-    if (candidate_direction == kPositive) {
+    if (candidate_strand == kPositive) {
       num_errors = BandedAlignPatternToText(
           error_threshold_,
           reference.GetSequenceAt(rid) + position - error_threshold_, read,
@@ -343,7 +343,7 @@ void DraftMappingGenerator::GenerateDraftMappingsOnOneDirectionUsingSIMD(
         num_second_best_mappings = 1;
         second_min_num_errors = num_errors;
       }
-      if (candidate_direction == kPositive) {
+      if (candidate_strand == kPositive) {
         mappings.emplace_back(num_errors, valid_candidates[ci].position -
                                               error_threshold_ +
                                               mapping_end_position);
@@ -356,8 +356,8 @@ void DraftMappingGenerator::GenerateDraftMappingsOnOneDirectionUsingSIMD(
   }
 }
 
-void DraftMappingGenerator::GenerateDraftMappingsOnOneDirection(
-    Direction candidate_direction, uint32_t read_index,
+void DraftMappingGenerator::GenerateDraftMappingsOnOneStrand(
+    const Strand candidate_strand, uint32_t read_index,
     const SequenceBatch &read_batch, const SequenceBatch &reference,
     MappingMetadata &mapping_metadata) {
   const char *read = read_batch.GetSequenceAt(read_index);
@@ -366,12 +366,12 @@ void DraftMappingGenerator::GenerateDraftMappingsOnOneDirection(
       read_batch.GetNegativeSequenceAt(read_index);
 
   const std::vector<Candidate> &candidates =
-      candidate_direction == kPositive ? mapping_metadata.positive_candidates_
-                                       : mapping_metadata.negative_candidates_;
+      candidate_strand == kPositive ? mapping_metadata.positive_candidates_
+                                    : mapping_metadata.negative_candidates_;
   std::vector<DraftMapping> &mappings =
-      candidate_direction == kPositive ? mapping_metadata.positive_mappings_
-                                       : mapping_metadata.negative_mappings_;
-  std::vector<int> &split_sites = candidate_direction == kPositive
+      candidate_strand == kPositive ? mapping_metadata.positive_mappings_
+                                    : mapping_metadata.negative_mappings_;
+  std::vector<int> &split_sites = candidate_strand == kPositive
                                       ? mapping_metadata.positive_split_sites_
                                       : mapping_metadata.negative_split_sites_;
   int &min_num_errors = mapping_metadata.min_num_errors_;
@@ -388,7 +388,7 @@ void DraftMappingGenerator::GenerateDraftMappingsOnOneDirection(
 
     uint32_t rid = candidates[ci].GetReferenceSequenceIndex();
     uint32_t position = candidates[ci].GetReferenceSequencePosition();
-    if (candidate_direction == kNegative) {
+    if (candidate_strand == kNegative) {
       position = position - read_length + 1;
     }
 
@@ -408,7 +408,7 @@ void DraftMappingGenerator::GenerateDraftMappingsOnOneDirection(
     int longest_match = 0;
 
     if (split_alignment_) {
-      if (candidate_direction == kPositive) {
+      if (candidate_strand == kPositive) {
         num_errors = BandedAlignPatternToTextWithDropOff(
             error_threshold_,
             reference.GetSequenceAt(rid) + position - error_threshold_, read,
@@ -472,7 +472,7 @@ void DraftMappingGenerator::GenerateDraftMappingsOnOneDirection(
                        gap_beginning);
 
         if (candidates.size() > 200) {
-          if (candidate_direction == kPositive) {
+          if (candidate_strand == kPositive) {
             longest_match = GetLongestMatchLength(
                 reference.GetSequenceAt(rid) + position, read, read_length);
           } else {
@@ -486,7 +486,7 @@ void DraftMappingGenerator::GenerateDraftMappingsOnOneDirection(
         actual_num_errors = error_threshold_ + 1;
       }
     } else {
-      if (candidate_direction == kPositive) {
+      if (candidate_strand == kPositive) {
         num_errors = BandedAlignPatternToText(
             error_threshold_,
             reference.GetSequenceAt(rid) + position - error_threshold_, read,
@@ -527,7 +527,7 @@ void DraftMappingGenerator::GenerateDraftMappingsOnOneDirection(
         second_min_num_errors = num_errors;
       }
 
-      if (candidate_direction == kPositive) {
+      if (candidate_strand == kPositive) {
         mappings.emplace_back(
             num_errors,
             candidates[ci].position - error_threshold_ + mapping_end_position);

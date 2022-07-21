@@ -10,6 +10,8 @@
 
 #include "candidate.h"
 #include "khash.h"
+#include "minimizer.h"
+#include "strand.h"
 
 namespace chromap {
 
@@ -34,15 +36,10 @@ struct BarcodeWithQual {
 
 struct _mm_history {
   unsigned int timestamp;
-  std::vector<std::pair<uint64_t, uint64_t> > minimizers;
+  std::vector<Minimizer> minimizers;
   std::vector<Candidate> positive_candidates;
   std::vector<Candidate> negative_candidates;
   uint32_t repetitive_seed_length;
-};
-
-enum Direction {
-  kPositive,
-  kNegative,
 };
 
 struct mmHit {
@@ -84,6 +81,17 @@ inline static double GetCPUTime() {
 inline static void ExitWithMessage(const std::string &message) {
   std::cerr << message << std::endl;
   exit(-1);
+}
+
+inline static uint64_t Hash64(uint64_t key, const uint64_t mask) {
+  key = (~key + (key << 21)) & mask;  // key = (key << 21) - key - 1;
+  key = key ^ key >> 24;
+  key = ((key + (key << 3)) + (key << 8)) & mask;  // key * 265
+  key = key ^ key >> 14;
+  key = ((key + (key << 2)) + (key << 4)) & mask;  // key * 21
+  key = key ^ key >> 28;
+  key = (key + (key << 31)) & mask;
+  return key;
 }
 
 static constexpr uint8_t char_to_uint8_table_[256] = {
@@ -128,6 +136,14 @@ inline static uint64_t GenerateSeedFromSequence(const char *sequence,
     }
   }
   return seed;
+}
+
+inline static uint64_t GenerateMinimizer(uint32_t sequence_index,
+                                         uint32_t sequence_position,
+                                         const Strand strand) {
+  const uint64_t minimizer =
+      (((uint64_t)sequence_index) << 32 | sequence_position) << 1;
+  return minimizer | (strand == kPositive ? 0 : 1);
 }
 
 }  // namespace chromap

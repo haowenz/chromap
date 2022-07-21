@@ -17,15 +17,14 @@ class PairsMapping : public Mapping {
   int rid2_;
   uint32_t pos1_;
   uint32_t pos2_;
-  int direction1_;  // 1-positive. 0-negative
-  int direction2_;
+  int strand1_;  // 1-positive. 0-negative
+  int strand2_;
   uint16_t mapq_ : 8, is_unique_ : 1, num_dups_ : 7;
 
   PairsMapping() : num_dups_(0) {}
   PairsMapping(uint32_t read_id, std::string read_name, uint64_t cell_barcode,
-               int rid1, int rid2, uint32_t pos1, uint32_t pos2, int direction1,
-               int direction2, uint8_t mapq, uint8_t is_unique,
-               uint8_t num_dups)
+               int rid1, int rid2, uint32_t pos1, uint32_t pos2, int strand1,
+               int strand2, uint8_t mapq, uint8_t is_unique, uint8_t num_dups)
       : read_id_(read_id),
         read_name_(read_name),
         cell_barcode_(cell_barcode),
@@ -33,8 +32,8 @@ class PairsMapping : public Mapping {
         rid2_(rid2),
         pos1_(pos1),
         pos2_(pos2),
-        direction1_(direction1),
-        direction2_(direction2),
+        strand1_(strand1),
+        strand2_(strand2),
         mapq_(mapq),
         is_unique_(is_unique),
         num_dups_(num_dups) {}
@@ -65,15 +64,15 @@ class PairsMapping : public Mapping {
     return pos1_ + 1;
   }
 
-  char GetDirection(int idx) const {
-    int d = direction1_;
+  char GetStrand(int idx) const {
+    int d = strand1_;
     if (idx == 2) {
-      d = direction2_;
+      d = strand2_;
     }
     return d > 0 ? '+' : '-';
   }
 
-  bool IsPositiveStrand() const { return direction1_ > 0 ? true : false; }
+  bool IsPositiveStrand() const { return strand1_ > 0 ? true : false; }
   uint32_t GetStartPosition() const {  // inclusive
     return pos1_;
   }
@@ -104,9 +103,9 @@ class PairsMapping : public Mapping {
     num_written_bytes +=
         fwrite(&pos2_, sizeof(uint32_t), 1, temp_mapping_output_file);
     num_written_bytes +=
-        fwrite(&direction1_, sizeof(int), 1, temp_mapping_output_file);
+        fwrite(&strand1_, sizeof(int), 1, temp_mapping_output_file);
     num_written_bytes +=
-        fwrite(&direction2_, sizeof(int), 1, temp_mapping_output_file);
+        fwrite(&strand2_, sizeof(int), 1, temp_mapping_output_file);
     uint16_t mapq_unique_dups = (mapq_ << 8) | (is_unique_ << 7) | num_dups_;
     num_written_bytes += fwrite(&mapq_unique_dups, sizeof(uint16_t), 1,
                                 temp_mapping_output_file);
@@ -131,9 +130,9 @@ class PairsMapping : public Mapping {
     num_read_bytes +=
         fread(&pos2_, sizeof(uint32_t), 1, temp_mapping_output_file);
     num_read_bytes +=
-        fread(&direction1_, sizeof(int), 1, temp_mapping_output_file);
+        fread(&strand1_, sizeof(int), 1, temp_mapping_output_file);
     num_read_bytes +=
-        fread(&direction2_, sizeof(int), 1, temp_mapping_output_file);
+        fread(&strand2_, sizeof(int), 1, temp_mapping_output_file);
     uint16_t mapq_unique_dups = 0;
     num_read_bytes +=
         fread(&mapq_unique_dups, sizeof(uint16_t), 1, temp_mapping_output_file);

@@ -21,6 +21,7 @@
 #include "mapping_parameters.h"
 #include "mapping_processor.h"
 #include "mapping_writer.h"
+#include "minimizer_generator.h"
 #include "mmcache.hpp"
 #include "paired_end_mapping_metadata.h"
 #include "sequence_batch.h"
@@ -183,7 +184,8 @@ void Chromap::MapSingleEndReads() {
 
   Index index(mapping_parameters_.index_file_path);
   index.Load();
-  int kmer_size = index.GetKmerSize();
+  const int kmer_size = index.GetKmerSize();
+  const int window_size = index.GetWindowSize();
   // index.Statistics(num_sequences, reference);
 
   SequenceBatch read_batch(read_batch_size_, read1_effective_range_);
@@ -209,6 +211,8 @@ void Chromap::MapSingleEndReads() {
       ComputeBarcodeAbundance(initial_num_sample_barcodes_);
     }
   }
+
+  MinimizerGenerator minimizer_generator(kmer_size, window_size);
 
   CandidateProcessor candidate_processor(
       mapping_parameters_.min_num_seeds_required_for_mapping,
@@ -294,7 +298,7 @@ void Chromap::MapSingleEndReads() {
             mapping_parameters_.num_threads / num_reference_sequences);
       }
     }
-#pragma omp parallel shared(num_reads_, mm_history, reference, index, read_batch, barcode_batch, read_batch_for_loading, barcode_batch_for_loading, std::cerr, num_loaded_reads_for_loading, num_loaded_reads, num_reference_sequences, mappings_on_diff_ref_seqs_for_diff_threads, mappings_on_diff_ref_seqs_for_diff_threads_for_saving, mappings_on_diff_ref_seqs, temp_mapping_file_handles, mm_to_candidates_cache, mapping_writer, candidate_processor, mapping_processor, draft_mapping_generator, mapping_generator, num_mappings_in_mem, max_num_mappings_in_mem) num_threads(mapping_parameters_.num_threads) reduction(+:num_candidates_, num_mappings_, num_mapped_reads_, num_uniquely_mapped_reads_, num_barcode_in_whitelist_, num_corrected_barcode_)
+#pragma omp parallel shared(num_reads_, mm_history, reference, index, read_batch, barcode_batch, read_batch_for_loading, barcode_batch_for_loading, std::cerr, num_loaded_reads_for_loading, num_loaded_reads, num_reference_sequences, mappings_on_diff_ref_seqs_for_diff_threads, mappings_on_diff_ref_seqs_for_diff_threads_for_saving, mappings_on_diff_ref_seqs, temp_mapping_file_handles, mm_to_candidates_cache, mapping_writer, minimizer_generator, candidate_processor, mapping_processor, draft_mapping_generator, mapping_generator, num_mappings_in_mem, max_num_mappings_in_mem) num_threads(mapping_parameters_.num_threads) reduction(+:num_candidates_, num_mappings_, num_mapped_reads_, num_uniquely_mapped_reads_, num_barcode_in_whitelist_, num_corrected_barcode_)
     {
       thread_num_candidates = 0;
       thread_num_mappings = 0;
@@ -338,8 +342,8 @@ void Chromap::MapSingleEndReads() {
             mapping_metadata.PrepareForMappingNextRead(
                 mapping_parameters_.max_seed_frequencies[0]);
 
-            index.GenerateMinimizerSketch(read_batch, read_index,
-                                          mapping_metadata.minimizers_);
+            minimizer_generator.GenerateMinimizers(
+                read_batch, read_index, mapping_metadata.minimizers_);
 
             if (mapping_metadata.minimizers_.size() > 0) {
               if (mapping_parameters_.custom_rid_order_file_path.length() > 0) {
@@ -551,7 +555,8 @@ void Chromap::MapPairedEndReads() {
   // Load index
   Index index(mapping_parameters_.index_file_path);
   index.Load();
-  int kmer_size = index.GetKmerSize();
+  const int kmer_size = index.GetKmerSize();
+  const int window_size = index.GetWindowSize();
   // index.Statistics(num_sequences, reference);
 
   // Initialize read batches
@@ -588,6 +593,8 @@ void Chromap::MapPairedEndReads() {
       ComputeBarcodeAbundance(initial_num_sample_barcodes_);
     }
   }
+
+  MinimizerGenerator minimizer_generator(kmer_size, window_size);
 
   CandidateProcessor candidate_processor(
       mapping_parameters_.min_num_seeds_required_for_mapping,
@@ -675,7 +682,7 @@ void Chromap::MapPairedEndReads() {
       }
     }
 
-#pragma omp parallel shared(num_reads_, num_reference_sequences, reference, index, read_batch1, read_batch2, barcode_batch, read_batch1_for_loading, read_batch2_for_loading, barcode_batch_for_loading, candidate_processor, mapping_processor, draft_mapping_generator, mapping_generator, mapping_writer, std::cerr, num_loaded_pairs_for_loading, num_loaded_pairs, mappings_on_diff_ref_seqs_for_diff_threads, mappings_on_diff_ref_seqs_for_diff_threads_for_saving, mappings_on_diff_ref_seqs, num_mappings_in_mem, max_num_mappings_in_mem, temp_mapping_file_handles, mm_to_candidates_cache, mm_history1, mm_history2) num_threads(mapping_parameters_.num_threads) reduction(+:num_candidates_, num_mappings_, num_mapped_reads_, num_uniquely_mapped_reads_, num_barcode_in_whitelist_, num_corrected_barcode_)
+#pragma omp parallel shared(num_reads_, num_reference_sequences, reference, index, read_batch1, read_batch2, barcode_batch, read_batch1_for_loading, read_batch2_for_loading, barcode_batch_for_loading, minimizer_generator, candidate_processor, mapping_processor, draft_mapping_generator, mapping_generator, mapping_writer, std::cerr, num_loaded_pairs_for_loading, num_loaded_pairs, mappings_on_diff_ref_seqs_for_diff_threads, mappings_on_diff_ref_seqs_for_diff_threads_for_saving, mappings_on_diff_ref_seqs, num_mappings_in_mem, max_num_mappings_in_mem, temp_mapping_file_handles, mm_to_candidates_cache, mm_history1, mm_history2) num_threads(mapping_parameters_.num_threads) reduction(+:num_candidates_, num_mappings_, num_mapped_reads_, num_uniquely_mapped_reads_, num_barcode_in_whitelist_, num_corrected_barcode_)
     {
       thread_num_candidates = 0;
       thread_num_mappings = 0;
@@ -729,10 +736,10 @@ void Chromap::MapPairedEndReads() {
               paired_end_mapping_metadata.PreparedForMappingNextReadPair(
                   mapping_parameters_.max_seed_frequencies[0]);
 
-              index.GenerateMinimizerSketch(
+              minimizer_generator.GenerateMinimizers(
                   read_batch1, pair_index,
                   paired_end_mapping_metadata.mapping_metadata1_.minimizers_);
-              index.GenerateMinimizerSketch(
+              minimizer_generator.GenerateMinimizers(
                   read_batch2, pair_index,
                   paired_end_mapping_metadata.mapping_metadata2_.minimizers_);
 

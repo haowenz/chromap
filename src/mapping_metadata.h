@@ -6,6 +6,7 @@
 #include <utility>
 #include <vector>
 
+#include "minimizer.h"
 #include "candidate.h"
 #include "draft_mapping.h"
 
@@ -145,7 +146,7 @@ class MappingMetadata {
 
   uint32_t repetitive_seed_length_;
 
-  std::vector<std::pair<uint64_t, uint64_t>> minimizers_;
+  std::vector<Minimizer> minimizers_;
 
   std::vector<uint64_t> positive_hits_;
   std::vector<uint64_t> negative_hits_;

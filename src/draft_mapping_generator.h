@@ -41,16 +41,16 @@ class DraftMappingGenerator {
       const SequenceBatch &read_batch, uint32_t read_index,
       const SequenceBatch &reference, MappingMetadata &mapping_metadata);
 
-  void GenerateDraftMappingsOnOneDirectionUsingSIMD(
-      Direction candidate_direction, uint32_t read_index,
+  void GenerateDraftMappingsOnOneStrandUsingSIMD(
+      const Strand candidate_strand, uint32_t read_index,
       const SequenceBatch &read_batch, const SequenceBatch &reference,
       MappingMetadata &mapping_metadata);
 
-  void GenerateDraftMappingsOnOneDirection(Direction candidate_direction,
-                                           uint32_t read_index,
-                                           const SequenceBatch &read_batch,
-                                           const SequenceBatch &reference,
-                                           MappingMetadata &mapping_metadata);
+  void GenerateDraftMappingsOnOneStrand(const Strand candidate_strand,
+                                        uint32_t read_index,
+                                        const SequenceBatch &read_batch,
+                                        const SequenceBatch &reference,
+                                        MappingMetadata &mapping_metadata);
 
   const int error_threshold_;
   const bool split_alignment_;

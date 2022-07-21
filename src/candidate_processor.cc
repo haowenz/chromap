@@ -12,8 +12,7 @@ namespace chromap {
 void CandidateProcessor::GenerateCandidates(
     int error_threshold, const Index &index,
     MappingMetadata &mapping_metadata) const {
-  const std::vector<std::pair<uint64_t, uint64_t>> &minimizers =
-      mapping_metadata.minimizers_;
+  const std::vector<Minimizer> &minimizers = mapping_metadata.minimizers_;
   std::vector<uint64_t> &positive_hits = mapping_metadata.positive_hits_;
   std::vector<uint64_t> &negative_hits = mapping_metadata.negative_hits_;
   std::vector<Candidate> &positive_candidates =
@@ -51,13 +50,13 @@ void CandidateProcessor::GenerateCandidates(
   }
 
   // std::cerr << "Normal positive gen on one dir\n";
-  GenerateCandidatesOnOneDirection(error_threshold, num_required_seeds,
-                                   minimizers.size(), positive_hits,
-                                   positive_candidates);
+  GenerateCandidatesOnOneStrand(error_threshold, num_required_seeds,
+                                minimizers.size(), positive_hits,
+                                positive_candidates);
   // std::cerr << "Normal negative gen on one dir\n";
-  GenerateCandidatesOnOneDirection(error_threshold, num_required_seeds,
-                                   minimizers.size(), negative_hits,
-                                   negative_candidates);
+  GenerateCandidatesOnOneStrand(error_threshold, num_required_seeds,
+                                minimizers.size(), negative_hits,
+                                negative_candidates);
   // fprintf(stderr, "p+n: %d\n", positive_candidates->size() +
   // negative_candidates->size()) ;
 }
@@ -75,7 +74,7 @@ int CandidateProcessor::SupplementCandidates(
   int ret = 0;
 
   for (int mate = 0; mate <= 1; ++mate) {
-    std::vector<std::pair<uint64_t, uint64_t>> *minimizers;
+    std::vector<Minimizer> *minimizers;
     std::vector<uint64_t> *positive_hits;
     std::vector<uint64_t> *negative_hits;
     std::vector<Candidate> *positive_candidates;
@@ -256,22 +255,21 @@ void CandidateProcessor::ReduceCandidatesForPairedEndRead(
 
 int CandidateProcessor::GenerateCandidatesFromRepetitiveReadWithMateInfo(
     int error_threshold, const Index &index,
-    const std::vector<std::pair<uint64_t, uint64_t>> &minimizers,
-    uint32_t &repetitive_seed_length, std::vector<uint64_t> &hits,
-    std::vector<Candidate> &candidates,
-    const std::vector<Candidate> &mate_candidates, const Direction direction,
+    const std::vector<Minimizer> &minimizers, uint32_t &repetitive_seed_length,
+    std::vector<uint64_t> &hits, std::vector<Candidate> &candidates,
+    const std::vector<Candidate> &mate_candidates, const Strand strand,
     uint32_t search_range) const {
   int max_seed_count = index.CollectSeedHitsFromRepetitiveReadWithMateInfo(
       error_threshold, minimizers, repetitive_seed_length, hits,
-      mate_candidates, direction, search_range,
+      mate_candidates, strand, search_range,
       min_num_seeds_required_for_mapping_, max_seed_frequencies_[0]);
 
-  GenerateCandidatesOnOneDirection(error_threshold, /*num_seeds_required=*/1,
-                                   minimizers.size(), hits, candidates);
+  GenerateCandidatesOnOneStrand(error_threshold, /*num_seeds_required=*/1,
+                                minimizers.size(), hits, candidates);
   return max_seed_count;
 }
 
-void CandidateProcessor::GenerateCandidatesOnOneDirection(
+void CandidateProcessor::GenerateCandidatesOnOneStrand(
     int error_threshold, int num_seeds_required, uint32_t num_minimizers,
     std::vector<uint64_t> &hits, std::vector<Candidate> &candidates) const {
   hits.emplace_back(UINT64_MAX);

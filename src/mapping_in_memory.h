@@ -26,7 +26,7 @@ struct MappingInMemory {
 
   uint64_t barcode_key = 0;
 
-  Direction direction = kPositive;
+  Strand strand = kPositive;
   bool is_unique = true;
   uint8_t mapq = 0;
 
@@ -45,9 +45,7 @@ struct MappingInMemory {
 
   std::string MD_tag;
 
-  inline uint8_t GetDirection() const {
-    return (direction == kPositive ? 1 : 0);
-  }
+  inline uint8_t GetStrand() const { return (strand == kPositive ? 1 : 0); }
 
   inline uint32_t GetFragmentStartPosition() const {
     return ref_start_position;
@@ -69,8 +67,8 @@ struct PairedEndMappingInMemory {
   uint8_t is_unique;
   uint8_t mapq;
 
-  inline uint8_t GetDirection() const {
-    return (mapping_in_memory1.direction == kPositive ? 1 : 0);
+  inline uint8_t GetStrand() const {
+    return (mapping_in_memory1.strand == kPositive ? 1 : 0);
   }
 
   inline uint32_t GetReadId() const { return mapping_in_memory1.read_id; }
@@ -78,7 +76,7 @@ struct PairedEndMappingInMemory {
   inline uint64_t GetBarcode() const { return mapping_in_memory1.barcode_key; }
 
   inline uint32_t GetFragmentStartPosition() const {
-    if (mapping_in_memory1.direction == kPositive) {
+    if (mapping_in_memory1.strand == kPositive) {
       return mapping_in_memory1.GetFragmentStartPosition();
     }
 
@@ -86,7 +84,7 @@ struct PairedEndMappingInMemory {
   }
 
   inline uint16_t GetFragmentLength() const {
-    if (mapping_in_memory1.direction == kPositive) {
+    if (mapping_in_memory1.strand == kPositive) {
       return mapping_in_memory2.ref_end_position -
              mapping_in_memory1.ref_start_position + 1;
     }
@@ -95,14 +93,14 @@ struct PairedEndMappingInMemory {
   }
 
   inline uint32_t GetPositiveAlignmentLength() const {
-    if (mapping_in_memory1.direction == kPositive) {
+    if (mapping_in_memory1.strand == kPositive) {
       return mapping_in_memory1.GetAlignmentLength();
     }
     return mapping_in_memory2.GetAlignmentLength();
   }
 
   inline uint32_t GetNegativeAlignmentLength() const {
-    if (mapping_in_memory1.direction == kNegative) {
+    if (mapping_in_memory1.strand == kNegative) {
       return mapping_in_memory1.GetAlignmentLength();
     }
     return mapping_in_memory2.GetAlignmentLength();

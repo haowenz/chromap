@@ -62,15 +62,15 @@ class PairedEndMappingMetadata {
 
   // TODO: think how to deal with the code copy.
   inline const std::vector<std::pair<uint32_t, uint32_t>> &GetBestMappings(
-      Direction first_mapping_direction,
-      Direction second_mapping_direction) const {
-    if (first_mapping_direction == kPositive) {
-      if (second_mapping_direction == kPositive) {
+      const Strand first_mapping_strand,
+      const Strand second_mapping_strand) const {
+    if (first_mapping_strand == kPositive) {
+      if (second_mapping_strand == kPositive) {
         return F1F2_best_mappings_;
       }
       return F1R2_best_mappings_;
     } else {
-      if (second_mapping_direction == kPositive) {
+      if (second_mapping_strand == kPositive) {
         return F2R1_best_mappings_;
       }
       return R1R2_best_mappings_;
@@ -78,15 +78,14 @@ class PairedEndMappingMetadata {
   }
 
   inline std::vector<std::pair<uint32_t, uint32_t>> &GetBestMappings(
-      Direction first_mapping_direction,
-      Direction second_mapping_direction) {
-    if (first_mapping_direction == kPositive) {
-      if (second_mapping_direction == kPositive) {
+      const Strand first_mapping_strand, const Strand second_mapping_strand) {
+    if (first_mapping_strand == kPositive) {
+      if (second_mapping_strand == kPositive) {
         return F1F2_best_mappings_;
       }
       return F1R2_best_mappings_;
     } else {
-      if (second_mapping_direction == kPositive) {
+      if (second_mapping_strand == kPositive) {
         return F2R1_best_mappings_;
       }
       return R1R2_best_mappings_;
