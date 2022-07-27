@@ -240,6 +240,36 @@ void Index::CheckIndex(uint32_t num_sequences,
   }
 }
 
+void Index::HeapMergeSeedHitLists(
+    const std::vector<std::vector<uint64_t>> sorted_seed_hit_lists,
+    std::vector<uint64_t> &seed_hits) const {
+  std::priority_queue<SeedHitInList> heap;
+  std::vector<uint32_t> seed_hit_list_indices(sorted_seed_hit_lists.size(), 0);
+
+  for (uint32_t li = 0; li < sorted_seed_hit_lists.size(); ++li) {
+    if (sorted_seed_hit_lists[li].size() == 0) {
+      continue;
+    }
+    heap.emplace(li, sorted_seed_hit_lists[li][0]);
+  }
+
+  while (!heap.empty()) {
+    const SeedHitInList min_seed_hit = heap.top();
+    heap.pop();
+    seed_hits.push_back(min_seed_hit.position);
+    ++seed_hit_list_indices[min_seed_hit.list_index];
+
+    const uint32_t min_seed_hit_list_index =
+        seed_hit_list_indices[min_seed_hit.list_index];
+    const std::vector<uint64_t> &min_sorted_seed_hit_list =
+        sorted_seed_hit_lists[min_seed_hit.list_index];
+    if (min_seed_hit_list_index < min_sorted_seed_hit_list.size()) {
+      heap.emplace(min_seed_hit.list_index,
+                   min_sorted_seed_hit_list[min_seed_hit_list_index]);
+    }
+  }
+}
+
 int Index::CollectSeedHits(int max_seed_frequency,
                            int repetitive_seed_frequency,
                            const std::vector<Minimizer> &minimizers,
@@ -376,56 +406,14 @@ int Index::CollectSeedHits(int max_seed_frequency,
   }
 
   if (use_heap) {
-    std::priority_queue<struct mmHit> heap;
-    std::vector<uint32_t> mm_pos(num_minimizers);
-    positive_hits.clear();
-    for (uint32_t mi = 0; mi < num_minimizers; ++mi) {
-      if (mm_positive_hits[mi].size() == 0) continue;
-      // Only the positive part may have the underflow issue.
-      if (heap_resort)
+    // TODO: try to remove this sorting.
+    if (heap_resort) {
+      for (uint32_t mi = 0; mi < num_minimizers; ++mi) {
         std::sort(mm_positive_hits[mi].begin(), mm_positive_hits[mi].end());
-      struct mmHit nh;
-      nh.mi = mi;
-      nh.position = mm_positive_hits[mi][0];
-      heap.push(nh);
-      mm_pos[mi] = 0;
-    }
-
-    while (!heap.empty()) {
-      struct mmHit top = heap.top();
-      heap.pop();
-      positive_hits.push_back(top.position);
-      ++mm_pos[top.mi];
-      if (mm_pos[top.mi] < mm_positive_hits[top.mi].size()) {
-        struct mmHit nh;
-        nh.mi = top.mi;
-        nh.position = mm_positive_hits[top.mi][mm_pos[top.mi]];
-        heap.push(nh);
       }
     }
-
-    negative_hits.clear();
-    for (uint32_t mi = 0; mi < num_minimizers; ++mi) {
-      if (mm_negative_hits[mi].size() == 0) continue;
-      struct mmHit nh;
-      nh.mi = mi;
-      nh.position = mm_negative_hits[mi][0];
-      heap.push(nh);
-      mm_pos[mi] = 0;
-    }
-
-    while (!heap.empty()) {
-      struct mmHit top = heap.top();
-      heap.pop();
-      negative_hits.push_back(top.position);
-      ++mm_pos[top.mi];
-      if (mm_pos[top.mi] < mm_negative_hits[top.mi].size()) {
-        struct mmHit nh;
-        nh.mi = top.mi;
-        nh.position = mm_negative_hits[top.mi][mm_pos[top.mi]];
-        heap.push(nh);
-      }
-    }
+    HeapMergeSeedHitLists(mm_positive_hits, positive_hits);
+    HeapMergeSeedHitLists(mm_negative_hits, negative_hits);
   } else {
     std::sort(positive_hits.begin(), positive_hits.end());
     std::sort(negative_hits.begin(), negative_hits.end());
