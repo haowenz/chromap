@@ -11,9 +11,11 @@ namespace chromap {
 
 void Index::Construct(uint32_t num_sequences, const SequenceBatch &reference) {
   const double real_start_time = GetRealTime();
+
   std::vector<Minimizer> minimizers;
   minimizers.reserve(reference.GetNumBases() / window_size_ * 2);
 
+  std::cerr << "Collecting minimizers.\n";
   MinimizerGenerator minimizer_generator(kmer_size_, window_size_);
   for (uint32_t sequence_index = 0; sequence_index < num_sequences;
        ++sequence_index) {
@@ -22,14 +24,18 @@ void Index::Construct(uint32_t num_sequences, const SequenceBatch &reference) {
   }
   std::cerr << "Collected " << minimizers.size() << " minimizers.\n";
 
+  std::cerr << "Sorting minimizers.\n";
   std::stable_sort(minimizers.begin(), minimizers.end());
-  std::cerr << "Sorted minimizers.\n";
+  std::cerr << "Sorted all minimizers.\n";
 
   const uint32_t num_minimizers = minimizers.size();
 
+  assert(num_minimizers > 0);
+  // TODO: check this assert!
   // Here I make sure the # minimizers is less than the limit of signed int32,
   // so that I can use int to store position later.
-  assert(num_minimizers != 0 && num_minimizers <= INT_MAX);
+  assert(num_minimizers <= INT_MAX);
+
   occurrence_table_.reserve(num_minimizers);
 
   uint64_t previous_key = minimizers[0].GetHashKey();
@@ -37,15 +43,21 @@ void Index::Construct(uint32_t num_sequences, const SequenceBatch &reference) {
   uint64_t num_nonsingletons = 0;
   uint32_t num_singletons = 0;
 
-  for (uint32_t ti = 0; ti < num_minimizers; ++ti) {
-    uint64_t current_key = minimizers[ti].GetHashKey();
+  for (uint32_t ti = 0; ti <= num_minimizers; ++ti) {
+    const bool is_last_iteration = ti == num_minimizers;
+    const uint64_t current_key =
+        is_last_iteration ? previous_key + 1 : minimizers[ti].GetHashKey();
+
     if (current_key != previous_key) {
       int khash_return_code = 0;
       khiter_t khash_iterator =
           kh_put(k64, lookup_table_, previous_key << 1, &khash_return_code);
       assert(khash_return_code != -1 && khash_return_code != 0);
 
-      if (num_previous_minimizer_occurrences == 1) {  // singleton
+      if (num_previous_minimizer_occurrences == 1) {
+        // We set the lowest bit of the key value to 1 if the minimizer only
+        // occurs once. And the occurrence is directly saved in the lookup
+        // table.
         kh_key(lookup_table_, khash_iterator) |= 1;
         kh_value(lookup_table_, khash_iterator) = occurrence_table_.back();
         occurrence_table_.pop_back();
@@ -60,24 +72,12 @@ void Index::Construct(uint32_t num_sequences, const SequenceBatch &reference) {
       num_previous_minimizer_occurrences++;
     }
 
+    if (is_last_iteration) {
+      break;
+    }
+
     occurrence_table_.push_back(minimizers[ti].GetMinimizer());
     previous_key = current_key;
-  }
-
-  int khash_return_code = 0;
-  khiter_t khash_iterator =
-      kh_put(k64, lookup_table_, previous_key << 1, &khash_return_code);
-  assert(khash_return_code != -1 && khash_return_code != 0);
-
-  if (num_previous_minimizer_occurrences == 1) {  // singleton
-    kh_key(lookup_table_, khash_iterator) |= 1;
-    kh_value(lookup_table_, khash_iterator) = occurrence_table_.back();
-    occurrence_table_.pop_back();
-    ++num_singletons;
-  } else {
-    kh_value(lookup_table_, khash_iterator) =
-        (num_nonsingletons << 32) | num_previous_minimizer_occurrences;
-    num_nonsingletons += num_previous_minimizer_occurrences;
   }
 
   assert(num_nonsingletons + num_singletons == num_minimizers);
