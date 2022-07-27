@@ -15,9 +15,14 @@
 
 namespace chromap {
 
+// Note that the max kmer size is 28 and it is saved in a unsigned 64-bit
+// integer. So it can right shift by one bit is lossless and safe. The minimizer
+// only occurs once when the lowest bit of the key value is set to 1.
 #define KHashFunctionForIndex(a) ((a) >> 1)
 #define KHashEqForIndex(a, b) ((a) >> 1 == (b) >> 1)
-KHASH_INIT(k64, uint64_t, uint64_t, 1, KHashFunctionForIndex, KHashEqForIndex);
+KHASH_INIT(/*name=*/k64, /*khkey_t=*/uint64_t, /*khval_t=*/uint64_t,
+           /*kh_is_map=*/1, /*__hash_func=*/KHashFunctionForIndex,
+           /*__hash_equal=*/KHashEqForIndex);
 
 class Index {
  public:
