@@ -270,6 +270,28 @@ void Index::HeapMergeSeedHitLists(
   }
 }
 
+uint64_t Index::GenerateCandidatePositionForSingleSeedHit(
+    uint64_t reference_seed_hit, uint32_t read_position,
+    const Strand &read_strand) const {
+  const uint64_t reference_id = reference_seed_hit >> 33;
+  const uint32_t reference_position = reference_seed_hit >> 1;
+  const Strand reference_strand =
+      (reference_seed_hit & 1) == 0 ? kPositive : kNegative;
+
+  // For now we can't see the reference here. So let us don't validate
+  // this seed hit. Instead, we do it later some time when we check the
+  // candidates.
+  const uint32_t mapping_start_position =
+      read_strand == reference_strand
+          ? reference_position - read_position
+          : reference_position + read_position - kmer_size_ + 1;
+
+  const uint64_t candidate_position =
+      (reference_id << 32) | mapping_start_position;
+
+  return candidate_position;
+}
+
 int Index::CollectSeedHits(int max_seed_frequency,
                            int repetitive_seed_frequency,
                            const std::vector<Minimizer> &minimizers,
@@ -289,7 +311,7 @@ int Index::CollectSeedHits(int max_seed_frequency,
     }
   }
 
-  bool heap_resort = false;  // need to sort the elements of heap first
+  bool is_candidate_position_list_sorted = true;
 
   positive_hits.reserve(max_seed_frequency * 2);
   negative_hits.reserve(max_seed_frequency * 2);
@@ -307,7 +329,7 @@ int Index::CollectSeedHits(int max_seed_frequency,
       continue;
     }
 
-    const uint64_t value = kh_value(lookup_table_, khash_iterator);
+    const uint64_t reference_seed_hit = kh_value(lookup_table_, khash_iterator);
 
     const uint32_t read_position = minimizers[mi].GetSequencePosition();
     const Strand read_strand = minimizers[mi].GetSequenceStrand();
@@ -316,72 +338,59 @@ int Index::CollectSeedHits(int max_seed_frequency,
         (kh_key(lookup_table_, khash_iterator) & 1) > 0;
 
     if (is_reference_minimizer_single) {
-      const uint64_t reference_id = value >> 33;
-      const uint32_t reference_position = value >> 1;
-      const Strand reference_strand = (value & 1) == 0 ? kPositive : kNegative;
+      const uint64_t candidate_position =
+          GenerateCandidatePositionForSingleSeedHit(reference_seed_hit,
+                                                    read_position, read_strand);
 
-      // Check whether the strands of reference minimizer and read minimizer are
-      // the same. Later, we can play some tricks with 0,1 here to make it
-      // faster.
+      const Strand reference_strand =
+          (reference_seed_hit & 1) == 0 ? kPositive : kNegative;
+
       if (read_strand == reference_strand) {
-        const uint32_t candidate_position = reference_position - read_position;
-        // Ok, for now we can't see the reference here. So let us don't validate
-        // this candidate. Instead, we do it later some time when we check the
-        // candidates.
-        const uint64_t seed_hit = (reference_id << 32) | candidate_position;
-
         if (use_heap) {
-          mm_positive_hits[mi].push_back(seed_hit);
+          mm_positive_hits[mi].push_back(candidate_position);
         } else {
-          positive_hits.push_back(seed_hit);
+          positive_hits.push_back(candidate_position);
         }
       } else {
-        const uint32_t candidate_position =
-            reference_position + read_position - kmer_size_ + 1;
-        const uint64_t seed_hit = (reference_id << 32) | candidate_position;
-
         if (use_heap) {
-          mm_negative_hits[mi].push_back(seed_hit);
+          mm_negative_hits[mi].push_back(candidate_position);
         } else {
-          negative_hits.push_back(seed_hit);
+          negative_hits.push_back(candidate_position);
         }
       }
       continue;
     }
 
-    const uint32_t offset = value >> 32;
-    const uint32_t num_occurrences = value;
+    const uint32_t occurrence_offset = reference_seed_hit >> 32;
+    const uint32_t num_occurrences = reference_seed_hit;
 
     if (num_occurrences < (uint32_t)max_seed_frequency) {
       for (uint32_t oi = 0; oi < num_occurrences; ++oi) {
-        const uint64_t value = occurrence_table_[offset + oi];
-        const uint64_t reference_id = value >> 33;
-        const uint32_t reference_position = value >> 1;
+        const uint64_t reference_seed_hit =
+            occurrence_table_[occurrence_offset + oi];
+
+        const uint64_t candidate_position =
+            GenerateCandidatePositionForSingleSeedHit(
+                reference_seed_hit, read_position, read_strand);
+
+        const uint32_t reference_position = reference_seed_hit >> 1;
         const Strand reference_strand =
-            (value & 1) == 0 ? kPositive : kNegative;
+            (reference_seed_hit & 1) == 0 ? kPositive : kNegative;
 
         if (read_strand == reference_strand) {
-          const uint32_t candidate_position =
-              reference_position - read_position;
-          const uint64_t seed_hit = (reference_id << 32) | candidate_position;
-
           if (use_heap) {
             if (reference_position < read_position) {
-              heap_resort = true;
+              is_candidate_position_list_sorted = false;
             }
-            mm_positive_hits[mi].push_back(seed_hit);
+            mm_positive_hits[mi].push_back(candidate_position);
           } else {
-            positive_hits.push_back(seed_hit);
+            positive_hits.push_back(candidate_position);
           }
         } else {
-          const uint32_t candidate_position =
-              reference_position + read_position - kmer_size_ + 1;
-          const uint64_t seed_hit = (reference_id << 32) | candidate_position;
-
           if (use_heap) {
-            mm_negative_hits[mi].push_back(seed_hit);
+            mm_negative_hits[mi].push_back(candidate_position);
           } else {
-            negative_hits.push_back(seed_hit);
+            negative_hits.push_back(candidate_position);
           }
         }
       }
@@ -407,7 +416,7 @@ int Index::CollectSeedHits(int max_seed_frequency,
 
   if (use_heap) {
     // TODO: try to remove this sorting.
-    if (heap_resort) {
+    if (!is_candidate_position_list_sorted) {
       for (uint32_t mi = 0; mi < num_minimizers; ++mi) {
         std::sort(mm_positive_hits[mi].begin(), mm_positive_hits[mi].end());
       }
@@ -511,7 +520,7 @@ int Index::CollectSeedHitsFromRepetitiveReadWithMateInfo(
       continue;
     }
 
-    const uint64_t value = kh_value(lookup_table_, khash_iterator);
+    const uint64_t reference_seed_hit = kh_value(lookup_table_, khash_iterator);
     const uint32_t read_position = minimizers[mi].GetSequencePosition();
     const Strand read_strand = minimizers[mi].GetSequenceStrand();
 
@@ -519,9 +528,10 @@ int Index::CollectSeedHitsFromRepetitiveReadWithMateInfo(
         (kh_key(lookup_table_, khash_iterator) & 1) > 0;
 
     if (is_reference_minimizer_single) {
-      const uint64_t reference_id = value >> 33;
-      const uint32_t reference_position = value >> 1;
-      const Strand reference_strand = (value & 1) == 0 ? kPositive : kNegative;
+      const uint64_t reference_id = reference_seed_hit >> 33;
+      const uint32_t reference_position = reference_seed_hit >> 1;
+      const Strand reference_strand =
+          (reference_seed_hit & 1) == 0 ? kPositive : kNegative;
 
       if (read_strand == reference_strand) {
         if (strand == kPositive) {
@@ -540,8 +550,8 @@ int Index::CollectSeedHitsFromRepetitiveReadWithMateInfo(
       continue;
     }
 
-    const uint32_t offset = value >> 32;
-    const uint32_t num_occurrences = value;
+    const uint32_t offset = reference_seed_hit >> 32;
+    const uint32_t num_occurrences = reference_seed_hit;
     int32_t prev_l = 0;
     for (uint32_t bi = 0; bi < boundary_size; ++bi) {
       // use binary search to locate the coordinate near mate position
@@ -550,11 +560,11 @@ int Index::CollectSeedHitsFromRepetitiveReadWithMateInfo(
       while (l <= r) {
         m = (l + r) / 2;
 
-        uint64_t value = (occurrence_table_[offset + m]) >> 1;
+        uint64_t reference_seed_hit = (occurrence_table_[offset + m]) >> 1;
 
-        if (value < boundary) {
+        if (reference_seed_hit < boundary) {
           l = m + 1;
-        } else if (value > boundary) {
+        } else if (reference_seed_hit > boundary) {
           r = m - 1;
         } else {
           break;
@@ -564,15 +574,15 @@ int Index::CollectSeedHitsFromRepetitiveReadWithMateInfo(
       prev_l = m;
 
       for (uint32_t oi = m; oi < num_occurrences; ++oi) {
-        const uint64_t value = occurrence_table_[offset + oi];
-        if ((value >> 1) > boundaries[bi].second) {
+        const uint64_t reference_seed_hit = occurrence_table_[offset + oi];
+        if ((reference_seed_hit >> 1) > boundaries[bi].second) {
           break;
         }
 
-        const uint64_t reference_id = value >> 33;
-        const uint32_t reference_position = value >> 1;
+        const uint64_t reference_id = reference_seed_hit >> 33;
+        const uint32_t reference_position = reference_seed_hit >> 1;
         const Strand reference_strand =
-            (value & 1) == 0 ? kPositive : kNegative;
+            (reference_seed_hit & 1) == 0 ? kPositive : kNegative;
 
         if (read_strand == reference_strand) {
           if (strand == kPositive) {
