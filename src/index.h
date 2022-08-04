@@ -96,6 +96,10 @@ class Index {
       const std::vector<std::vector<uint64_t>> sorted_seed_hit_lists,
       std::vector<uint64_t> &seed_hits) const;
 
+  uint64_t GenerateCandidatePositionForSingleSeedHit(
+      uint64_t reference_seed_hit, uint32_t read_position,
+      const Strand &read_strand) const;
+
  protected:
   int kmer_size_ = 0;
   int window_size_ = 0;
