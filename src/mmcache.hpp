@@ -42,7 +42,7 @@ class mm_cache {
     int direction = 0;
     for (i = 0; i < size; ++i) {
       if (cache.minimizers[i] != minimizers[i].GetHashKey() ||
-          (minimizers[i].GetMinimizer() & 1) != cache.strands[i])
+          (minimizers[i].GetHit() & 1) != cache.strands[i])
         break;
     }
     if (i >= size) {
@@ -58,7 +58,7 @@ class mm_cache {
 
     for (i = 0, j = size - 1; i < size; ++i, --j) {
       if (cache.minimizers[i] != minimizers[j].GetHashKey() ||
-          (minimizers[j].GetMinimizer() & 1) == cache.strands[i])
+          (minimizers[j].GetHit() & 1) == cache.strands[i])
         break;
     }
     if (i >= size) {
@@ -263,7 +263,7 @@ if (cache[hidx].finger_print_cnt_sum <= 5)
       cache[hidx].strands.resize(msize);
       for (i = 0; i < msize; ++i) {
         cache[hidx].minimizers[i] = minimizers[i].GetHashKey();
-        cache[hidx].strands[i] = (minimizers[i].GetMinimizer() & 1);
+        cache[hidx].strands[i] = (minimizers[i].GetHit() & 1);
       }
       for (i = 0; i < msize - 1; ++i) {
         cache[hidx].offsets[i] =

@@ -76,7 +76,7 @@ void Index::Construct(uint32_t num_sequences, const SequenceBatch &reference) {
       break;
     }
 
-    occurrence_table_.push_back(minimizers[ti].GetMinimizer());
+    occurrence_table_.push_back(minimizers[ti].GetHit());
     previous_key = current_key;
   }
 
@@ -225,13 +225,13 @@ void Index::CheckIndex(uint32_t num_sequences,
     uint64_t key = kh_key(lookup_table_, khash_iterator);
     uint64_t value = kh_value(lookup_table_, khash_iterator);
     if (key & 1) {  // singleton
-      assert(minimizers[i].GetMinimizer() == value);
+      assert(minimizers[i].GetHit() == value);
       count = 0;
     } else {
       uint32_t offset = value >> 32;
       uint32_t num_occ = value;
       uint64_t value_in_index = occurrence_table_[offset + count];
-      assert(value_in_index == minimizers[i].GetMinimizer());
+      assert(value_in_index == minimizers[i].GetHit());
       ++count;
       if (count == num_occ) {
         count = 0;
