@@ -12,23 +12,22 @@ class Minimizer {
   Minimizer() = delete;
 
   Minimizer(std::pair<uint64_t, uint64_t> minimizer)
-      : hash_key_(minimizer.first), minimizer_(minimizer.second) {}
+      : hash_key_(minimizer.first), hit_(minimizer.second) {}
 
-  Minimizer(uint64_t hash_key, uint64_t minimizer)
-      : hash_key_(hash_key), minimizer_(minimizer) {}
+  Minimizer(uint64_t hash_key, uint64_t hit) : hash_key_(hash_key), hit_(hit) {}
 
   ~Minimizer() = default;
 
   inline uint64_t GetHashKey() const { return hash_key_; }
 
-  inline uint64_t GetMinimizer() const { return minimizer_; }
+  inline uint64_t GetHit() const { return hit_; }
 
-  inline uint32_t GetSequenceIndex() const { return (minimizer_ >> 33); }
+  inline uint32_t GetSequenceIndex() const { return (hit_ >> 33); }
 
-  inline uint32_t GetSequencePosition() const { return (minimizer_ >> 1); }
+  inline uint32_t GetSequencePosition() const { return (hit_ >> 1); }
 
   inline Strand GetSequenceStrand() const {
-    if ((minimizer_ & 1) == 0) {
+    if ((hit_ & 1) == 0) {
       return kPositive;
     }
     return kNegative;
@@ -39,7 +38,7 @@ class Minimizer {
       return true;
     }
 
-    if (hash_key_ == m.hash_key_ && minimizer_ < m.minimizer_) {
+    if (hash_key_ == m.hash_key_ && hit_ < m.hit_) {
       return true;
     }
 
@@ -50,10 +49,10 @@ class Minimizer {
   // The hash value of the kmer.
   uint64_t hash_key_ = 0;
 
-  // The high 31 bits save the reference sequence index in the reference
-  // sequence batch. The following 32 bits save the reference position on that
-  // sequence. And the lowest bit encodes the strand (0 for positive).
-  uint64_t minimizer_ = 0;
+  // The high 31 bits save the sequence index in the sequence batch. The
+  // following 32 bits save the end position on that sequence. And the lowest
+  // bit encodes the strand (0 for positive).
+  uint64_t hit_ = 0;
 };
 
 }  // namespace chromap
