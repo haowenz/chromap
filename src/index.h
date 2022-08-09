@@ -90,9 +90,9 @@ class Index {
   uint32_t GetLookupTableSize() const { return kh_size(lookup_table_); }
 
  private:
-  void HeapMergeSeedHitLists(
-      const std::vector<std::vector<uint64_t>> sorted_seed_hit_lists,
-      std::vector<uint64_t> &seed_hits) const;
+  void HeapMergeCandidatePositionLists(
+      const std::vector<std::vector<uint64_t>> sorted_candidate_position_lists,
+      std::vector<uint64_t> &candidate_positions) const;
 
   uint64_t GenerateCandidatePositionForSingleSeedHit(
       uint64_t reference_seed_hit, uint64_t read_seed_hit) const;

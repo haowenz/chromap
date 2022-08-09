@@ -42,15 +42,15 @@ struct _mm_history {
   uint32_t repetitive_seed_length;
 };
 
-// Only used in Index to merge sorted seed hit lists using heap.
-struct SeedHitInList {
+// Only used in Index to merge sorted candidate position lists using heap.
+struct CandidatePositionWithListIndex {
   uint32_t list_index;
   uint64_t position;
 
-  SeedHitInList(uint32_t list_index, uint64_t position)
+  CandidatePositionWithListIndex(uint32_t list_index, uint64_t position)
       : list_index(list_index), position(position) {}
 
-  bool operator<(const SeedHitInList &h) const {
+  bool operator<(const CandidatePositionWithListIndex &h) const {
     // The inversed direction is to make a min-heap.
     return position > h.position;
   }

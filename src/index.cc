@@ -241,32 +241,35 @@ void Index::CheckIndex(uint32_t num_sequences,
   }
 }
 
-void Index::HeapMergeSeedHitLists(
-    const std::vector<std::vector<uint64_t>> sorted_seed_hit_lists,
-    std::vector<uint64_t> &seed_hits) const {
-  std::priority_queue<SeedHitInList> heap;
-  std::vector<uint32_t> seed_hit_list_indices(sorted_seed_hit_lists.size(), 0);
+void Index::HeapMergeCandidatePositionLists(
+    const std::vector<std::vector<uint64_t>> sorted_candidate_position_lists,
+    std::vector<uint64_t> &candidate_positions) const {
+  std::priority_queue<CandidatePositionWithListIndex> heap;
+  std::vector<uint32_t> candidate_position_list_indices(
+      sorted_candidate_position_lists.size(), 0);
 
-  for (uint32_t li = 0; li < sorted_seed_hit_lists.size(); ++li) {
-    if (sorted_seed_hit_lists[li].size() == 0) {
+  for (uint32_t li = 0; li < sorted_candidate_position_lists.size(); ++li) {
+    if (sorted_candidate_position_lists[li].size() == 0) {
       continue;
     }
-    heap.emplace(li, sorted_seed_hit_lists[li][0]);
+    heap.emplace(li, sorted_candidate_position_lists[li][0]);
   }
 
   while (!heap.empty()) {
-    const SeedHitInList min_seed_hit = heap.top();
+    const CandidatePositionWithListIndex min_candidate_position = heap.top();
     heap.pop();
-    seed_hits.push_back(min_seed_hit.position);
-    ++seed_hit_list_indices[min_seed_hit.list_index];
+    candidate_positions.push_back(min_candidate_position.position);
+    ++candidate_position_list_indices[min_candidate_position.list_index];
 
-    const uint32_t min_seed_hit_list_index =
-        seed_hit_list_indices[min_seed_hit.list_index];
-    const std::vector<uint64_t> &min_sorted_seed_hit_list =
-        sorted_seed_hit_lists[min_seed_hit.list_index];
-    if (min_seed_hit_list_index < min_sorted_seed_hit_list.size()) {
-      heap.emplace(min_seed_hit.list_index,
-                   min_sorted_seed_hit_list[min_seed_hit_list_index]);
+    const uint32_t min_candidate_position_list_index =
+        candidate_position_list_indices[min_candidate_position.list_index];
+    const std::vector<uint64_t> &min_sorted_candidate_position_list =
+        sorted_candidate_position_lists[min_candidate_position.list_index];
+    if (min_candidate_position_list_index <
+        min_sorted_candidate_position_list.size()) {
+      heap.emplace(min_candidate_position.list_index,
+                   min_sorted_candidate_position_list
+                       [min_candidate_position_list_index]);
     }
   }
 }
@@ -430,10 +433,10 @@ int Index::GenerateCandidatePositions(
                   positive_candidate_position_lists[mi].end());
       }
     }
-    HeapMergeSeedHitLists(positive_candidate_position_lists,
-                          positive_candidate_positions);
-    HeapMergeSeedHitLists(negative_candidate_position_lists,
-                          negative_candidate_positions);
+    HeapMergeCandidatePositionLists(positive_candidate_position_lists,
+                                    positive_candidate_positions);
+    HeapMergeCandidatePositionLists(negative_candidate_position_lists,
+                                    negative_candidate_positions);
   } else {
     std::sort(positive_candidate_positions.begin(),
               positive_candidate_positions.end());
