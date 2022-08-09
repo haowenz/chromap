@@ -21,19 +21,28 @@ void CandidateProcessor::GenerateCandidates(
       mapping_metadata.negative_candidates_;
   uint32_t &repetitive_seed_length = mapping_metadata.repetitive_seed_length_;
 
+  const CandidatePositionGeneratingConfig first_round_generating_config(
+      /*max_seed_frequency=*/max_seed_frequencies_[0],
+      /*repetitive_seed_frequency=*/max_seed_frequencies_[0],
+      /*use_heap_merge=*/false);
+
   repetitive_seed_length = 0;
-  int repetitive_seed_count = index.CollectSeedHits(
-      max_seed_frequencies_[0], max_seed_frequencies_[0], minimizers,
-      repetitive_seed_length, positive_hits, negative_hits, false);
+  int repetitive_seed_count = index.GenerateCandidatePositions(
+      first_round_generating_config, mapping_metadata);
 
   bool use_high_frequency_minimizers = false;
   if (positive_hits.size() + negative_hits.size() == 0) {
     positive_hits.clear();
     negative_hits.clear();
     repetitive_seed_length = 0;
-    repetitive_seed_count = index.CollectSeedHits(
-        max_seed_frequencies_[1], max_seed_frequencies_[0], minimizers,
-        repetitive_seed_length, positive_hits, negative_hits, true);
+
+    const CandidatePositionGeneratingConfig second_round_generating_config(
+        /*max_seed_frequency=*/max_seed_frequencies_[1],
+        /*repetitive_seed_frequency=*/max_seed_frequencies_[0],
+        /*use_heap_merge=*/true);
+
+    repetitive_seed_count = index.GenerateCandidatePositions(
+        second_round_generating_config, mapping_metadata);
     use_high_frequency_minimizers = true;
     if (positive_hits.size() == 0 || negative_hits.size() == 0) {
       use_high_frequency_minimizers = false;
