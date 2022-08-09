@@ -303,13 +303,13 @@ int Index::CollectSeedHits(int max_seed_frequency,
                            bool use_heap) const {
   const uint32_t num_minimizers = minimizers.size();
 
-  std::vector<std::vector<uint64_t>> mm_positive_hits;
-  std::vector<std::vector<uint64_t>> mm_negative_hits;
+  std::vector<std::vector<uint64_t>> positive_hit_lists;
+  std::vector<std::vector<uint64_t>> negative_hit_lists;
 
   if (use_heap) {
     for (uint32_t i = 0; i < num_minimizers; ++i) {
-      mm_positive_hits.emplace_back(std::vector<uint64_t>());
-      mm_negative_hits.emplace_back(std::vector<uint64_t>());
+      positive_hit_lists.emplace_back(std::vector<uint64_t>());
+      negative_hit_lists.emplace_back(std::vector<uint64_t>());
     }
   }
 
@@ -350,13 +350,13 @@ int Index::CollectSeedHits(int max_seed_frequency,
 
       if (read_strand == reference_strand) {
         if (use_heap) {
-          mm_positive_hits[mi].push_back(candidate_position);
+          positive_hit_lists[mi].push_back(candidate_position);
         } else {
           positive_hits.push_back(candidate_position);
         }
       } else {
         if (use_heap) {
-          mm_negative_hits[mi].push_back(candidate_position);
+          negative_hit_lists[mi].push_back(candidate_position);
         } else {
           negative_hits.push_back(candidate_position);
         }
@@ -386,13 +386,13 @@ int Index::CollectSeedHits(int max_seed_frequency,
             if (reference_position < read_position) {
               is_candidate_position_list_sorted = false;
             }
-            mm_positive_hits[mi].push_back(candidate_position);
+            positive_hit_lists[mi].push_back(candidate_position);
           } else {
             positive_hits.push_back(candidate_position);
           }
         } else {
           if (use_heap) {
-            mm_negative_hits[mi].push_back(candidate_position);
+            negative_hit_lists[mi].push_back(candidate_position);
           } else {
             negative_hits.push_back(candidate_position);
           }
@@ -422,11 +422,11 @@ int Index::CollectSeedHits(int max_seed_frequency,
     // TODO: try to remove this sorting.
     if (!is_candidate_position_list_sorted) {
       for (uint32_t mi = 0; mi < num_minimizers; ++mi) {
-        std::sort(mm_positive_hits[mi].begin(), mm_positive_hits[mi].end());
+        std::sort(positive_hit_lists[mi].begin(), positive_hit_lists[mi].end());
       }
     }
-    HeapMergeSeedHitLists(mm_positive_hits, positive_hits);
-    HeapMergeSeedHitLists(mm_negative_hits, negative_hits);
+    HeapMergeSeedHitLists(positive_hit_lists, positive_hits);
+    HeapMergeSeedHitLists(negative_hit_lists, negative_hits);
   } else {
     std::sort(positive_hits.begin(), positive_hits.end());
     std::sort(negative_hits.begin(), negative_hits.end());
