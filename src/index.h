@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 
+#include "candidate_position_generating_config.h"
 #include "index_parameters.h"
 #include "khash.h"
 #include "mapping_metadata.h"
@@ -67,12 +68,9 @@ class Index {
   void CheckIndex(uint32_t num_sequences, const SequenceBatch &reference) const;
 
   // Return the number of repetitive seeds.
-  int CollectSeedHits(int max_seed_frequency, int repetitive_seed_frequency,
-                      const std::vector<Minimizer> &minimizers,
-                      uint32_t &repetitive_seed_length,
-                      std::vector<uint64_t> &positive_hits,
-                      std::vector<uint64_t> &negative_hits,
-                      bool use_heap) const;
+  int GenerateCandidatePositions(
+      const CandidatePositionGeneratingConfig &generating_config,
+      MappingMetadata &mapping_metadata) const;
 
   // Input a search range, for each best mate candidate, serach for minimizer
   // hits. Return the minimizer count of the best candidate if it finishes

@@ -294,29 +294,35 @@ uint64_t Index::GenerateCandidatePositionForSingleSeedHit(
   return candidate_position;
 }
 
-int Index::CollectSeedHits(int max_seed_frequency,
-                           int repetitive_seed_frequency,
-                           const std::vector<Minimizer> &minimizers,
-                           uint32_t &repetitive_seed_length,
-                           std::vector<uint64_t> &positive_hits,
-                           std::vector<uint64_t> &negative_hits,
-                           bool use_heap) const {
-  const uint32_t num_minimizers = minimizers.size();
+int Index::GenerateCandidatePositions(
+    const CandidatePositionGeneratingConfig &generating_config,
+    MappingMetadata &mapping_metadata) const {
+  const uint32_t num_minimizers = mapping_metadata.GetNumMinimizers();
+  const std::vector<Minimizer> &minimizers = mapping_metadata.minimizers_;
 
-  std::vector<std::vector<uint64_t>> positive_hit_lists;
-  std::vector<std::vector<uint64_t>> negative_hit_lists;
+  std::vector<std::vector<uint64_t>> positive_candidate_position_lists;
+  std::vector<std::vector<uint64_t>> negative_candidate_position_lists;
 
-  if (use_heap) {
+  if (generating_config.UseHeapMerge()) {
     for (uint32_t i = 0; i < num_minimizers; ++i) {
-      positive_hit_lists.emplace_back(std::vector<uint64_t>());
-      negative_hit_lists.emplace_back(std::vector<uint64_t>());
+      positive_candidate_position_lists.emplace_back(std::vector<uint64_t>());
+      negative_candidate_position_lists.emplace_back(std::vector<uint64_t>());
     }
   }
 
   bool is_candidate_position_list_sorted = true;
 
-  positive_hits.reserve(max_seed_frequency * 2);
-  negative_hits.reserve(max_seed_frequency * 2);
+  std::vector<uint64_t> &positive_candidate_positions =
+      mapping_metadata.positive_hits_;
+  std::vector<uint64_t> &negative_candidate_positions =
+      mapping_metadata.negative_hits_;
+
+  positive_candidate_positions.reserve(generating_config.GetMaxSeedFrequency() *
+                                       2);
+  negative_candidate_positions.reserve(generating_config.GetMaxSeedFrequency() *
+                                       2);
+
+  uint32_t &repetitive_seed_length = mapping_metadata.repetitive_seed_length_;
 
   uint32_t previous_repetitive_seed_position =
       std::numeric_limits<uint32_t>::max();
@@ -345,16 +351,16 @@ int Index::CollectSeedHits(int max_seed_frequency,
                                                     read_seed_hit);
 
       if (AreTwoHitsOnTheSameStrand(reference_seed_hit, read_seed_hit)) {
-        if (use_heap) {
-          positive_hit_lists[mi].push_back(candidate_position);
+        if (generating_config.UseHeapMerge()) {
+          positive_candidate_position_lists[mi].push_back(candidate_position);
         } else {
-          positive_hits.push_back(candidate_position);
+          positive_candidate_positions.push_back(candidate_position);
         }
       } else {
-        if (use_heap) {
-          negative_hit_lists[mi].push_back(candidate_position);
+        if (generating_config.UseHeapMerge()) {
+          negative_candidate_position_lists[mi].push_back(candidate_position);
         } else {
-          negative_hits.push_back(candidate_position);
+          negative_candidate_positions.push_back(candidate_position);
         }
       }
       continue;
@@ -367,7 +373,7 @@ int Index::CollectSeedHits(int max_seed_frequency,
     const uint32_t occurrence_offset = occurrence_info >> 32;
     const uint32_t num_occurrences = occurrence_info;
 
-    if (num_occurrences < (uint32_t)max_seed_frequency) {
+    if (!generating_config.IsFrequentSeed(num_occurrences)) {
       for (uint32_t oi = 0; oi < num_occurrences; ++oi) {
         const uint64_t reference_seed_hit =
             occurrence_table_[occurrence_offset + oi];
@@ -380,25 +386,25 @@ int Index::CollectSeedHits(int max_seed_frequency,
             GenerateSequencePosition(reference_seed_hit);
 
         if (AreTwoHitsOnTheSameStrand(reference_seed_hit, read_seed_hit)) {
-          if (use_heap) {
+          if (generating_config.UseHeapMerge()) {
             if (reference_position < read_position) {
               is_candidate_position_list_sorted = false;
             }
-            positive_hit_lists[mi].push_back(candidate_position);
+            positive_candidate_position_lists[mi].push_back(candidate_position);
           } else {
-            positive_hits.push_back(candidate_position);
+            positive_candidate_positions.push_back(candidate_position);
           }
         } else {
-          if (use_heap) {
-            negative_hit_lists[mi].push_back(candidate_position);
+          if (generating_config.UseHeapMerge()) {
+            negative_candidate_position_lists[mi].push_back(candidate_position);
           } else {
-            negative_hits.push_back(candidate_position);
+            negative_candidate_positions.push_back(candidate_position);
           }
         }
       }
     }
 
-    if (num_occurrences >= (uint32_t)repetitive_seed_frequency) {
+    if (generating_config.IsRepetitiveSeed(num_occurrences)) {
       if (previous_repetitive_seed_position > read_position) {
         // First minimizer.
         repetitive_seed_length += kmer_size_;
@@ -416,28 +422,35 @@ int Index::CollectSeedHits(int max_seed_frequency,
     }
   }
 
-  if (use_heap) {
+  if (generating_config.UseHeapMerge()) {
     // TODO: try to remove this sorting.
     if (!is_candidate_position_list_sorted) {
       for (uint32_t mi = 0; mi < num_minimizers; ++mi) {
-        std::sort(positive_hit_lists[mi].begin(), positive_hit_lists[mi].end());
+        std::sort(positive_candidate_position_lists[mi].begin(),
+                  positive_candidate_position_lists[mi].end());
       }
     }
-    HeapMergeSeedHitLists(positive_hit_lists, positive_hits);
-    HeapMergeSeedHitLists(negative_hit_lists, negative_hits);
+    HeapMergeSeedHitLists(positive_candidate_position_lists,
+                          positive_candidate_positions);
+    HeapMergeSeedHitLists(negative_candidate_position_lists,
+                          negative_candidate_positions);
   } else {
-    std::sort(positive_hits.begin(), positive_hits.end());
-    std::sort(negative_hits.begin(), negative_hits.end());
+    std::sort(positive_candidate_positions.begin(),
+              positive_candidate_positions.end());
+    std::sort(negative_candidate_positions.begin(),
+              negative_candidate_positions.end());
   }
 
 #ifdef LI_DEBUG
-  for (uint32_t mi = 0; mi < positive_hits->size(); ++mi)
-    printf("+ %llu %d %d\n", positive_hits->at(mi),
-           (int)(positive_hits->at(mi) >> 32), (int)(positive_hits->at(mi)));
+  for (uint32_t mi = 0; mi < positive_candidate_positions->size(); ++mi)
+    printf("+ %llu %d %d\n", positive_candidate_positions->at(mi),
+           (int)(positive_candidate_positions->at(mi) >> 32),
+           (int)(positive_candidate_positions->at(mi)));
 
-  for (uint32_t mi = 0; mi < negative_hits->size(); ++mi)
-    printf("- %llu %d %d\n", negative_hits->at(mi),
-           (int)(negative_hits->at(mi) >> 32), (int)(negative_hits->at(mi)));
+  for (uint32_t mi = 0; mi < negative_candidate_positions->size(); ++mi)
+    printf("- %llu %d %d\n", negative_candidate_positions->at(mi),
+           (int)(negative_candidate_positions->at(mi) >> 32),
+           (int)(negative_candidate_positions->at(mi)));
 #endif
 
   return repetitive_seed_count;
