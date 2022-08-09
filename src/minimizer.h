@@ -22,17 +22,6 @@ class Minimizer {
 
   inline uint64_t GetHit() const { return hit_; }
 
-  inline uint32_t GetSequenceIndex() const { return (hit_ >> 33); }
-
-  inline uint32_t GetSequencePosition() const { return (hit_ >> 1); }
-
-  inline Strand GetSequenceStrand() const {
-    if ((hit_ & 1) == 0) {
-      return kPositive;
-    }
-    return kNegative;
-  }
-
   inline bool operator<(const Minimizer &m) const {
     if (hash_key_ < m.hash_key_) {
       return true;

@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <iostream>
 
+#include "hit.h"
 #include "minimizer_generator.h"
 
 namespace chromap {
@@ -271,20 +272,21 @@ void Index::HeapMergeSeedHitLists(
 }
 
 uint64_t Index::GenerateCandidatePositionForSingleSeedHit(
-    uint64_t reference_seed_hit, uint32_t read_position,
-    const Strand &read_strand) const {
-  const uint64_t reference_id = reference_seed_hit >> 33;
-  const uint32_t reference_position = reference_seed_hit >> 1;
-  const Strand reference_strand =
-      (reference_seed_hit & 1) == 0 ? kPositive : kNegative;
+    uint64_t reference_seed_hit, uint64_t read_seed_hit) const {
+  const uint32_t reference_position =
+      GenerateSequencePosition(reference_seed_hit);
+
+  const uint32_t read_position = GenerateSequencePosition(read_seed_hit);
 
   // For now we can't see the reference here. So let us don't validate
   // this seed hit. Instead, we do it later some time when we check the
   // candidates.
   const uint32_t mapping_start_position =
-      read_strand == reference_strand
+      AreTwoHitsOnTheSameStrand(reference_seed_hit, read_seed_hit)
           ? reference_position - read_position
           : reference_position + read_position - kmer_size_ + 1;
+
+  const uint64_t reference_id = GenerateSequenceIndex(reference_seed_hit);
 
   const uint64_t candidate_position =
       (reference_id << 32) | mapping_start_position;
@@ -331,8 +333,9 @@ int Index::CollectSeedHits(int max_seed_frequency,
 
     const uint64_t reference_seed_hit = kh_value(lookup_table_, khash_iterator);
 
-    const uint32_t read_position = minimizers[mi].GetSequencePosition();
-    const Strand read_strand = minimizers[mi].GetSequenceStrand();
+    const uint64_t read_seed_hit = minimizers[mi].GetHit();
+    const uint32_t read_position = GenerateSequencePosition(read_seed_hit);
+    const Strand read_strand = GenerateSequenceStrand(read_seed_hit);
 
     const bool is_reference_minimizer_single =
         (kh_key(lookup_table_, khash_iterator) & 1) > 0;
@@ -340,10 +343,10 @@ int Index::CollectSeedHits(int max_seed_frequency,
     if (is_reference_minimizer_single) {
       const uint64_t candidate_position =
           GenerateCandidatePositionForSingleSeedHit(reference_seed_hit,
-                                                    read_position, read_strand);
+                                                    read_seed_hit);
 
       const Strand reference_strand =
-          (reference_seed_hit & 1) == 0 ? kPositive : kNegative;
+          GenerateSequenceStrand(reference_seed_hit);
 
       if (read_strand == reference_strand) {
         if (use_heap) {
@@ -370,12 +373,13 @@ int Index::CollectSeedHits(int max_seed_frequency,
             occurrence_table_[occurrence_offset + oi];
 
         const uint64_t candidate_position =
-            GenerateCandidatePositionForSingleSeedHit(
-                reference_seed_hit, read_position, read_strand);
+            GenerateCandidatePositionForSingleSeedHit(reference_seed_hit,
+                                                      read_seed_hit);
 
-        const uint32_t reference_position = reference_seed_hit >> 1;
+        const uint32_t reference_position =
+            GenerateSequencePosition(reference_seed_hit);
         const Strand reference_strand =
-            (reference_seed_hit & 1) == 0 ? kPositive : kNegative;
+            GenerateSequenceStrand(reference_seed_hit);
 
         if (read_strand == reference_strand) {
           if (use_heap) {
@@ -521,17 +525,20 @@ int Index::CollectSeedHitsFromRepetitiveReadWithMateInfo(
     }
 
     const uint64_t reference_seed_hit = kh_value(lookup_table_, khash_iterator);
-    const uint32_t read_position = minimizers[mi].GetSequencePosition();
-    const Strand read_strand = minimizers[mi].GetSequenceStrand();
+
+    const uint64_t read_seed_hit = minimizers[mi].GetHit();
+    const uint32_t read_position = GenerateSequencePosition(read_seed_hit);
+    const Strand read_strand = GenerateSequenceStrand(read_seed_hit);
 
     const bool is_reference_minimizer_single =
         (kh_key(lookup_table_, khash_iterator) & 1) > 0;
 
     if (is_reference_minimizer_single) {
-      const uint64_t reference_id = reference_seed_hit >> 33;
-      const uint32_t reference_position = reference_seed_hit >> 1;
+      const uint64_t reference_id = GenerateSequenceIndex(reference_seed_hit);
+      const uint32_t reference_position =
+          GenerateSequencePosition(reference_seed_hit);
       const Strand reference_strand =
-          (reference_seed_hit & 1) == 0 ? kPositive : kNegative;
+          GenerateSequenceStrand(reference_seed_hit);
 
       if (read_strand == reference_strand) {
         if (strand == kPositive) {
@@ -579,10 +586,11 @@ int Index::CollectSeedHitsFromRepetitiveReadWithMateInfo(
           break;
         }
 
-        const uint64_t reference_id = reference_seed_hit >> 33;
-        const uint32_t reference_position = reference_seed_hit >> 1;
+        const uint64_t reference_id = GenerateSequenceIndex(reference_seed_hit);
+        const uint32_t reference_position =
+            GenerateSequencePosition(reference_seed_hit);
         const Strand reference_strand =
-            (reference_seed_hit & 1) == 0 ? kPositive : kNegative;
+            GenerateSequenceStrand(reference_seed_hit);
 
         if (read_strand == reference_strand) {
           if (strand == kPositive) {
