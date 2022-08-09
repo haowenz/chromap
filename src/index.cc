@@ -331,24 +331,20 @@ int Index::CollectSeedHits(int max_seed_frequency,
       continue;
     }
 
-    const uint64_t reference_seed_hit = kh_value(lookup_table_, khash_iterator);
-
     const uint64_t read_seed_hit = minimizers[mi].GetHit();
-    const uint32_t read_position = GenerateSequencePosition(read_seed_hit);
-    const Strand read_strand = GenerateSequenceStrand(read_seed_hit);
 
     const bool is_reference_minimizer_single =
         (kh_key(lookup_table_, khash_iterator) & 1) > 0;
 
     if (is_reference_minimizer_single) {
+      const uint64_t reference_seed_hit =
+          kh_value(lookup_table_, khash_iterator);
+
       const uint64_t candidate_position =
           GenerateCandidatePositionForSingleSeedHit(reference_seed_hit,
                                                     read_seed_hit);
 
-      const Strand reference_strand =
-          GenerateSequenceStrand(reference_seed_hit);
-
-      if (read_strand == reference_strand) {
+      if (AreTwoHitsOnTheSameStrand(reference_seed_hit, read_seed_hit)) {
         if (use_heap) {
           positive_hit_lists[mi].push_back(candidate_position);
         } else {
@@ -364,8 +360,12 @@ int Index::CollectSeedHits(int max_seed_frequency,
       continue;
     }
 
-    const uint32_t occurrence_offset = reference_seed_hit >> 32;
-    const uint32_t num_occurrences = reference_seed_hit;
+    const uint32_t read_position = GenerateSequencePosition(read_seed_hit);
+
+    const uint64_t occurrence_info = kh_value(lookup_table_, khash_iterator);
+
+    const uint32_t occurrence_offset = occurrence_info >> 32;
+    const uint32_t num_occurrences = occurrence_info;
 
     if (num_occurrences < (uint32_t)max_seed_frequency) {
       for (uint32_t oi = 0; oi < num_occurrences; ++oi) {
@@ -378,10 +378,8 @@ int Index::CollectSeedHits(int max_seed_frequency,
 
         const uint32_t reference_position =
             GenerateSequencePosition(reference_seed_hit);
-        const Strand reference_strand =
-            GenerateSequenceStrand(reference_seed_hit);
 
-        if (read_strand == reference_strand) {
+        if (AreTwoHitsOnTheSameStrand(reference_seed_hit, read_seed_hit)) {
           if (use_heap) {
             if (reference_position < read_position) {
               is_candidate_position_list_sorted = false;
