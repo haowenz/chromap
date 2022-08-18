@@ -46,13 +46,12 @@ class CandidateProcessor {
                                      std::vector<uint64_t> &hits,
                                      std::vector<Candidate> &candidates) const;
 
-  int GenerateCandidatesFromRepetitiveReadWithMateInfo(
-      int error_threshold, const Index &index,
-      const std::vector<Minimizer> &minimizers,
+  int GenerateCandidatesFromRepetitiveReadWithMateInfoOnOneStrand(
+      const Strand strand, uint32_t search_range, int error_threshold,
+      const Index &index, const std::vector<Minimizer> &minimizers,
+      const std::vector<Candidate> &mate_candidates,
       uint32_t &repetitive_seed_length, std::vector<uint64_t> &hits,
-      std::vector<Candidate> &candidates,
-      const std::vector<Candidate> &mate_candidates, const Strand strand,
-      uint32_t search_range) const;
+      std::vector<Candidate> &candidates) const;
 
   void MergeCandidates(int error_threshold, std::vector<Candidate> &c1,
                        std::vector<Candidate> &c2,
