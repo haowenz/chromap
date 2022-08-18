@@ -76,12 +76,12 @@ class Index {
   // positions for the read. Return the minimizer count of the best candidate if
   // it finishes normally. Or return a negative value if it stops early due to
   // too many candidates with low minimizer count.
-  int GenerateCandidatePositionsFromRepetitiveReadWithMateInfo(
+  int GenerateCandidatePositionsFromRepetitiveReadWithMateInfoOnOneStrand(
+      const Strand strand, uint32_t search_range,
+      int min_num_seeds_required_for_mapping, int max_seed_frequency0,
       int error_threshold, const std::vector<Minimizer> &minimizers,
-      uint32_t &repetitive_seed_length, std::vector<uint64_t> &hits,
-      const std::vector<Candidate> &mate_candidates, const Strand strand,
-      uint32_t search_range, int min_num_seeds_required_for_mapping,
-      int max_seed_frequency0) const;
+      const std::vector<Candidate> &mate_candidates,
+      uint32_t &repetitive_seed_length, std::vector<uint64_t> &hits) const;
 
   int GetKmerSize() const { return kmer_size_; }
 
