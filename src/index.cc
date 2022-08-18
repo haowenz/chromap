@@ -459,12 +459,12 @@ int Index::GenerateCandidatePositions(
   return repetitive_seed_count;
 }
 
-int Index::GenerateCandidatePositionsFromRepetitiveReadWithMateInfo(
+int Index::GenerateCandidatePositionsFromRepetitiveReadWithMateInfoOnOneStrand(
+    const Strand strand, uint32_t search_range,
+    int min_num_seeds_required_for_mapping, int max_seed_frequency0,
     int error_threshold, const std::vector<Minimizer> &minimizers,
-    uint32_t &repetitive_seed_length, std::vector<uint64_t> &hits,
-    const std::vector<Candidate> &mate_candidates, const Strand strand,
-    uint32_t search_range, int min_num_seeds_required_for_mapping,
-    int max_seed_frequency0) const {
+    const std::vector<Candidate> &mate_candidates,
+    uint32_t &repetitive_seed_length, std::vector<uint64_t> &hits) const {
   const uint32_t mate_candidates_size = mate_candidates.size();
 
   int max_minimizer_count = 0;

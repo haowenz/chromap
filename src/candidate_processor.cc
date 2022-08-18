@@ -270,10 +270,10 @@ int CandidateProcessor::
         uint32_t &repetitive_seed_length, std::vector<uint64_t> &hits,
         std::vector<Candidate> &candidates) const {
   int max_seed_count =
-      index.GenerateCandidatePositionsFromRepetitiveReadWithMateInfo(
-          error_threshold, minimizers, repetitive_seed_length, hits,
-          mate_candidates, strand, search_range,
-          min_num_seeds_required_for_mapping_, max_seed_frequencies_[0]);
+      index.GenerateCandidatePositionsFromRepetitiveReadWithMateInfoOnOneStrand(
+          strand, search_range, min_num_seeds_required_for_mapping_,
+          max_seed_frequencies_[0], error_threshold, minimizers,
+          mate_candidates, repetitive_seed_length, hits);
 
   GenerateCandidatesOnOneStrand(error_threshold, /*num_seeds_required=*/1,
                                 minimizers.size(), hits, candidates);
