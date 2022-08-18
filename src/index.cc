@@ -459,7 +459,7 @@ int Index::GenerateCandidatePositions(
   return repetitive_seed_count;
 }
 
-int Index::CollectSeedHitsFromRepetitiveReadWithMateInfo(
+int Index::GenerateCandidatePositionsFromRepetitiveReadWithMateInfo(
     int error_threshold, const std::vector<Minimizer> &minimizers,
     uint32_t &repetitive_seed_length, std::vector<uint64_t> &hits,
     const std::vector<Candidate> &mate_candidates, const Strand strand,
