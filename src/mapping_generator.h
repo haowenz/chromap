@@ -380,7 +380,7 @@ void MappingGenerator<MappingRecord>::
     printf("mappings1 %d %d:%d\n", i,
            (int)(mappings1[i].GetReferenceSequenceIndex()),
            (int)mappings1[i].GetReferenceSequencePosition());
-  for (int i = 0; i < mappings1.size(); ++i)
+  for (int i = 0; i < mappings2.size(); ++i)
     printf("mappings2 %d %d:%d\n", i,
            (int)(mappings2[i].GetReferenceSequenceIndex()),
            (int)mappings2[i].GetReferenceSequencePosition());
@@ -418,17 +418,17 @@ void MappingGenerator<MappingRecord>::
     if ((first_read_strand == kNegative &&
          mappings1[i1].position > mappings2[i2].position +
                                       mapping_parameters_.max_insert_size -
-                                      read1_length) ||
+                                      read2_length) ||
         (first_read_strand == kPositive &&
          mappings1[i1].position >
-             mappings2[i2].position + read2_length - min_overlap_length)) {
+             mappings2[i2].position + read1_length - min_overlap_length)) {
       ++i2;
     } else if ((first_read_strand == kPositive &&
                 mappings2[i2].position >
                     mappings1[i1].position +
-                        mapping_parameters_.max_insert_size - read2_length) ||
+                        mapping_parameters_.max_insert_size - read1_length) ||
                (first_read_strand == kNegative &&
-                mappings2[i2].position > mappings1[i1].position + read1_length -
+                mappings2[i2].position > mappings1[i1].position + read2_length -
                                              min_overlap_length)) {
       ++i1;
     } else {
@@ -447,11 +447,13 @@ void MappingGenerator<MappingRecord>::
                 mappings1[i1].position + read1_length - min_overlap_length))) {
 #ifdef LI_DEBUG
         printf(
-            "%s passed: %llu %d %llu %d: %d %d %d\n", __func__,
+            "%s passed: %llu %d %d %llu %d %d: %d %d %d\n", __func__,
             mappings1[i1].GetReferenceSequenceIndex(),
             int(mappings1[i1].GetReferenceSequencePosition()),
+						first_read_strand,
             mappings2[current_i2].GetReferenceSequenceIndex(),
             int(mappings2[current_i2].GetReferenceSequencePosition()),
+						second_read_strand,
             mappings1[i1].GetNumErrors() + mappings2[current_i2].GetNumErrors(),
             mappings1[i1].GetNumErrors(), mappings2[current_i2].GetNumErrors());
 #endif
@@ -594,7 +596,6 @@ void MappingGenerator<MappingRecord>::
       GetRefStartEndPositionForReadFromMapping(
           mappings2[i2], reference,
           paired_end_mapping_in_memory.mapping_in_memory2);
-
       uint8_t mapq1 = 0;
       uint8_t mapq2 = 0;
       const uint8_t mapq = GetMAPQForPairedEndRead(

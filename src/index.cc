@@ -432,13 +432,13 @@ int Index::CollectSeedHits(int max_seed_frequency,
   }
 
 #ifdef LI_DEBUG
-  for (uint32_t mi = 0; mi < positive_hits->size(); ++mi)
-    printf("+ %llu %d %d\n", positive_hits->at(mi),
-           (int)(positive_hits->at(mi) >> 32), (int)(positive_hits->at(mi)));
+  for (uint32_t mi = 0; mi < positive_hits.size(); ++mi)
+    printf("+ %llu %d %d\n", positive_hits[mi],
+           (int)(positive_hits[mi] >> 32), (int)(positive_hits[mi]));
 
-  for (uint32_t mi = 0; mi < negative_hits->size(); ++mi)
-    printf("- %llu %d %d\n", negative_hits->at(mi),
-           (int)(negative_hits->at(mi) >> 32), (int)(negative_hits->at(mi)));
+  for (uint32_t mi = 0; mi < negative_hits.size(); ++mi)
+    printf("- %llu %d %d\n", negative_hits[mi],
+           (int)(negative_hits[mi] >> 32), (int)(negative_hits[mi]));
 #endif
 
   return repetitive_seed_count;
@@ -622,10 +622,10 @@ int Index::CollectSeedHitsFromRepetitiveReadWithMateInfo(
   std::sort(hits.begin(), hits.end());
 
 #ifdef LI_DEBUG
-  for (uint32_t i = 0; i < hits->size(); ++i)
-    printf("%s: %d %d\n", __func__, (int)(hits->at(i) >> 32), (int)hits->at(i));
+  for (uint32_t i = 0; i < hits.size(); ++i)
+    printf("%s: %d %d\n", __func__, (int)(hits[i] >> 32), (int)hits[i]);
   std::cerr << "Rescue gen on one dir\n ";
-  printf("%s: %d\n", __func__, hits->size());
+  printf("%s: %d\n", __func__, hits.size());
 #endif
 
   return max_minimizer_count;
