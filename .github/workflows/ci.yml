@@ -43,9 +43,9 @@ jobs:
     - name: build-openmp
       if: steps.cache-openmp.outputs.cache-hit != 'true'
       run: |
-        wget https://github.com/llvm/llvm-project/releases/download/llvmorg-15.0.4/openmp-15.0.4.src.tar.xz
-        tar -xf openmp-15.0.4.src.tar.xz
-        cd openmp-15.0.4.src
+        wget https://github.com/llvm/llvm-project/releases/download/llvmorg-14.0.0/openmp-14.0.0.src.tar.xz
+        tar -xf openmp-14.0.0.src.tar.xz
+        cd openmp-14.0.0.src
         sed -i'' -e '/.size __kmp_unnamed_critical_addr/d' runtime/src/z_Linux_asm.S
         sed -i'' -e 's/__kmp_unnamed_critical_addr/___kmp_unnamed_critical_addr/g' runtime/src/z_Linux_asm.S
         mkdir -p build && cd build
