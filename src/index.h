@@ -16,9 +16,11 @@
 
 namespace chromap {
 
-// Note that the max kmer size is 28 and it is saved in a unsigned 64-bit
-// integer. So it can right shift by one bit is lossless and safe. The minimizer
-// only occurs once when the lowest bit of the key value is set to 1.
+// Note that the max kmer size is 28 and its hash value is always saved in the
+// lowest 56 bits of an unsigned 64-bit integer. When an element is inserted
+// into the hash table, its hash value is left shifted by 1 bit and the lowest
+// bit of the key value is set to 1 when the minimizer only occurs once. So
+// right shift by one bit is lossless and safe.
 #define KHashFunctionForIndex(a) ((a) >> 1)
 #define KHashEqForIndex(a, b) ((a) >> 1 == (b) >> 1)
 KHASH_INIT(/*name=*/k64, /*khkey_t=*/uint64_t, /*khval_t=*/uint64_t,
