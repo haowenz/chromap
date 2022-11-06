@@ -3,6 +3,10 @@
 
 namespace chromap {
 
+// This class holds the parameters to generate candidate position. Using the
+// parameters, it can check whether a seed is frequent or repetitive. Frequent
+// seeds are usually skipped when generating candidate positions. Repetitive
+// seeds are the seeds considered when computing repetitive seed length.
 class CandidatePositionGeneratingConfig {
  public:
   CandidatePositionGeneratingConfig() = delete;
