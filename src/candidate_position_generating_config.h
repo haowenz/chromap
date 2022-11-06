@@ -3,6 +3,8 @@
 
 namespace chromap {
 
+// This class holds the parameters to generate candidate position. Using the
+// parameters, it can check whether a seed is frequent or repetitive.
 class CandidatePositionGeneratingConfig {
  public:
   CandidatePositionGeneratingConfig() = delete;
