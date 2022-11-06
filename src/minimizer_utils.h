@@ -1,5 +1,5 @@
-#ifndef HIT_H_
-#define HIT_H_
+#ifndef MINIMIZER_UTILS_H_
+#define MINIMIZER_UTILS_H_
 
 #include "strand.h"
 
@@ -27,4 +27,4 @@ inline static bool AreTwoHitsOnTheSameStrand(uint64_t seed_hit1,
 
 }  // namespace chromap
 
-#endif  // HIT_H_
+#endif  // MINIMIZER_UTILS_H_

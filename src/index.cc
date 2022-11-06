@@ -5,7 +5,7 @@
 #include <algorithm>
 #include <iostream>
 
-#include "hit.h"
+#include "minimizer_utils.h"
 #include "minimizer_generator.h"
 
 namespace chromap {
