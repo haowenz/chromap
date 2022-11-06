@@ -3,7 +3,7 @@
 
 #include <utility>
 
-#include "hit.h"
+#include "minimizer_utils.h"
 #include "strand.h"
 
 namespace chromap {

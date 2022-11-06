@@ -1,9 +1,9 @@
 #ifndef CHROMAP_CACHE_H_
 #define CHROMAP_CACHE_H_
 
-#include "hit.h"
 #include "index.h"
 #include "minimizer.h"
+#include "minimizer_utils.h"
 
 #define FINGER_PRINT_SIZE 103
 
