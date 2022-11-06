@@ -48,9 +48,8 @@ class mm_cache {
     }
     if (i >= size) {
       for (i = 0; i < size - 1; ++i) {
-        if (cache.offsets[i] !=
-            ((int)GenerateSequencePosition(minimizers[i + 1].GetHit()) -
-             (int)GenerateSequencePosition(minimizers[i].GetHit())))
+        if (cache.offsets[i] != ((int)minimizers[i + 1].GetSequencePosition() -
+                                 (int)minimizers[i].GetSequencePosition()))
           break;
       }
       if (i >= size - 1) direction = 1;
@@ -66,8 +65,8 @@ class mm_cache {
     if (i >= size) {
       for (i = 0, j = size - 1; i < size - 1; ++i, --j) {
         if (cache.offsets[i] !=
-            ((int)GenerateSequencePosition(minimizers[j].GetHit())) -
-                ((int)GenerateSequencePosition(minimizers[j - 1].GetHit())))
+            ((int)minimizers[j].GetSequencePosition()) -
+                ((int)minimizers[j - 1].GetSequencePosition()))
           break;
       }
 
@@ -134,7 +133,7 @@ class mm_cache {
       neg_candidates = cache[hidx].negative_candidates;
       repetitive_seed_length = cache[hidx].repetitive_seed_length;
       int size = pos_candidates.size();
-      int shift = (int)GenerateSequencePosition(minimizers[0].GetHit());
+      int shift = (int)minimizers[0].GetSequencePosition();
       for (i = 0; i < size; ++i) {
         uint64_t rid = pos_candidates[i].position >> 32;
         int rpos = (int)pos_candidates[i].position;
@@ -148,10 +147,9 @@ class mm_cache {
       int size = cache[hidx].negative_candidates.size();
       // Start position of the last minimizer shoud equal the first minimizer's
       // end position in rc "read".
-      int shift =
-          read_len -
-          ((int)GenerateSequencePosition(minimizers[msize - 1].GetHit())) - 1 +
-          kmer_length - 1;
+      int shift = read_len -
+                  ((int)minimizers[msize - 1].GetSequencePosition()) - 1 +
+                  kmer_length - 1;
 
       pos_candidates = cache[hidx].negative_candidates;
       for (i = 0; i < size; ++i) {
@@ -243,7 +241,7 @@ if (cache[hidx].finger_print_cnt_sum <= 5)
         return;
       }
       int size = pos_candidates.size();
-      int shift = (int)GenerateSequencePosition(minimizers[0].GetHit());
+      int shift = (int)minimizers[0].GetSequencePosition();
       // Do not cache if it is too near the start.
       for (i = 0; i < size; ++i)
         if ((int)pos_candidates[i].position < kmer_length + shift) {
@@ -255,8 +253,7 @@ if (cache[hidx].finger_print_cnt_sum <= 5)
       size = neg_candidates.size();
       for (i = 0; i < size; ++i)
         if ((int)neg_candidates[i].position -
-                ((int)GenerateSequencePosition(
-                    minimizers[msize - 1].GetHit())) <
+                ((int)minimizers[msize - 1].GetSequencePosition()) <
             kmer_length + shift) {
           cache[hidx].offsets.clear();
           cache[hidx].strands.clear();
@@ -271,8 +268,8 @@ if (cache[hidx].finger_print_cnt_sum <= 5)
       }
       for (i = 0; i < msize - 1; ++i) {
         cache[hidx].offsets[i] =
-            ((int)GenerateSequencePosition(minimizers[i + 1].GetHit())) -
-            ((int)GenerateSequencePosition(minimizers[i].GetHit()));
+            ((int)minimizers[i + 1].GetSequencePosition()) -
+            ((int)minimizers[i].GetSequencePosition());
       }
       std::vector<Candidate>().swap(cache[hidx].positive_candidates);
       std::vector<Candidate>().swap(cache[hidx].negative_candidates);
