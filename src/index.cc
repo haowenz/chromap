@@ -5,8 +5,8 @@
 #include <algorithm>
 #include <iostream>
 
-#include "minimizer_utils.h"
 #include "minimizer_generator.h"
+#include "minimizer_utils.h"
 
 namespace chromap {
 
@@ -39,7 +39,8 @@ void Index::Construct(uint32_t num_sequences, const SequenceBatch &reference) {
 
   occurrence_table_.reserve(num_minimizers);
 
-  uint64_t previous_key = minimizers[0].GetHashKey();
+  uint64_t previous_key =
+      GenerateHashKeyInLookupTable(minimizers[0].GetHashKey());
   uint32_t num_previous_minimizer_occurrences = 0;
   uint64_t num_nonsingletons = 0;
   uint32_t num_singletons = 0;
@@ -47,12 +48,14 @@ void Index::Construct(uint32_t num_sequences, const SequenceBatch &reference) {
   for (uint32_t ti = 0; ti <= num_minimizers; ++ti) {
     const bool is_last_iteration = ti == num_minimizers;
     const uint64_t current_key =
-        is_last_iteration ? previous_key + 1 : minimizers[ti].GetHashKey();
+        is_last_iteration
+            ? previous_key + 1
+            : GenerateHashKeyInLookupTable(minimizers[ti].GetHashKey());
 
     if (current_key != previous_key) {
       int khash_return_code = 0;
       khiter_t khash_iterator =
-          kh_put(k64, lookup_table_, previous_key << 1, &khash_return_code);
+          kh_put(k64, lookup_table_, previous_key, &khash_return_code);
       assert(khash_return_code != -1 && khash_return_code != 0);
 
       if (num_previous_minimizer_occurrences == 1) {
@@ -65,7 +68,8 @@ void Index::Construct(uint32_t num_sequences, const SequenceBatch &reference) {
         ++num_singletons;
       } else {
         kh_value(lookup_table_, khash_iterator) =
-            (num_nonsingletons << 32) | num_previous_minimizer_occurrences;
+            GenerateEntryValueInLookupTable(num_nonsingletons,
+                                            num_previous_minimizer_occurrences);
         num_nonsingletons += num_previous_minimizer_occurrences;
       }
       num_previous_minimizer_occurrences = 1;
@@ -221,7 +225,8 @@ void Index::CheckIndex(uint32_t num_sequences,
   uint32_t count = 0;
   for (uint32_t i = 0; i < minimizers.size(); ++i) {
     khiter_t khash_iterator =
-        kh_get(k64, lookup_table_, minimizers[i].GetHashKey() << 1);
+        kh_get(k64, lookup_table_,
+               GenerateHashKeyInLookupTable(minimizers[i].GetHashKey()));
     assert(khash_iterator != kh_end(lookup_table_));
     uint64_t key = kh_key(lookup_table_, khash_iterator);
     uint64_t value = kh_value(lookup_table_, khash_iterator);
@@ -229,8 +234,8 @@ void Index::CheckIndex(uint32_t num_sequences,
       assert(minimizers[i].GetHit() == value);
       count = 0;
     } else {
-      uint32_t offset = value >> 32;
-      uint32_t num_occ = value;
+      uint32_t offset = GenerateOffsetInOccurrenceTable(value);
+      uint32_t num_occ = GenerateNumOccurrenceInOccurrenceTable(value);
       uint64_t value_in_index = occurrence_table_[offset + count];
       assert(value_in_index == minimizers[i].GetHit());
       ++count;
@@ -292,7 +297,7 @@ uint64_t Index::GenerateCandidatePositionForSingleSeedHit(
   const uint64_t reference_id = GenerateSequenceIndex(reference_seed_hit);
 
   const uint64_t candidate_position =
-      (reference_id << 32) | mapping_start_position;
+      GenerateCandidatePosition(reference_id, mapping_start_position);
 
   return candidate_position;
 }
@@ -334,7 +339,8 @@ int Index::GenerateCandidatePositions(
 
   for (uint32_t mi = 0; mi < num_minimizers; ++mi) {
     khiter_t khash_iterator =
-        kh_get(k64, lookup_table_, minimizers[mi].GetHashKey() << 1);
+        kh_get(k64, lookup_table_,
+               GenerateHashKeyInLookupTable(minimizers[mi].GetHashKey()));
     if (khash_iterator == kh_end(lookup_table_)) {
       // std::cerr << "The minimizer is not in reference!\n";
       continue;
@@ -373,8 +379,10 @@ int Index::GenerateCandidatePositions(
 
     const uint64_t occurrence_info = kh_value(lookup_table_, khash_iterator);
 
-    const uint32_t occurrence_offset = occurrence_info >> 32;
-    const uint32_t num_occurrences = occurrence_info;
+    const uint32_t occurrence_offset =
+        GenerateOffsetInOccurrenceTable(occurrence_info);
+    const uint32_t num_occurrences =
+        GenerateNumOccurrenceInOccurrenceTable(occurrence_info);
 
     if (!generating_config.IsFrequentSeed(num_occurrences)) {
       for (uint32_t oi = 0; oi < num_occurrences; ++oi) {
@@ -532,7 +540,8 @@ int Index::GenerateCandidatePositionsFromRepetitiveReadWithMateInfoOnOneStrand(
 
   for (uint32_t mi = 0; mi < minimizers.size(); ++mi) {
     khiter_t khash_iterator =
-        kh_get(k64, lookup_table_, minimizers[mi].GetHashKey() << 1);
+        kh_get(k64, lookup_table_,
+               GenerateHashKeyInLookupTable(minimizers[mi].GetHashKey()));
     if (khash_iterator == kh_end(lookup_table_)) {
       // std::cerr << "The minimizer is not in reference!\n";
       continue;
@@ -558,21 +567,24 @@ int Index::GenerateCandidatePositionsFromRepetitiveReadWithMateInfoOnOneStrand(
         if (strand == kPositive) {
           const uint32_t candidate_position =
               reference_position - read_position;
-          const uint64_t seed_hit = (reference_id << 32) | candidate_position;
+          const uint64_t seed_hit =
+              GenerateCandidatePosition(reference_id, candidate_position);
           hits.push_back(seed_hit);
         }
       } else if (strand == kNegative) {
         const uint32_t candidate_position =
             reference_position + read_position - kmer_size_ + 1;
-        const uint64_t seed_hit = (reference_id << 32) | candidate_position;
+        const uint64_t seed_hit =
+            GenerateCandidatePosition(reference_id, candidate_position);
         hits.push_back(seed_hit);
       }
 
       continue;
     }
 
-    const uint32_t offset = reference_seed_hit >> 32;
-    const uint32_t num_occurrences = reference_seed_hit;
+    const uint32_t offset = GenerateOffsetInOccurrenceTable(reference_seed_hit);
+    const uint32_t num_occurrences =
+        GenerateNumOccurrenceInOccurrenceTable(reference_seed_hit);
     int32_t prev_l = 0;
     for (uint32_t bi = 0; bi < boundary_size; ++bi) {
       // use binary search to locate the coordinate near mate position
@@ -581,7 +593,9 @@ int Index::GenerateCandidatePositionsFromRepetitiveReadWithMateInfoOnOneStrand(
       while (l <= r) {
         m = (l + r) / 2;
 
-        uint64_t reference_seed_hit = (occurrence_table_[offset + m]) >> 1;
+        uint64_t reference_seed_hit =
+            GenerateCandidatePositionFromOccurrenceTableEntry(
+                occurrence_table_[offset + m]);
 
         if (reference_seed_hit < boundary) {
           l = m + 1;
@@ -596,7 +610,8 @@ int Index::GenerateCandidatePositionsFromRepetitiveReadWithMateInfoOnOneStrand(
 
       for (uint32_t oi = m; oi < num_occurrences; ++oi) {
         const uint64_t reference_seed_hit = occurrence_table_[offset + oi];
-        if ((reference_seed_hit >> 1) > boundaries[bi].second) {
+        if ((GenerateCandidatePositionFromOccurrenceTableEntry(
+                reference_seed_hit)) > boundaries[bi].second) {
           break;
         }
 
@@ -610,13 +625,15 @@ int Index::GenerateCandidatePositionsFromRepetitiveReadWithMateInfoOnOneStrand(
           if (strand == kPositive) {
             const uint32_t candidate_position =
                 reference_position - read_position;
-            const uint64_t seed_hit = (reference_id << 32) | candidate_position;
+            const uint64_t seed_hit =
+                GenerateCandidatePosition(reference_id, candidate_position);
             hits.push_back(seed_hit);
           }
         } else if (strand == kNegative) {
           const uint32_t candidate_position =
               reference_position + read_position - kmer_size_ + 1;
-          const uint64_t seed_hit = (reference_id << 32) | candidate_position;
+          const uint64_t seed_hit =
+              GenerateCandidatePosition(reference_id, candidate_position);
           hits.push_back(seed_hit);
         }
       }
