@@ -16,9 +16,8 @@ KHASH_INIT(/*name=*/k64, /*khkey_t=*/uint64_t, /*khval_t=*/uint64_t,
 
 namespace chromap {
 
-inline static uint64_t GenerateHashKeyInLookupTable(
-    uint64_t minimizer_hash_key) {
-  return minimizer_hash_key << 1;
+inline static uint64_t GenerateHashInLookupTable(uint64_t minimizer_hash) {
+  return minimizer_hash << 1;
 }
 
 inline static uint64_t GenerateEntryValueInLookupTable(
