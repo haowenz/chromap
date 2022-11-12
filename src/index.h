@@ -81,14 +81,9 @@ class Index {
   uint32_t GetLookupTableSize() const { return kh_size(lookup_table_); }
 
  private:
-  void HeapMergeCandidatePositionLists(
-      const std::vector<std::vector<uint64_t>> sorted_candidate_position_lists,
-      std::vector<uint64_t> &candidate_positions) const;
-
   uint64_t GenerateCandidatePositionForSingleSeedHit(
       uint64_t reference_seed_hit, uint64_t read_seed_hit) const;
 
- protected:
   int kmer_size_ = 0;
   int window_size_ = 0;
   // Number of threads to build the index, which is not used right now.

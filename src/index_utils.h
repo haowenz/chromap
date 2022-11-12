@@ -46,6 +46,53 @@ inline static uint64_t GenerateCandidatePositionFromOccurrenceTableEntry(
   return entry >> 1;
 }
 
+// Only used in Index to merge sorted candidate position lists using heap.
+struct CandidatePositionWithListIndex {
+  uint32_t list_index;
+  uint64_t position;
+
+  CandidatePositionWithListIndex(uint32_t list_index, uint64_t position)
+      : list_index(list_index), position(position) {}
+
+  bool operator<(const CandidatePositionWithListIndex &h) const {
+    // The inversed direction is to make a min-heap.
+    return position > h.position;
+  }
+};
+
+inline static void HeapMergeCandidatePositionLists(
+    const std::vector<std::vector<uint64_t>> sorted_candidate_position_lists,
+    std::vector<uint64_t> &candidate_positions) {
+  std::priority_queue<CandidatePositionWithListIndex> heap;
+  std::vector<uint32_t> candidate_position_list_indices(
+      sorted_candidate_position_lists.size(), 0);
+
+  for (uint32_t li = 0; li < sorted_candidate_position_lists.size(); ++li) {
+    if (sorted_candidate_position_lists[li].size() == 0) {
+      continue;
+    }
+    heap.emplace(li, sorted_candidate_position_lists[li][0]);
+  }
+
+  while (!heap.empty()) {
+    const CandidatePositionWithListIndex min_candidate_position = heap.top();
+    heap.pop();
+    candidate_positions.push_back(min_candidate_position.position);
+    ++candidate_position_list_indices[min_candidate_position.list_index];
+
+    const uint32_t min_candidate_position_list_index =
+        candidate_position_list_indices[min_candidate_position.list_index];
+    const std::vector<uint64_t> &min_sorted_candidate_position_list =
+        sorted_candidate_position_lists[min_candidate_position.list_index];
+    if (min_candidate_position_list_index <
+        min_sorted_candidate_position_list.size()) {
+      heap.emplace(min_candidate_position.list_index,
+                   min_sorted_candidate_position_list
+                       [min_candidate_position_list_index]);
+    }
+  }
+}
+
 }  // namespace chromap
 
 #endif  // INDEX_UTILS_H_

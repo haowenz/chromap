@@ -42,20 +42,6 @@ struct _mm_history {
   uint32_t repetitive_seed_length;
 };
 
-// Only used in Index to merge sorted candidate position lists using heap.
-struct CandidatePositionWithListIndex {
-  uint32_t list_index;
-  uint64_t position;
-
-  CandidatePositionWithListIndex(uint32_t list_index, uint64_t position)
-      : list_index(list_index), position(position) {}
-
-  bool operator<(const CandidatePositionWithListIndex &h) const {
-    // The inversed direction is to make a min-heap.
-    return position > h.position;
-  }
-};
-
 KHASH_MAP_INIT_INT64(k128, uint128_t);
 KHASH_MAP_INIT_INT64(k64_seq, uint64_t);
 KHASH_SET_INIT_INT(k32_set);
