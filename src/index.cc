@@ -38,8 +38,7 @@ void Index::Construct(uint32_t num_sequences, const SequenceBatch &reference) {
 
   occurrence_table_.reserve(num_minimizers);
 
-  uint64_t previous_key =
-      GenerateHashKeyInLookupTable(minimizers[0].GetHashKey());
+  uint64_t previous_key = GenerateHashInLookupTable(minimizers[0].GetHash());
   uint32_t num_previous_minimizer_occurrences = 0;
   uint64_t num_nonsingletons = 0;
   uint32_t num_singletons = 0;
@@ -47,9 +46,8 @@ void Index::Construct(uint32_t num_sequences, const SequenceBatch &reference) {
   for (uint32_t ti = 0; ti <= num_minimizers; ++ti) {
     const bool is_last_iteration = ti == num_minimizers;
     const uint64_t current_key =
-        is_last_iteration
-            ? previous_key + 1
-            : GenerateHashKeyInLookupTable(minimizers[ti].GetHashKey());
+        is_last_iteration ? previous_key + 1
+                          : GenerateHashInLookupTable(minimizers[ti].GetHash());
 
     if (current_key != previous_key) {
       int khash_return_code = 0;
@@ -223,9 +221,8 @@ void Index::CheckIndex(uint32_t num_sequences,
 
   uint32_t count = 0;
   for (uint32_t i = 0; i < minimizers.size(); ++i) {
-    khiter_t khash_iterator =
-        kh_get(k64, lookup_table_,
-               GenerateHashKeyInLookupTable(minimizers[i].GetHashKey()));
+    khiter_t khash_iterator = kh_get(
+        k64, lookup_table_, GenerateHashInLookupTable(minimizers[i].GetHash()));
     assert(khash_iterator != kh_end(lookup_table_));
     uint64_t key = kh_key(lookup_table_, khash_iterator);
     uint64_t value = kh_value(lookup_table_, khash_iterator);
@@ -283,7 +280,7 @@ int Index::GenerateCandidatePositions(
   for (uint32_t mi = 0; mi < num_minimizers; ++mi) {
     khiter_t khash_iterator =
         kh_get(k64, lookup_table_,
-               GenerateHashKeyInLookupTable(minimizers[mi].GetHashKey()));
+               GenerateHashInLookupTable(minimizers[mi].GetHash()));
     if (khash_iterator == kh_end(lookup_table_)) {
       // std::cerr << "The minimizer is not in reference!\n";
       continue;
@@ -484,7 +481,7 @@ int Index::GenerateCandidatePositionsFromRepetitiveReadWithMateInfoOnOneStrand(
   for (uint32_t mi = 0; mi < minimizers.size(); ++mi) {
     khiter_t khash_iterator =
         kh_get(k64, lookup_table_,
-               GenerateHashKeyInLookupTable(minimizers[mi].GetHashKey()));
+               GenerateHashInLookupTable(minimizers[mi].GetHash()));
     if (khash_iterator == kh_end(lookup_table_)) {
       // std::cerr << "The minimizer is not in reference!\n";
       continue;
