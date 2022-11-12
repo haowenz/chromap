@@ -8,24 +8,13 @@
 
 #include "candidate_position_generating_config.h"
 #include "index_parameters.h"
-#include "khash.h"
+#include "index_utils.h"
 #include "mapping_metadata.h"
 #include "minimizer.h"
 #include "sequence_batch.h"
 #include "utils.h"
 
 namespace chromap {
-
-// Note that the max kmer size is 28 and its hash value is always saved in the
-// lowest 56 bits of an unsigned 64-bit integer. When an element is inserted
-// into the hash table, its hash value is left shifted by 1 bit and the lowest
-// bit of the key value is set to 1 when the minimizer only occurs once. So
-// right shift by one bit is lossless and safe.
-#define KHashFunctionForIndex(a) ((a) >> 1)
-#define KHashEqForIndex(a, b) ((a) >> 1 == (b) >> 1)
-KHASH_INIT(/*name=*/k64, /*khkey_t=*/uint64_t, /*khval_t=*/uint64_t,
-           /*kh_is_map=*/1, /*__hash_func=*/KHashFunctionForIndex,
-           /*__hash_equal=*/KHashEqForIndex);
 
 class Index {
  public:
