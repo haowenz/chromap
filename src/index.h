@@ -81,8 +81,8 @@ class Index {
   uint32_t GetLookupTableSize() const { return kh_size(lookup_table_); }
 
  private:
-  uint64_t GenerateCandidatePositionFromHits(uint64_t reference_seed_hit,
-                                             uint64_t read_seed_hit) const;
+  uint64_t GenerateCandidatePositionFromHits(uint64_t reference_hit,
+                                             uint64_t read_hit) const;
 
   void UpdateRepetitiveSeedStats(uint32_t read_position,
                                  RepetitiveSeedStats &stats) const;
