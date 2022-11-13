@@ -1,5 +1,5 @@
 #ifndef INDEX_UTILS_H_
-#define INDEX_UTILSH_
+#define INDEX_UTILS_H_
 
 #include "khash.h"
 
