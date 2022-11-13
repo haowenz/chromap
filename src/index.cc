@@ -275,7 +275,7 @@ int Index::GenerateCandidatePositions(
     const uint64_t lookup_key = kh_key(lookup_table_, khash_iterator);
     const uint64_t lookup_value = kh_value(lookup_table_, khash_iterator);
     const uint64_t read_hit = minimizers[mi].GetHit();
-    if (IsSingleton(lookup_key)) {
+    if (IsSingletonLookupKey(lookup_key)) {
       const uint64_t candidate_position = GenerateCandidatePositionFromHits(
           /*reference_hit=*/lookup_value, read_hit);
       if (AreTwoHitsOnTheSameStrand(/*reference_hit=*/lookup_value, read_hit)) {
@@ -355,12 +355,11 @@ int Index::GenerateCandidatePositionsFromRepetitiveReadWithMateInfoOnOneStrand(
     int min_num_seeds_required_for_mapping, int max_seed_frequency0,
     int error_threshold, const std::vector<Minimizer> &minimizers,
     const std::vector<Candidate> &mate_candidates,
-    uint32_t &repetitive_seed_length, std::vector<uint64_t> &hits) const {
+    uint32_t &repetitive_seed_length,
+    std::vector<uint64_t> &candidate_positions) const {
   const uint32_t mate_candidates_size = mate_candidates.size();
-
   int max_minimizer_count = 0;
   int best_candidate_num = 0;
-
   for (uint32_t i = 0; i < mate_candidates_size; ++i) {
     int count = mate_candidates[i].count;
     if (count > max_minimizer_count) {
@@ -373,20 +372,18 @@ int Index::GenerateCandidatePositionsFromRepetitiveReadWithMateInfoOnOneStrand(
 
   const bool mate_has_too_many_candidates =
       best_candidate_num >= 300 ||
-      mate_candidates_size > (uint32_t)max_seed_frequency0;
-
+      mate_candidates_size > static_cast<uint32_t>(max_seed_frequency0);
   const bool mate_has_too_many_low_support_candidates =
       max_minimizer_count <= min_num_seeds_required_for_mapping &&
       best_candidate_num >= 200;
-
   if (mate_has_too_many_candidates ||
       mate_has_too_many_low_support_candidates) {
     return -max_minimizer_count;
   }
 
+  // TODO: reduce the search range based on the strand.
   std::vector<std::pair<uint64_t, uint64_t>> boundaries;
-  boundaries.reserve(300);
-
+  boundaries.reserve(best_candidate_num);
   for (uint32_t ci = 0; ci < mate_candidates_size; ++ci) {
     if (mate_candidates[ci].count == max_minimizer_count) {
       const uint64_t boundary_start =
@@ -398,13 +395,13 @@ int Index::GenerateCandidatePositionsFromRepetitiveReadWithMateInfoOnOneStrand(
     }
   }
 
-  // Merge adjacent boundary point. Assume the candidates are sorted by
-  // coordinate, and thus boundaries are also sorted.
-  uint32_t raw_boundary_size = boundaries.size();
+  const uint32_t raw_boundary_size = boundaries.size();
   if (raw_boundary_size == 0) {
     return max_minimizer_count;
   }
 
+  // Merge adjacent boundary point. Assume the candidates are sorted by
+  // coordinate, and thus boundaries are also sorted.
   uint32_t boundary_size = 1;
   for (uint32_t bi = 1; bi < raw_boundary_size; ++bi) {
     if (boundaries[boundary_size - 1].second < boundaries[bi].first) {
@@ -416,11 +413,7 @@ int Index::GenerateCandidatePositionsFromRepetitiveReadWithMateInfoOnOneStrand(
   }
   boundaries.resize(boundary_size);
 
-  uint32_t previous_repetitive_seed_position =
-      std::numeric_limits<uint32_t>::max();
-
-  repetitive_seed_length = 0;
-
+  RepetitiveSeedStats repetitive_seed_stats;
   for (uint32_t mi = 0; mi < minimizers.size(); ++mi) {
     khiter_t khash_iterator =
         kh_get(k64, lookup_table_,
@@ -430,62 +423,44 @@ int Index::GenerateCandidatePositionsFromRepetitiveReadWithMateInfoOnOneStrand(
       continue;
     }
 
-    const uint64_t reference_hit = kh_value(lookup_table_, khash_iterator);
-
+    const uint64_t lookup_key = kh_key(lookup_table_, khash_iterator);
+    const uint64_t lookup_value = kh_value(lookup_table_, khash_iterator);
     const uint64_t read_hit = minimizers[mi].GetHit();
     const uint32_t read_position = HitToSequencePosition(read_hit);
-    const Strand read_strand = HitToStrand(read_hit);
-
-    const bool is_reference_minimizer_single =
-        (kh_key(lookup_table_, khash_iterator) & 1) > 0;
-
-    if (is_reference_minimizer_single) {
-      const uint64_t reference_id = HitToSequenceIndex(reference_hit);
-      const uint32_t reference_position = HitToSequencePosition(reference_hit);
-      const Strand reference_strand = HitToStrand(reference_hit);
-
-      if (read_strand == reference_strand) {
-        if (strand == kPositive) {
-          const uint32_t reference_start_position =
-              reference_position - read_position;
-          hits.push_back(SequenceIndexAndPositionToCandidatePosition(
-              reference_id, reference_start_position));
-        }
-      } else if (strand == kNegative) {
-        const uint32_t reference_start_position =
-            reference_position + read_position - kmer_size_ + 1;
-        const uint64_t candidate_position = ;
-        hits.push_back(SequenceIndexAndPositionToCandidatePosition(
-            reference_id, reference_start_position));
+    if (IsSingletonLookupKey(lookup_key)) {
+      const uint64_t candidate_position =
+          GenerateCandidatePositionFromHits(lookup_value, read_hit);
+      const bool on_same_strand =
+          AreTwoHitsOnTheSameStrand(lookup_value, read_hit);
+      if ((on_same_strand && strand == kPositive) ||
+          (!on_same_strand && strand == kNegative)) {
+        candidate_positions.push_back(candidate_position);
       }
-
       continue;
     }
 
-    const uint32_t offset = GenerateOffsetInOccurrenceTable(reference_hit);
+    const uint32_t offset = GenerateOffsetInOccurrenceTable(lookup_value);
     const uint32_t num_occurrences =
-        GenerateNumOccurrenceInOccurrenceTable(reference_hit);
+        GenerateNumOccurrenceInOccurrenceTable(lookup_value);
     int32_t prev_l = 0;
     for (uint32_t bi = 0; bi < boundary_size; ++bi) {
-      // use binary search to locate the coordinate near mate position
+      // Use binary search to locate the coordinate near mate position.
       int32_t l = prev_l, m = 0, r = num_occurrences - 1;
       uint64_t boundary = boundaries[bi].first;
       while (l <= r) {
         m = (l + r) / 2;
-
-        uint64_t reference_hit =
+        uint64_t candidate_position =
             GenerateCandidatePositionFromOccurrenceTableEntry(
                 occurrence_table_[offset + m]);
-
-        if (reference_hit < boundary) {
+        if (candidate_position < boundary) {
           l = m + 1;
-        } else if (reference_hit > boundary) {
+        } else if (candidate_position > boundary) {
           r = m - 1;
         } else {
           break;
         }
       }
-
+      // For next boundary, we don't have to start from l=0.
       prev_l = m;
 
       for (uint32_t oi = m; oi < num_occurrences; ++oi) {
@@ -494,54 +469,24 @@ int Index::GenerateCandidatePositionsFromRepetitiveReadWithMateInfoOnOneStrand(
             boundaries[bi].second) {
           break;
         }
-
-        const uint64_t reference_id = HitToSequenceIndex(reference_hit);
-        const uint32_t reference_position =
-            HitToSequencePosition(reference_hit);
-        const Strand reference_strand = HitToStrand(reference_hit);
-
-        if (read_strand == reference_strand) {
-          if (strand == kPositive) {
-            const uint32_t reference_start_position =
-                reference_position - read_position;
-            hits.push_back(SequenceIndexAndPositionToCandidatePosition(
-                reference_id, reference_start_position));
-          }
-        } else if (strand == kNegative) {
-          const uint32_t reference_start_position =
-              reference_position + read_position - kmer_size_ + 1;
-          hits.push_back(SequenceIndexAndPositionToCandidatePosition(
-              reference_id, reference_start_position));
+        const uint64_t candidate_position =
+            GenerateCandidatePositionFromHits(reference_hit, read_hit);
+        const bool on_same_strand =
+            AreTwoHitsOnTheSameStrand(reference_hit, read_hit);
+        if ((on_same_strand && strand == kPositive) ||
+            (!on_same_strand && strand == kNegative)) {
+          candidate_positions.push_back(candidate_position);
         }
       }
-    }  // for bi
+    }
 
     if (num_occurrences >= (uint32_t)max_seed_frequency0) {
-      if (previous_repetitive_seed_position > read_position) {
-        // First minimizer.
-        repetitive_seed_length += kmer_size_;
-      } else {
-        if (read_position <
-            previous_repetitive_seed_position + kmer_size_ + window_size_ - 1) {
-          repetitive_seed_length +=
-              read_position - previous_repetitive_seed_position;
-        } else {
-          repetitive_seed_length += kmer_size_;
-        }
-      }
-      previous_repetitive_seed_position = read_position;
+      UpdateRepetitiveSeedStats(read_position, repetitive_seed_stats);
     }
-  }  // for mi
+  }
 
-  std::sort(hits.begin(), hits.end());
-
-#ifdef LI_DEBUG
-  for (uint32_t i = 0; i < hits->size(); ++i)
-    printf("%s: %d %d\n", __func__, (int)(hits->at(i) >> 32), (int)hits->at(i));
-  std::cerr << "Rescue gen on one dir\n ";
-  printf("%s: %d\n", __func__, hits->size());
-#endif
-
+  std::sort(candidate_positions.begin(), candidate_positions.end());
+  repetitive_seed_length = repetitive_seed_stats.repetitive_seed_length;
   return max_minimizer_count;
 }
 
