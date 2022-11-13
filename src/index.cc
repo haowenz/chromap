@@ -14,7 +14,6 @@ void Index::Construct(uint32_t num_sequences, const SequenceBatch &reference) {
 
   std::vector<Minimizer> minimizers;
   minimizers.reserve(reference.GetNumBases() / window_size_ * 2);
-
   std::cerr << "Collecting minimizers.\n";
   MinimizerGenerator minimizer_generator(kmer_size_, window_size_);
   for (uint32_t sequence_index = 0; sequence_index < num_sequences;
@@ -23,36 +22,32 @@ void Index::Construct(uint32_t num_sequences, const SequenceBatch &reference) {
                                            minimizers);
   }
   std::cerr << "Collected " << minimizers.size() << " minimizers.\n";
-
   std::cerr << "Sorting minimizers.\n";
   std::stable_sort(minimizers.begin(), minimizers.end());
   std::cerr << "Sorted all minimizers.\n";
-
-  const uint32_t num_minimizers = minimizers.size();
-
+  const size_t num_minimizers = minimizers.size();
   assert(num_minimizers > 0);
   // TODO: check this assert!
   // Here I make sure the # minimizers is less than the limit of signed int32,
   // so that I can use int to store position later.
-  assert(num_minimizers <= INT_MAX);
+  assert(num_minimizers <= static_cast<size_t>(INT_MAX));
 
   occurrence_table_.reserve(num_minimizers);
-
-  uint64_t previous_key = GenerateHashInLookupTable(minimizers[0].GetHash());
+  uint64_t previous_lookup_hash =
+      GenerateHashInLookupTable(minimizers[0].GetHash());
   uint32_t num_previous_minimizer_occurrences = 0;
   uint64_t num_nonsingletons = 0;
   uint32_t num_singletons = 0;
+  for (size_t mi = 0; mi <= num_minimizers; ++mi) {
+    const bool is_last_iteration = mi == num_minimizers;
+    const uint64_t current_lookup_hash =
+        is_last_iteration ? previous_lookup_hash + 1
+                          : GenerateHashInLookupTable(minimizers[mi].GetHash());
 
-  for (uint32_t ti = 0; ti <= num_minimizers; ++ti) {
-    const bool is_last_iteration = ti == num_minimizers;
-    const uint64_t current_key =
-        is_last_iteration ? previous_key + 1
-                          : GenerateHashInLookupTable(minimizers[ti].GetHash());
-
-    if (current_key != previous_key) {
+    if (current_lookup_hash != previous_lookup_hash) {
       int khash_return_code = 0;
       khiter_t khash_iterator =
-          kh_put(k64, lookup_table_, previous_key, &khash_return_code);
+          kh_put(k64, lookup_table_, previous_lookup_hash, &khash_return_code);
       assert(khash_return_code != -1 && khash_return_code != 0);
 
       if (num_previous_minimizer_occurrences == 1) {
@@ -78,10 +73,9 @@ void Index::Construct(uint32_t num_sequences, const SequenceBatch &reference) {
       break;
     }
 
-    occurrence_table_.push_back(minimizers[ti].GetHit());
-    previous_key = current_key;
+    occurrence_table_.push_back(minimizers[mi].GetHit());
+    previous_lookup_hash = current_lookup_hash;
   }
-
   assert(num_nonsingletons + num_singletons == num_minimizers);
 
   std::cerr << "Kmer size: " << kmer_size_ << ", window size: " << window_size_
@@ -207,7 +201,6 @@ void Index::CheckIndex(uint32_t num_sequences,
                        const SequenceBatch &reference) const {
   std::vector<Minimizer> minimizers;
   minimizers.reserve(reference.GetNumBases() / window_size_ * 2);
-
   MinimizerGenerator minimizer_generator(kmer_size_, window_size_);
   for (uint32_t sequence_index = 0; sequence_index < num_sequences;
        ++sequence_index) {
@@ -215,7 +208,6 @@ void Index::CheckIndex(uint32_t num_sequences,
                                            minimizers);
   }
   std::cerr << "Collected " << minimizers.size() << " minimizers.\n";
-
   std::stable_sort(minimizers.begin(), minimizers.end());
   std::cerr << "Sorted minimizers.\n";
 
@@ -250,31 +242,26 @@ int Index::GenerateCandidatePositions(
 
   std::vector<std::vector<uint64_t>> positive_candidate_position_lists;
   std::vector<std::vector<uint64_t>> negative_candidate_position_lists;
-
   if (generating_config.UseHeapMerge()) {
     for (uint32_t i = 0; i < num_minimizers; ++i) {
       positive_candidate_position_lists.emplace_back(std::vector<uint64_t>());
       negative_candidate_position_lists.emplace_back(std::vector<uint64_t>());
     }
   }
-
   bool is_candidate_position_list_sorted = true;
 
   std::vector<uint64_t> &positive_candidate_positions =
       mapping_metadata.positive_hits_;
   std::vector<uint64_t> &negative_candidate_positions =
       mapping_metadata.negative_hits_;
-
   positive_candidate_positions.reserve(generating_config.GetMaxSeedFrequency() *
                                        2);
   negative_candidate_positions.reserve(generating_config.GetMaxSeedFrequency() *
                                        2);
 
   uint32_t &repetitive_seed_length = mapping_metadata.repetitive_seed_length_;
-
   uint32_t previous_repetitive_seed_position =
       std::numeric_limits<uint32_t>::max();
-
   int repetitive_seed_count = 0;
 
   for (uint32_t mi = 0; mi < num_minimizers; ++mi) {
@@ -287,18 +274,14 @@ int Index::GenerateCandidatePositions(
     }
 
     const uint64_t read_seed_hit = minimizers[mi].GetHit();
-
     const bool is_reference_minimizer_single =
         (kh_key(lookup_table_, khash_iterator) & 1) > 0;
-
     if (is_reference_minimizer_single) {
       const uint64_t reference_seed_hit =
           kh_value(lookup_table_, khash_iterator);
-
       const uint64_t candidate_position =
           GenerateCandidatePositionForSingleSeedHit(reference_seed_hit,
                                                     read_seed_hit);
-
       if (AreTwoHitsOnTheSameStrand(reference_seed_hit, read_seed_hit)) {
         if (generating_config.UseHeapMerge()) {
           positive_candidate_position_lists[mi].push_back(candidate_position);
@@ -316,26 +299,20 @@ int Index::GenerateCandidatePositions(
     }
 
     const uint32_t read_position = GenerateSequencePosition(read_seed_hit);
-
     const uint64_t occurrence_info = kh_value(lookup_table_, khash_iterator);
-
     const uint32_t occurrence_offset =
         GenerateOffsetInOccurrenceTable(occurrence_info);
     const uint32_t num_occurrences =
         GenerateNumOccurrenceInOccurrenceTable(occurrence_info);
-
     if (!generating_config.IsFrequentSeed(num_occurrences)) {
       for (uint32_t oi = 0; oi < num_occurrences; ++oi) {
         const uint64_t reference_seed_hit =
             occurrence_table_[occurrence_offset + oi];
-
         const uint64_t candidate_position =
             GenerateCandidatePositionForSingleSeedHit(reference_seed_hit,
                                                       read_seed_hit);
-
         const uint32_t reference_position =
             GenerateSequencePosition(reference_seed_hit);
-
         if (AreTwoHitsOnTheSameStrand(reference_seed_hit, read_seed_hit)) {
           if (generating_config.UseHeapMerge()) {
             if (reference_position < read_position) {
