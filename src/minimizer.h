@@ -3,7 +3,7 @@
 
 #include <utility>
 
-#include "minimizer_utils.h"
+#include "hit_utils.h"
 #include "strand.h"
 
 namespace chromap {
@@ -23,17 +23,13 @@ class Minimizer {
 
   inline uint64_t GetHit() const { return hit_; }
 
-  inline uint32_t GetSequenceIndex() const {
-    return GenerateSequenceIndex(hit_);
-  }
+  inline uint32_t GetSequenceIndex() const { return HitToSequenceIndex(hit_); }
 
   inline uint32_t GetSequencePosition() const {
-    return GenerateSequencePosition(hit_);
+    return HitToSequencePosition(hit_);
   }
 
-  inline Strand GetSequenceStrand() const {
-    return GenerateSequenceStrand(hit_);
-  }
+  inline Strand GetSequenceStrand() const { return HitToStrand(hit_); }
 
   inline bool operator<(const Minimizer &m) const {
     if (hash_ < m.hash_) {

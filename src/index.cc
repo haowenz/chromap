@@ -290,7 +290,7 @@ int Index::GenerateCandidatePositions(
     const uint32_t num_occurrences =
         GenerateNumOccurrenceInOccurrenceTable(lookup_value);
     if (!generating_config.IsFrequentSeed(num_occurrences)) {
-      const uint32_t read_position = GenerateSequencePosition(read_seed_hit);
+      const uint32_t read_position = HitToSequencePosition(read_seed_hit);
       const uint32_t occ_offset = GenerateOffsetInOccurrenceTable(lookup_value);
       for (uint32_t oi = 0; oi < num_occurrences; ++oi) {
         const uint64_t reference_seed_hit = occurrence_table_[occ_offset + oi];
@@ -298,7 +298,7 @@ int Index::GenerateCandidatePositions(
             reference_seed_hit, read_seed_hit);
         if (AreTwoHitsOnTheSameStrand(reference_seed_hit, read_seed_hit)) {
           const uint32_t reference_position =
-              GenerateSequencePosition(reference_seed_hit);
+              HitToSequencePosition(reference_seed_hit);
           if (reference_position < read_position) {
             is_candidate_position_list_sorted = false;
           }
@@ -310,7 +310,7 @@ int Index::GenerateCandidatePositions(
     }
 
     if (generating_config.IsRepetitiveSeed(num_occurrences)) {
-      const uint32_t read_position = GenerateSequencePosition(read_seed_hit);
+      const uint32_t read_position = HitToSequencePosition(read_seed_hit);
       UpdateRepetitiveSeedStats(read_position, repetitive_seed_stats);
     }
   }
@@ -434,32 +434,31 @@ int Index::GenerateCandidatePositionsFromRepetitiveReadWithMateInfoOnOneStrand(
     const uint64_t reference_seed_hit = kh_value(lookup_table_, khash_iterator);
 
     const uint64_t read_seed_hit = minimizers[mi].GetHit();
-    const uint32_t read_position = GenerateSequencePosition(read_seed_hit);
-    const Strand read_strand = GenerateSequenceStrand(read_seed_hit);
+    const uint32_t read_position = HitToSequencePosition(read_seed_hit);
+    const Strand read_strand = HitToStrand(read_seed_hit);
 
     const bool is_reference_minimizer_single =
         (kh_key(lookup_table_, khash_iterator) & 1) > 0;
 
     if (is_reference_minimizer_single) {
-      const uint64_t reference_id = GenerateSequenceIndex(reference_seed_hit);
+      const uint64_t reference_id = HitToSequenceIndex(reference_seed_hit);
       const uint32_t reference_position =
-          GenerateSequencePosition(reference_seed_hit);
-      const Strand reference_strand =
-          GenerateSequenceStrand(reference_seed_hit);
+          HitToSequencePosition(reference_seed_hit);
+      const Strand reference_strand = HitToStrand(reference_seed_hit);
 
       if (read_strand == reference_strand) {
         if (strand == kPositive) {
           const uint32_t candidate_position =
               reference_position - read_position;
-          const uint64_t seed_hit =
-              GenerateCandidatePosition(reference_id, candidate_position);
+          const uint64_t seed_hit = SequenceIndexAndPositionToCandidatePosition(
+              reference_id, candidate_position);
           hits.push_back(seed_hit);
         }
       } else if (strand == kNegative) {
         const uint32_t candidate_position =
             reference_position + read_position - kmer_size_ + 1;
-        const uint64_t seed_hit =
-            GenerateCandidatePosition(reference_id, candidate_position);
+        const uint64_t seed_hit = SequenceIndexAndPositionToCandidatePosition(
+            reference_id, candidate_position);
         hits.push_back(seed_hit);
       }
 
@@ -499,25 +498,25 @@ int Index::GenerateCandidatePositionsFromRepetitiveReadWithMateInfoOnOneStrand(
           break;
         }
 
-        const uint64_t reference_id = GenerateSequenceIndex(reference_seed_hit);
+        const uint64_t reference_id = HitToSequenceIndex(reference_seed_hit);
         const uint32_t reference_position =
-            GenerateSequencePosition(reference_seed_hit);
-        const Strand reference_strand =
-            GenerateSequenceStrand(reference_seed_hit);
+            HitToSequencePosition(reference_seed_hit);
+        const Strand reference_strand = HitToStrand(reference_seed_hit);
 
         if (read_strand == reference_strand) {
           if (strand == kPositive) {
             const uint32_t candidate_position =
                 reference_position - read_position;
             const uint64_t seed_hit =
-                GenerateCandidatePosition(reference_id, candidate_position);
+                SequenceIndexAndPositionToCandidatePosition(reference_id,
+                                                            candidate_position);
             hits.push_back(seed_hit);
           }
         } else if (strand == kNegative) {
           const uint32_t candidate_position =
               reference_position + read_position - kmer_size_ + 1;
-          const uint64_t seed_hit =
-              GenerateCandidatePosition(reference_id, candidate_position);
+          const uint64_t seed_hit = SequenceIndexAndPositionToCandidatePosition(
+              reference_id, candidate_position);
           hits.push_back(seed_hit);
         }
       }
@@ -554,9 +553,8 @@ int Index::GenerateCandidatePositionsFromRepetitiveReadWithMateInfoOnOneStrand(
 
 uint64_t Index::GenerateCandidatePositionFromHits(
     uint64_t reference_seed_hit, uint64_t read_seed_hit) const {
-  const uint32_t reference_position =
-      GenerateSequencePosition(reference_seed_hit);
-  const uint32_t read_position = GenerateSequencePosition(read_seed_hit);
+  const uint32_t reference_position = HitToSequencePosition(reference_seed_hit);
+  const uint32_t read_position = HitToSequencePosition(read_seed_hit);
   // For now we can't see the reference here. So let us don't validate this
   // candidate position. Instead, we do it later some time when we check the
   // candidates.
@@ -564,9 +562,10 @@ uint64_t Index::GenerateCandidatePositionFromHits(
       AreTwoHitsOnTheSameStrand(reference_seed_hit, read_seed_hit)
           ? reference_position - read_position
           : reference_position + read_position - kmer_size_ + 1;
-  const uint64_t reference_id = GenerateSequenceIndex(reference_seed_hit);
+  const uint64_t reference_id = HitToSequenceIndex(reference_seed_hit);
   const uint64_t candidate_position =
-      GenerateCandidatePosition(reference_id, mapping_start_position);
+      SequenceIndexAndPositionToCandidatePosition(reference_id,
+                                                  mapping_start_position);
   return candidate_position;
 }
 
