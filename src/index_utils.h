@@ -41,8 +41,8 @@ inline static uint32_t GenerateNumOccurrenceInOccurrenceTable(
   return static_cast<uint32_t>(lookup_table_entry_value);
 }
 
-inline static uint64_t GenerateCandidatePosition(uint64_t sequence_id,
-                                                 uint32_t sequence_position) {
+inline static uint64_t SequenceIndexAndPositionToCandidatePosition(
+    uint64_t sequence_id, uint32_t sequence_position) {
   return (sequence_id << 32) | sequence_position;
 }
 

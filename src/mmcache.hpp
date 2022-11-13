@@ -3,7 +3,6 @@
 
 #include "index.h"
 #include "minimizer.h"
-#include "minimizer_utils.h"
 
 #define FINGER_PRINT_SIZE 103
 
