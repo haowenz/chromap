@@ -250,20 +250,12 @@ int Index::GenerateCandidatePositions(
   }
   bool is_candidate_position_list_sorted = true;
 
-  std::vector<uint64_t> &positive_candidate_positions =
-      mapping_metadata.positive_hits_;
-  std::vector<uint64_t> &negative_candidate_positions =
-      mapping_metadata.negative_hits_;
-  positive_candidate_positions.reserve(generating_config.GetMaxSeedFrequency() *
-                                       2);
-  negative_candidate_positions.reserve(generating_config.GetMaxSeedFrequency() *
-                                       2);
+  mapping_metadata.positive_hits_.reserve(
+      generating_config.GetMaxSeedFrequency() * 2);
+  mapping_metadata.negative_hits_.reserve(
+      generating_config.GetMaxSeedFrequency() * 2);
 
-  uint32_t &repetitive_seed_length = mapping_metadata.repetitive_seed_length_;
-  uint32_t previous_repetitive_seed_position =
-      std::numeric_limits<uint32_t>::max();
-  int repetitive_seed_count = 0;
-
+  RepetitiveSeedStats repetitive_seed_stats;
   for (uint32_t mi = 0; mi < num_minimizers; ++mi) {
     khiter_t khash_iterator =
         kh_get(k64, lookup_table_,
@@ -273,80 +265,53 @@ int Index::GenerateCandidatePositions(
       continue;
     }
 
+    std::vector<uint64_t> &positive_candidate_positions =
+        generating_config.UseHeapMerge() ? positive_candidate_position_lists[mi]
+                                         : mapping_metadata.positive_hits_;
+    std::vector<uint64_t> &negative_candidate_positions =
+        generating_config.UseHeapMerge() ? negative_candidate_position_lists[mi]
+                                         : mapping_metadata.negative_hits_;
+
+    const uint64_t lookup_key = kh_key(lookup_table_, khash_iterator);
+    const uint64_t lookup_value = kh_value(lookup_table_, khash_iterator);
     const uint64_t read_seed_hit = minimizers[mi].GetHit();
-    const bool is_reference_minimizer_single =
-        (kh_key(lookup_table_, khash_iterator) & 1) > 0;
-    if (is_reference_minimizer_single) {
-      const uint64_t reference_seed_hit =
-          kh_value(lookup_table_, khash_iterator);
-      const uint64_t candidate_position =
-          GenerateCandidatePositionForSingleSeedHit(reference_seed_hit,
-                                                    read_seed_hit);
-      if (AreTwoHitsOnTheSameStrand(reference_seed_hit, read_seed_hit)) {
-        if (generating_config.UseHeapMerge()) {
-          positive_candidate_position_lists[mi].push_back(candidate_position);
-        } else {
-          positive_candidate_positions.push_back(candidate_position);
-        }
+    if (IsSingleton(lookup_key)) {
+      const uint64_t candidate_position = GenerateCandidatePositionFromHits(
+          /*reference_seed_hit=*/lookup_value, read_seed_hit);
+      if (AreTwoHitsOnTheSameStrand(/*reference_seed_hit=*/lookup_value,
+                                    read_seed_hit)) {
+        positive_candidate_positions.push_back(candidate_position);
       } else {
-        if (generating_config.UseHeapMerge()) {
-          negative_candidate_position_lists[mi].push_back(candidate_position);
-        } else {
-          negative_candidate_positions.push_back(candidate_position);
-        }
+        negative_candidate_positions.push_back(candidate_position);
       }
       continue;
     }
 
-    const uint32_t read_position = GenerateSequencePosition(read_seed_hit);
-    const uint64_t occurrence_info = kh_value(lookup_table_, khash_iterator);
-    const uint32_t occurrence_offset =
-        GenerateOffsetInOccurrenceTable(occurrence_info);
     const uint32_t num_occurrences =
-        GenerateNumOccurrenceInOccurrenceTable(occurrence_info);
+        GenerateNumOccurrenceInOccurrenceTable(lookup_value);
     if (!generating_config.IsFrequentSeed(num_occurrences)) {
+      const uint32_t read_position = GenerateSequencePosition(read_seed_hit);
+      const uint32_t occ_offset = GenerateOffsetInOccurrenceTable(lookup_value);
       for (uint32_t oi = 0; oi < num_occurrences; ++oi) {
-        const uint64_t reference_seed_hit =
-            occurrence_table_[occurrence_offset + oi];
-        const uint64_t candidate_position =
-            GenerateCandidatePositionForSingleSeedHit(reference_seed_hit,
-                                                      read_seed_hit);
-        const uint32_t reference_position =
-            GenerateSequencePosition(reference_seed_hit);
+        const uint64_t reference_seed_hit = occurrence_table_[occ_offset + oi];
+        const uint64_t candidate_position = GenerateCandidatePositionFromHits(
+            reference_seed_hit, read_seed_hit);
         if (AreTwoHitsOnTheSameStrand(reference_seed_hit, read_seed_hit)) {
-          if (generating_config.UseHeapMerge()) {
-            if (reference_position < read_position) {
-              is_candidate_position_list_sorted = false;
-            }
-            positive_candidate_position_lists[mi].push_back(candidate_position);
-          } else {
-            positive_candidate_positions.push_back(candidate_position);
+          const uint32_t reference_position =
+              GenerateSequencePosition(reference_seed_hit);
+          if (reference_position < read_position) {
+            is_candidate_position_list_sorted = false;
           }
+          positive_candidate_positions.push_back(candidate_position);
         } else {
-          if (generating_config.UseHeapMerge()) {
-            negative_candidate_position_lists[mi].push_back(candidate_position);
-          } else {
-            negative_candidate_positions.push_back(candidate_position);
-          }
+          negative_candidate_positions.push_back(candidate_position);
         }
       }
     }
 
     if (generating_config.IsRepetitiveSeed(num_occurrences)) {
-      if (previous_repetitive_seed_position > read_position) {
-        // First minimizer.
-        repetitive_seed_length += kmer_size_;
-      } else {
-        if (read_position <
-            previous_repetitive_seed_position + kmer_size_ + window_size_ - 1) {
-          repetitive_seed_length +=
-              read_position - previous_repetitive_seed_position;
-        } else {
-          repetitive_seed_length += kmer_size_;
-        }
-      }
-      previous_repetitive_seed_position = read_position;
-      ++repetitive_seed_count;
+      const uint32_t read_position = GenerateSequencePosition(read_seed_hit);
+      UpdateRepetitiveSeedStats(read_position, repetitive_seed_stats);
     }
   }
 
@@ -359,14 +324,14 @@ int Index::GenerateCandidatePositions(
       }
     }
     HeapMergeCandidatePositionLists(positive_candidate_position_lists,
-                                    positive_candidate_positions);
+                                    mapping_metadata.positive_hits_);
     HeapMergeCandidatePositionLists(negative_candidate_position_lists,
-                                    negative_candidate_positions);
+                                    mapping_metadata.negative_hits_);
   } else {
-    std::sort(positive_candidate_positions.begin(),
-              positive_candidate_positions.end());
-    std::sort(negative_candidate_positions.begin(),
-              negative_candidate_positions.end());
+    std::sort(mapping_metadata.positive_hits_.begin(),
+              mapping_metadata.positive_hits_.end());
+    std::sort(mapping_metadata.negative_hits_.begin(),
+              mapping_metadata.negative_hits_.end());
   }
 
 #ifdef LI_DEBUG
@@ -381,7 +346,9 @@ int Index::GenerateCandidatePositions(
            (int)(negative_candidate_positions->at(mi)));
 #endif
 
-  return repetitive_seed_count;
+  mapping_metadata.repetitive_seed_length_ =
+      repetitive_seed_stats.repetitive_seed_length;
+  return repetitive_seed_stats.repetitive_seed_count;
 }
 
 int Index::GenerateCandidatePositionsFromRepetitiveReadWithMateInfoOnOneStrand(
@@ -585,7 +552,7 @@ int Index::GenerateCandidatePositionsFromRepetitiveReadWithMateInfoOnOneStrand(
   return max_minimizer_count;
 }
 
-uint64_t Index::GenerateCandidatePositionForSingleSeedHit(
+uint64_t Index::GenerateCandidatePositionFromHits(
     uint64_t reference_seed_hit, uint64_t read_seed_hit) const {
   const uint32_t reference_position =
       GenerateSequencePosition(reference_seed_hit);
@@ -601,6 +568,24 @@ uint64_t Index::GenerateCandidatePositionForSingleSeedHit(
   const uint64_t candidate_position =
       GenerateCandidatePosition(reference_id, mapping_start_position);
   return candidate_position;
+}
+
+void Index::UpdateRepetitiveSeedStats(uint32_t read_position,
+                                      RepetitiveSeedStats &stats) const {
+  if (stats.previous_repetitive_seed_position > read_position) {
+    // First minimizer.
+    stats.repetitive_seed_length += kmer_size_;
+  } else {
+    if (read_position < stats.previous_repetitive_seed_position + kmer_size_ +
+                            window_size_ - 1) {
+      stats.repetitive_seed_length +=
+          read_position - stats.previous_repetitive_seed_position;
+    } else {
+      stats.repetitive_seed_length += kmer_size_;
+    }
+  }
+  stats.previous_repetitive_seed_position = read_position;
+  ++stats.repetitive_seed_count;
 }
 
 }  // namespace chromap

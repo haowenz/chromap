@@ -16,6 +16,13 @@ KHASH_INIT(/*name=*/k64, /*khkey_t=*/uint64_t, /*khval_t=*/uint64_t,
 
 namespace chromap {
 
+struct RepetitiveSeedStats {
+  uint32_t repetitive_seed_length = 0;
+  uint32_t previous_repetitive_seed_position =
+      std::numeric_limits<uint32_t>::max();
+  int repetitive_seed_count = 0;
+};
+
 inline static uint64_t GenerateHashInLookupTable(uint64_t minimizer_hash) {
   return minimizer_hash << 1;
 }
@@ -25,9 +32,8 @@ inline static uint64_t GenerateEntryValueInLookupTable(
   return (occurrence_table_offset << 32) | num_occurrences;
 }
 
-inline static uint32_t GenerateOffsetInOccurrenceTable(
-    uint64_t lookup_table_entry_value) {
-  return lookup_table_entry_value >> 32;
+inline static uint32_t GenerateOffsetInOccurrenceTable(uint64_t lookup_value) {
+  return lookup_value >> 32;
 }
 
 inline static uint32_t GenerateNumOccurrenceInOccurrenceTable(
@@ -43,6 +49,10 @@ inline static uint64_t GenerateCandidatePosition(uint64_t sequence_id,
 inline static uint64_t GenerateCandidatePositionFromOccurrenceTableEntry(
     uint64_t entry) {
   return entry >> 1;
+}
+
+inline static bool IsSingleton(uint64_t lookup_key) {
+  return (lookup_key & 1) > 0;
 }
 
 // Only used in Index to merge sorted candidate position lists using heap.
