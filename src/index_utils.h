@@ -51,7 +51,7 @@ inline static uint64_t GenerateCandidatePositionFromOccurrenceTableEntry(
   return entry >> 1;
 }
 
-inline static bool IsSingleton(uint64_t lookup_key) {
+inline static bool IsSingletonLookupKey(uint64_t lookup_key) {
   return (lookup_key & 1) > 0;
 }
 
