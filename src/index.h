@@ -6,18 +6,15 @@
 #include <string>
 #include <vector>
 
+#include "candidate_position_generating_config.h"
 #include "index_parameters.h"
-#include "khash.h"
+#include "index_utils.h"
 #include "mapping_metadata.h"
 #include "minimizer.h"
 #include "sequence_batch.h"
 #include "utils.h"
 
 namespace chromap {
-
-#define KHashFunctionForIndex(a) ((a) >> 1)
-#define KHashEqForIndex(a, b) ((a) >> 1 == (b) >> 1)
-KHASH_INIT(k64, uint64_t, uint64_t, 1, KHashFunctionForIndex, KHashEqForIndex);
 
 class Index {
  public:
@@ -62,23 +59,22 @@ class Index {
   void CheckIndex(uint32_t num_sequences, const SequenceBatch &reference) const;
 
   // Return the number of repetitive seeds.
-  int CollectSeedHits(int max_seed_frequency, int repetitive_seed_frequency,
-                      const std::vector<Minimizer> &minimizers,
-                      uint32_t &repetitive_seed_length,
-                      std::vector<uint64_t> &positive_hits,
-                      std::vector<uint64_t> &negative_hits,
-                      bool use_heap) const;
+  int GenerateCandidatePositions(
+      const CandidatePositionGeneratingConfig &generating_config,
+      MappingMetadata &mapping_metadata) const;
 
-  // Input a search range, for each best mate candidate, serach for minimizer
-  // hits. Return the minimizer count of the best candidate if it finishes
-  // normally. Or return a negative value if it stops early due to too many
-  // candidates with low minimizer count.
-  int CollectSeedHitsFromRepetitiveReadWithMateInfo(
+  // Input a search range, for each best mate candidate, serach for candidate
+  // positions for the read. Return the minimizer count of the best candidate if
+  // it finishes normally. Or return a negative value if it stops early due to
+  // too many candidates with low minimizer count.
+  // 'strand' is the strand to generate (augment) candidates.
+  int GenerateCandidatePositionsFromRepetitiveReadWithMateInfoOnOneStrand(
+      const Strand strand, uint32_t search_range,
+      int min_num_seeds_required_for_mapping, int max_seed_frequency0,
       int error_threshold, const std::vector<Minimizer> &minimizers,
-      uint32_t &repetitive_seed_length, std::vector<uint64_t> &hits,
-      const std::vector<Candidate> &mate_candidates, const Strand strand,
-      uint32_t search_range, int min_num_seeds_required_for_mapping,
-      int max_seed_frequency0) const;
+      const std::vector<Candidate> &mate_candidates,
+      uint32_t &repetitive_seed_length,
+      std::vector<uint64_t> &candidate_positions) const;
 
   int GetKmerSize() const { return kmer_size_; }
 
@@ -86,7 +82,13 @@ class Index {
 
   uint32_t GetLookupTableSize() const { return kh_size(lookup_table_); }
 
- protected:
+ private:
+  uint64_t GenerateCandidatePositionFromHits(uint64_t reference_hit,
+                                             uint64_t read_hit) const;
+
+  void UpdateRepetitiveSeedStats(uint32_t read_position,
+                                 RepetitiveSeedStats &stats) const;
+
   int kmer_size_ = 0;
   int window_size_ = 0;
   // Number of threads to build the index, which is not used right now.

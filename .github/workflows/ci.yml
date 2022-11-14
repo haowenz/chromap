@@ -7,7 +7,7 @@ on:
     branches: [ master ]
 
 env:
-  DEVELOPER_DIR: /Applications/Xcode_12.4.app/Contents/Developer
+  DEVELOPER_DIR: /Applications/Xcode.app/Contents/Developer
 
 jobs:
   ubuntu:
@@ -36,16 +36,16 @@ jobs:
     - uses: actions/checkout@v2
     - name: cache-openmp
       id: cache-openmp
-      uses: actions/cache@v2.1.7
+      uses: actions/cache@v3
       with:
         path: openmp-install
-        key: openmp-macos-install-20201213
+        key: openmp-macos-install
     - name: build-openmp
       if: steps.cache-openmp.outputs.cache-hit != 'true'
       run: |
-        wget https://github.com/llvm/llvm-project/releases/download/llvmorg-11.0.0/openmp-11.0.0.src.tar.xz
-        tar -xf openmp-11.0.0.src.tar.xz
-        cd openmp-11.0.0.src
+        wget https://github.com/llvm/llvm-project/releases/download/llvmorg-14.0.0/openmp-14.0.0.src.tar.xz
+        tar -xf openmp-14.0.0.src.tar.xz
+        cd openmp-14.0.0.src
         sed -i'' -e '/.size __kmp_unnamed_critical_addr/d' runtime/src/z_Linux_asm.S
         sed -i'' -e 's/__kmp_unnamed_critical_addr/___kmp_unnamed_critical_addr/g' runtime/src/z_Linux_asm.S
         mkdir -p build && cd build

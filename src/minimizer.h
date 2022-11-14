@@ -3,6 +3,7 @@
 
 #include <utility>
 
+#include "hit_utils.h"
 #include "strand.h"
 
 namespace chromap {
@@ -12,34 +13,30 @@ class Minimizer {
   Minimizer() = delete;
 
   Minimizer(std::pair<uint64_t, uint64_t> minimizer)
-      : hash_key_(minimizer.first), minimizer_(minimizer.second) {}
+      : hash_(minimizer.first), hit_(minimizer.second) {}
 
-  Minimizer(uint64_t hash_key, uint64_t minimizer)
-      : hash_key_(hash_key), minimizer_(minimizer) {}
+  Minimizer(uint64_t hash, uint64_t hit) : hash_(hash), hit_(hit) {}
 
   ~Minimizer() = default;
 
-  inline uint64_t GetHashKey() const { return hash_key_; }
+  inline uint64_t GetHash() const { return hash_; }
 
-  inline uint64_t GetMinimizer() const { return minimizer_; }
+  inline uint64_t GetHit() const { return hit_; }
 
-  inline uint32_t GetSequenceIndex() const { return (minimizer_ >> 33); }
+  inline uint32_t GetSequenceIndex() const { return HitToSequenceIndex(hit_); }
 
-  inline uint32_t GetSequencePosition() const { return (minimizer_ >> 1); }
-
-  inline Strand GetSequenceStrand() const {
-    if ((minimizer_ & 1) == 0) {
-      return kPositive;
-    }
-    return kNegative;
+  inline uint32_t GetSequencePosition() const {
+    return HitToSequencePosition(hit_);
   }
 
+  inline Strand GetSequenceStrand() const { return HitToStrand(hit_); }
+
   inline bool operator<(const Minimizer &m) const {
-    if (hash_key_ < m.hash_key_) {
+    if (hash_ < m.hash_) {
       return true;
     }
 
-    if (hash_key_ == m.hash_key_ && minimizer_ < m.minimizer_) {
+    if (hash_ == m.hash_ && hit_ < m.hit_) {
       return true;
     }
 
@@ -47,13 +44,13 @@ class Minimizer {
   }
 
  private:
-  // The hash value of the kmer.
-  uint64_t hash_key_ = 0;
+  // The hash of the kmer.
+  uint64_t hash_ = 0;
 
-  // The high 31 bits save the reference sequence index in the reference
-  // sequence batch. The following 32 bits save the reference position on that
-  // sequence. And the lowest bit encodes the strand (0 for positive).
-  uint64_t minimizer_ = 0;
+  // The high 31 bits save the sequence index in the sequence batch. The
+  // following 32 bits save the end position on that sequence. And the lowest
+  // bit encodes the strand (0 for positive).
+  uint64_t hit_ = 0;
 };
 
 }  // namespace chromap

@@ -41,14 +41,14 @@ class mm_cache {
     int i, j;
     int direction = 0;
     for (i = 0; i < size; ++i) {
-      if (cache.minimizers[i] != minimizers[i].GetHashKey() ||
-          (minimizers[i].GetMinimizer() & 1) != cache.strands[i])
+      if (cache.minimizers[i] != minimizers[i].GetHash() ||
+          (minimizers[i].GetHit() & 1) != cache.strands[i])
         break;
     }
     if (i >= size) {
       for (i = 0; i < size - 1; ++i) {
-        if (cache.offsets[i] != ((int)minimizers[i + 1].GetSequencePosition()) -
-                                    ((int)minimizers[i].GetSequencePosition()))
+        if (cache.offsets[i] != ((int)minimizers[i + 1].GetSequencePosition() -
+                                 (int)minimizers[i].GetSequencePosition()))
           break;
       }
       if (i >= size - 1) direction = 1;
@@ -57,8 +57,8 @@ class mm_cache {
     if (direction == 1) return 1;
 
     for (i = 0, j = size - 1; i < size; ++i, --j) {
-      if (cache.minimizers[i] != minimizers[j].GetHashKey() ||
-          (minimizers[j].GetMinimizer() & 1) == cache.strands[i])
+      if (cache.minimizers[i] != minimizers[j].GetHash() ||
+          (minimizers[j].GetHit() & 1) == cache.strands[i])
         break;
     }
     if (i >= size) {
@@ -113,16 +113,16 @@ class mm_cache {
     int i;
     int msize = minimizers.size();
     if (msize == 0) return -1;
-    if ((head_mm[(minimizers[0].GetHashKey() >> 6) & HEAD_MM_ARRAY_MASK] &
-         (1ull << (minimizers[0].GetHashKey() & 0x3f))) == 0)
+    if ((head_mm[(minimizers[0].GetHash() >> 6) & HEAD_MM_ARRAY_MASK] &
+         (1ull << (minimizers[0].GetHash() & 0x3f))) == 0)
       return -1;
     uint64_t h = 0;
     // for (i = 0 ; i < msize; ++i)
     //  h += (minimizers[i].first);
     if (msize == 1) {
-      h = (minimizers[0].GetHashKey());
+      h = (minimizers[0].GetHash());
     } else {
-      h = minimizers[0].GetHashKey() + minimizers[msize - 1].GetHashKey();
+      h = minimizers[0].GetHash() + minimizers[msize - 1].GetHash();
     }
 
     int hidx = h % cache_size;
@@ -186,10 +186,10 @@ class mm_cache {
     if (msize == 0)
       return;
     else if (msize == 1) {
-      h = f = (minimizers[0].GetHashKey());
+      h = f = (minimizers[0].GetHash());
     } else {
-      h = minimizers[0].GetHashKey() + minimizers[msize - 1].GetHashKey();
-      f = minimizers[0].GetHashKey() ^ minimizers[msize - 1].GetHashKey();
+      h = minimizers[0].GetHash() + minimizers[msize - 1].GetHash();
+      f = minimizers[0].GetHash() ^ minimizers[msize - 1].GetHash();
     }
     int hidx = h % cache_size;
     int finger_print = f % FINGER_PRINT_SIZE;
@@ -262,8 +262,8 @@ if (cache[hidx].finger_print_cnt_sum <= 5)
       cache[hidx].offsets.resize(msize - 1);
       cache[hidx].strands.resize(msize);
       for (i = 0; i < msize; ++i) {
-        cache[hidx].minimizers[i] = minimizers[i].GetHashKey();
-        cache[hidx].strands[i] = (minimizers[i].GetMinimizer() & 1);
+        cache[hidx].minimizers[i] = minimizers[i].GetHash();
+        cache[hidx].strands[i] = (minimizers[i].GetHit() & 1);
       }
       for (i = 0; i < msize - 1; ++i) {
         cache[hidx].offsets[i] =
@@ -285,10 +285,10 @@ if (cache[hidx].finger_print_cnt_sum <= 5)
         cache[hidx].negative_candidates[i].position -= shift;
 
       // Update head mm array
-      head_mm[(minimizers[0].GetHashKey() >> 6) & HEAD_MM_ARRAY_MASK] |=
-          (1ull << (minimizers[0].GetHashKey() & 0x3f));
-      head_mm[(minimizers[msize - 1].GetHashKey() >> 6) & HEAD_MM_ARRAY_MASK] |=
-          (1ull << (minimizers[msize - 1].GetHashKey() & 0x3f));
+      head_mm[(minimizers[0].GetHash() >> 6) & HEAD_MM_ARRAY_MASK] |=
+          (1ull << (minimizers[0].GetHash() & 0x3f));
+      head_mm[(minimizers[msize - 1].GetHash() >> 6) & HEAD_MM_ARRAY_MASK] |=
+          (1ull << (minimizers[msize - 1].GetHash() & 0x3f));
     }
   }
 

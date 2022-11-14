@@ -21,19 +21,28 @@ void CandidateProcessor::GenerateCandidates(
       mapping_metadata.negative_candidates_;
   uint32_t &repetitive_seed_length = mapping_metadata.repetitive_seed_length_;
 
+  const CandidatePositionGeneratingConfig first_round_generating_config(
+      /*max_seed_frequency=*/max_seed_frequencies_[0],
+      /*repetitive_seed_frequency=*/max_seed_frequencies_[0],
+      /*use_heap_merge=*/false);
+
   repetitive_seed_length = 0;
-  int repetitive_seed_count = index.CollectSeedHits(
-      max_seed_frequencies_[0], max_seed_frequencies_[0], minimizers,
-      repetitive_seed_length, positive_hits, negative_hits, false);
+  int repetitive_seed_count = index.GenerateCandidatePositions(
+      first_round_generating_config, mapping_metadata);
 
   bool use_high_frequency_minimizers = false;
   if (positive_hits.size() + negative_hits.size() == 0) {
     positive_hits.clear();
     negative_hits.clear();
     repetitive_seed_length = 0;
-    repetitive_seed_count = index.CollectSeedHits(
-        max_seed_frequencies_[1], max_seed_frequencies_[0], minimizers,
-        repetitive_seed_length, positive_hits, negative_hits, true);
+
+    const CandidatePositionGeneratingConfig second_round_generating_config(
+        /*max_seed_frequency=*/max_seed_frequencies_[1],
+        /*repetitive_seed_frequency=*/max_seed_frequencies_[0],
+        /*use_heap_merge=*/true);
+
+    repetitive_seed_count = index.GenerateCandidatePositions(
+        second_round_generating_config, mapping_metadata);
     use_high_frequency_minimizers = true;
     if (positive_hits.size() == 0 || negative_hits.size() == 0) {
       use_high_frequency_minimizers = false;
@@ -153,18 +162,18 @@ int CandidateProcessor::SupplementCandidates(
       int negative_rescue_result = 0;
       if (mate_positive_candidates->size() > 0) {
         positive_rescue_result =
-            GenerateCandidatesFromRepetitiveReadWithMateInfo(
-                error_threshold, index, *minimizers, *repetitive_seed_length,
-                *negative_hits, *augment_negative_candidates,
-                *mate_positive_candidates, kNegative, search_range);
+            GenerateCandidatesFromRepetitiveReadWithMateInfoOnOneStrand(
+                kNegative, search_range, error_threshold, index, *minimizers,
+                *mate_positive_candidates, *repetitive_seed_length,
+                *negative_hits, *augment_negative_candidates);
       }
 
       if (mate_negative_candidates->size() > 0) {
         negative_rescue_result =
-            GenerateCandidatesFromRepetitiveReadWithMateInfo(
-                error_threshold, index, *minimizers, *repetitive_seed_length,
-                *positive_hits, *augment_positive_candidates,
-                *mate_negative_candidates, kPositive, search_range);
+            GenerateCandidatesFromRepetitiveReadWithMateInfoOnOneStrand(
+                kPositive, search_range, error_threshold, index, *minimizers,
+                *mate_negative_candidates, *repetitive_seed_length,
+                *positive_hits, *augment_positive_candidates);
       }
 
       // If one of the strand did not supplement due to too many best candidate,
@@ -253,16 +262,18 @@ void CandidateProcessor::ReduceCandidatesForPairedEndRead(
       filtered_negative_candidates1, filtered_positive_candidates2);
 }
 
-int CandidateProcessor::GenerateCandidatesFromRepetitiveReadWithMateInfo(
-    int error_threshold, const Index &index,
-    const std::vector<Minimizer> &minimizers, uint32_t &repetitive_seed_length,
-    std::vector<uint64_t> &hits, std::vector<Candidate> &candidates,
-    const std::vector<Candidate> &mate_candidates, const Strand strand,
-    uint32_t search_range) const {
-  int max_seed_count = index.CollectSeedHitsFromRepetitiveReadWithMateInfo(
-      error_threshold, minimizers, repetitive_seed_length, hits,
-      mate_candidates, strand, search_range,
-      min_num_seeds_required_for_mapping_, max_seed_frequencies_[0]);
+int CandidateProcessor::
+    GenerateCandidatesFromRepetitiveReadWithMateInfoOnOneStrand(
+        const Strand strand, uint32_t search_range, int error_threshold,
+        const Index &index, const std::vector<Minimizer> &minimizers,
+        const std::vector<Candidate> &mate_candidates,
+        uint32_t &repetitive_seed_length, std::vector<uint64_t> &hits,
+        std::vector<Candidate> &candidates) const {
+  int max_seed_count =
+      index.GenerateCandidatePositionsFromRepetitiveReadWithMateInfoOnOneStrand(
+          strand, search_range, min_num_seeds_required_for_mapping_,
+          max_seed_frequencies_[0], error_threshold, minimizers,
+          mate_candidates, repetitive_seed_length, hits);
 
   GenerateCandidatesOnOneStrand(error_threshold, /*num_seeds_required=*/1,
                                 minimizers.size(), hits, candidates);

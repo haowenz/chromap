@@ -42,16 +42,6 @@ struct _mm_history {
   uint32_t repetitive_seed_length;
 };
 
-struct mmHit {
-  uint32_t mi;
-  uint64_t position;
-
-  bool operator<(const mmHit &h) const {
-    // the inversed direction is to make a min-heap
-    return position > h.position;
-  }
-};
-
 KHASH_MAP_INIT_INT64(k128, uint128_t);
 KHASH_MAP_INIT_INT64(k64_seq, uint64_t);
 KHASH_SET_INIT_INT(k32_set);
