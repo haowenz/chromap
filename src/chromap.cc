@@ -19,7 +19,8 @@ void Chromap::ConstructIndex() {
   // Load all sequences in the reference into one batch
   SequenceBatch reference;
   reference.InitializeLoading(index_parameters_.reference_file_path);
-  uint32_t num_sequences = reference.LoadAllSequences();
+  reference.LoadAllSequences();
+  const uint32_t num_sequences = reference.GetNumSequences();
   Index index(index_parameters_);
   index.Construct(num_sequences, reference);
   index.Statistics(num_sequences, reference);

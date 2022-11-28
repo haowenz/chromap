@@ -29,7 +29,7 @@
 #include "temp_mapping.h"
 #include "utils.h"
 
-#define CHROMAP_VERSION "0.2.3-r452"
+#define CHROMAP_VERSION "0.2.3-r458"
 
 namespace chromap {
 
@@ -174,7 +174,8 @@ void Chromap::MapSingleEndReads() {
 
   SequenceBatch reference;
   reference.InitializeLoading(mapping_parameters_.reference_file_path);
-  uint32_t num_reference_sequences = reference.LoadAllSequences();
+  reference.LoadAllSequences();
+  uint32_t num_reference_sequences = reference.GetNumSequences();
   if (mapping_parameters_.custom_rid_order_file_path.length() > 0) {
     GenerateCustomRidRanks(mapping_parameters_.custom_rid_order_file_path,
                            num_reference_sequences, reference,
@@ -539,7 +540,8 @@ void Chromap::MapPairedEndReads() {
   // Load reference
   SequenceBatch reference;
   reference.InitializeLoading(mapping_parameters_.reference_file_path);
-  uint32_t num_reference_sequences = reference.LoadAllSequences();
+  reference.LoadAllSequences();
+  uint32_t num_reference_sequences = reference.GetNumSequences();
   if (mapping_parameters_.custom_rid_order_file_path.length() > 0) {
     GenerateCustomRidRanks(mapping_parameters_.custom_rid_order_file_path,
                            num_reference_sequences, reference,
