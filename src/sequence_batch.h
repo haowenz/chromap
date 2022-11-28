@@ -17,6 +17,9 @@ namespace chromap {
 class SequenceBatch {
  public:
   KSEQ_INIT(gzFile, gzread);
+
+  // When 'max_num_sequences' is not specified. This batch can be used to load
+  // any number of sequences with a positive full effective range.
   SequenceBatch() : effective_range_(SequenceEffectiveRange()) {}
 
   // Construct once and use update sequences when loading each batch.
@@ -39,6 +42,8 @@ class SequenceBatch {
       }
     }
   }
+
+  inline uint64_t GetNumSequences() const { return num_loaded_sequences_; }
 
   inline uint32_t GetMaxBatchSize() const { return max_num_sequences_; }
 
@@ -121,7 +126,6 @@ class SequenceBatch {
 
   inline void TrimSequenceAt(uint32_t sequence_index, int length_after_trim) {
     kseq_t *sequence = sequence_batch_[sequence_index];
-
     if (length_after_trim >= (int)sequence->seq.l) {
       return;
     }
@@ -146,13 +150,19 @@ class SequenceBatch {
 
   void FinalizeLoading();
 
-  // Return the number of reads loaded into the batch
-  // and return 0 if there is no more reads
-  uint32_t LoadBatch();
-
+  // The func should never override other sequences rather than the last, which
+  // means 'sequence_index' cannot be smaller than 'num_loaded_sequences_' - 1.
+  // Return true when reaching the end of the file.
   bool LoadOneSequenceAndSaveAt(uint32_t sequence_index);
 
-  uint32_t LoadAllSequences();
+  // Return the number of sequences loaded into the batch and return 0 if there
+  // is no more sequences. This func now is only used to load barcodes.
+  uint32_t LoadBatch();
+
+  // Load all sequences in a file. This function should only be used to load
+  // reference. And once the reference is loaded, the batch should never be
+  // updated. This func is slow when there are large number of sequences.
+  void LoadAllSequences();
 
   inline void CorrectBaseAt(uint32_t sequence_index, uint32_t base_position,
                             char correct_base) {
@@ -185,17 +195,34 @@ class SequenceBatch {
   }
 
  protected:
+  // When 'is_seq' is set to true, this func will complement the base when
+  // necessary. Otherwise, it will just reverse the sequence.
+  void ReplaceByEffectiveRange(kstring_t &seq, bool is_seq);
+
+  // This is the accumulated number of sequences that have ever been loaded into
+  // the batch. It is useful for tracking read ids.
+  uint32_t total_num_loaded_sequences_ = 0;
+
+  // This is the number of sequences loaded into the current batch.
   uint32_t num_loaded_sequences_ = 0;
-  uint32_t max_num_sequences_ = 0;
+
+  // This is the number of bases loaded into the current batch. It is only
+  // populated for the reference.
   uint64_t num_bases_ = 0;
+
+  // This is the max number of sequences that can be loaded into the batch. It
+  // is set to 0 when there is no such restriction.
+  uint32_t max_num_sequences_ = 0;
+
   gzFile sequence_file_;
   kseq_t *sequence_kseq_ = nullptr;
   std::vector<kseq_t *> sequence_batch_;
+
+  // TODO: avoid constructing the negative sequence batch.
   std::vector<std::string> negative_sequence_batch_;
 
   // Actual range within each sequence.
   const SequenceEffectiveRange effective_range_;
-  void ReplaceByEffectiveRange(kstring_t &seq, bool is_seq);
 };
 
 }  // namespace chromap
