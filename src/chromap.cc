@@ -321,59 +321,100 @@ uint32_t Chromap::SampleInputBarcodesAndExamineLength() {
 void Chromap::LoadBarcodeWhitelist() {
   double real_start_time = GetRealTime();
   int num_barcodes = 0;
-  std::ifstream barcode_whitelist_file_stream(
-      mapping_parameters_.barcode_whitelist_file_path);
-  std::string barcode_whitelist_file_line;
-  // bool first_line = true;
-  while (getline(barcode_whitelist_file_stream, barcode_whitelist_file_line)) {
-    std::stringstream barcode_whitelist_file_line_string_stream(
-        barcode_whitelist_file_line);
-    //// skip the header
-    // if (barcode_whitelist_file_line[0] == '#' ||
-    // barcode_whitelist_file_line.find("kmer") == 0) {
-    //  continue;
-    //}
-    std::string barcode;
-    barcode_whitelist_file_line_string_stream >> barcode;
-    size_t barcode_length = barcode.length();
-    if (barcode_length > 32) {
-      ExitWithMessage("ERROR: barcode length is greater than 32!");
-    }
 
-    if (barcode_length != barcode_length_) {
-      if (num_barcodes == 0) {
-        ExitWithMessage(
-            "ERROR: whitelist and input barcode lengths are not equal!");
-      } else {
-        ExitWithMessage(
-            "ERROR: barcode lengths are not equal in the whitelist!");
+  if (1) {
+    gzFile barcode_whitelist_file = 
+      gzopen(mapping_parameters_.barcode_whitelist_file_path.c_str(), "r"); 
+    char barcode[256];
+
+    while (gzgets(barcode_whitelist_file, barcode, sizeof(barcode)) != NULL) {
+      size_t barcode_length = strlen(barcode);
+      if (barcode[barcode_length - 1] == '\n') {
+        barcode[barcode_length - 1] = '\0';
+        --barcode_length;
       }
-    }
+      if (barcode_length > 32) {
+        ExitWithMessage("ERROR: barcode length is greater than 32!");
+      }
 
-    // if (first_line) {
-    //  //size_t barcode_length = kmer.length();
-    //  // Allocate memory to save pore model parameters
-    //  //size_t num_pore_models = 1 << (kmer_size_ * 2);
-    //  //pore_models_.assign(num_pore_models, PoreModelParameters());
-    //  //first_line = false;
-    //}
-    // assert(kmer.length() == (size_t)kmer_size_);
-    uint64_t barcode_key = GenerateSeedFromSequence(
-        barcode.data(), barcode_length, 0, barcode_length);
-    // PoreModelParameters &pore_model_parameters =
-    // pore_models_[kmer_hash_value]; barcode_whitelist_file_line_string_stream
-    // >> pore_model_parameters.level_mean >> pore_model_parameters.level_stdv
-    // >> pore_model_parameters.sd_mean >> pore_model_parameters.sd_stdv;
-    int khash_return_code;
-    khiter_t barcode_whitelist_lookup_table_iterator =
+      if (barcode_length != barcode_length_) {
+        if (num_barcodes == 0) {
+          ExitWithMessage(
+              "ERROR: whitelist and input barcode lengths are not equal!");
+        } else {
+          ExitWithMessage(
+              "ERROR: barcode lengths are not equal in the whitelist!");
+        }
+      }
+      
+      uint64_t barcode_key = GenerateSeedFromSequence(
+          barcode, barcode_length, 0, barcode_length);
+      
+      int khash_return_code;
+      khiter_t barcode_whitelist_lookup_table_iterator =
         kh_put(k64_seq, barcode_whitelist_lookup_table_, barcode_key,
-               &khash_return_code);
-    kh_value(barcode_whitelist_lookup_table_,
-             barcode_whitelist_lookup_table_iterator) = 0;
-    assert(khash_return_code != -1 && khash_return_code != 0);
-    ++num_barcodes;
+            &khash_return_code);
+      kh_value(barcode_whitelist_lookup_table_,
+          barcode_whitelist_lookup_table_iterator) = 0;
+      assert(khash_return_code != -1 && khash_return_code != 0);
+      ++num_barcodes;
+    }
+    gzclose(barcode_whitelist_file);
+  } else { 
+    std::ifstream barcode_whitelist_file_stream(
+        mapping_parameters_.barcode_whitelist_file_path);
+    std::string barcode_whitelist_file_line;
+    // bool first_line = true;
+    while (getline(barcode_whitelist_file_stream, barcode_whitelist_file_line)) {
+      std::stringstream barcode_whitelist_file_line_string_stream(
+          barcode_whitelist_file_line);
+      //// skip the header
+      // if (barcode_whitelist_file_line[0] == '#' ||
+      // barcode_whitelist_file_line.find("kmer") == 0) {
+      //  continue;
+      //}
+      std::string barcode;
+      barcode_whitelist_file_line_string_stream >> barcode;
+      size_t barcode_length = barcode.length();
+      if (barcode_length > 32) {
+        ExitWithMessage("ERROR: barcode length is greater than 32!");
+      }
+
+      if (barcode_length != barcode_length_) {
+        if (num_barcodes == 0) {
+          ExitWithMessage(
+              "ERROR: whitelist and input barcode lengths are not equal!");
+        } else {
+          ExitWithMessage(
+              "ERROR: barcode lengths are not equal in the whitelist!");
+        }
+      }
+
+      // if (first_line) {
+      //  //size_t barcode_length = kmer.length();
+      //  // Allocate memory to save pore model parameters
+      //  //size_t num_pore_models = 1 << (kmer_size_ * 2);
+      //  //pore_models_.assign(num_pore_models, PoreModelParameters());
+      //  //first_line = false;
+      //}
+      // assert(kmer.length() == (size_t)kmer_size_);
+      uint64_t barcode_key = GenerateSeedFromSequence(
+          barcode.data(), barcode_length, 0, barcode_length);
+      // PoreModelParameters &pore_model_parameters =
+      // pore_models_[kmer_hash_value]; barcode_whitelist_file_line_string_stream
+      // >> pore_model_parameters.level_mean >> pore_model_parameters.level_stdv
+      // >> pore_model_parameters.sd_mean >> pore_model_parameters.sd_stdv;
+      int khash_return_code;
+      khiter_t barcode_whitelist_lookup_table_iterator =
+        kh_put(k64_seq, barcode_whitelist_lookup_table_, barcode_key,
+            &khash_return_code);
+      kh_value(barcode_whitelist_lookup_table_,
+          barcode_whitelist_lookup_table_iterator) = 0;
+      assert(khash_return_code != -1 && khash_return_code != 0);
+      ++num_barcodes;
+    }
+    barcode_whitelist_file_stream.close();
   }
-  barcode_whitelist_file_stream.close();
   std::cerr << "Loaded " << num_barcodes << " barcodes in "
             << GetRealTime() - real_start_time << "s.\n";
 }
