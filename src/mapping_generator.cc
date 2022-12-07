@@ -48,6 +48,7 @@ void MappingGenerator<SAMMapping>::EmplaceBackSingleEndMappingRecord(
       mapping_in_memory.read_id, std::string(mapping_in_memory.read_name),
       mapping_in_memory.barcode_key, /*num_dups=*/1,
       mapping_in_memory.GetFragmentStartPosition(), mapping_in_memory.rid,
+      /*mpos=*/0, /*mrid=*/-1, 0, 
       mapping_in_memory.SAM_flag, mapping_in_memory.GetStrand(),
       /*is_alt=*/0, mapping_in_memory.is_unique, mapping_in_memory.mapq,
       mapping_in_memory.NM, mapping_in_memory.n_cigar, mapping_in_memory.cigar,
@@ -84,12 +85,26 @@ template <>
 void MappingGenerator<SAMMapping>::EmplaceBackPairedEndMappingRecord(
     PairedEndMappingInMemory &paired_end_mapping_in_memory,
     std::vector<std::vector<SAMMapping>> &mappings_on_diff_ref_seqs) {
-  EmplaceBackSingleEndMappingRecord(
-      paired_end_mapping_in_memory.mapping_in_memory1,
-      mappings_on_diff_ref_seqs);
-  EmplaceBackSingleEndMappingRecord(
-      paired_end_mapping_in_memory.mapping_in_memory2,
-      mappings_on_diff_ref_seqs);
+  int tlen = (int)paired_end_mapping_in_memory.GetFragmentLength();
+  for (int i = 0; i < 2; ++i) {
+    MappingInMemory &mapping_in_memory = (i == 0 ? paired_end_mapping_in_memory.mapping_in_memory1 :
+        paired_end_mapping_in_memory.mapping_in_memory2);
+    MappingInMemory &mate_mapping_in_memory = (i == 0 ? paired_end_mapping_in_memory.mapping_in_memory2 :
+        paired_end_mapping_in_memory.mapping_in_memory1);
+  
+    mappings_on_diff_ref_seqs[mapping_in_memory.rid].emplace_back(
+      mapping_in_memory.read_id, std::string(mapping_in_memory.read_name),
+      mapping_in_memory.barcode_key, /*num_dups=*/1,
+      mapping_in_memory.GetFragmentStartPosition(), mapping_in_memory.rid,
+      /*mpos=*/mate_mapping_in_memory.GetFragmentStartPosition(), 
+      /*mrid=*/mate_mapping_in_memory.rid, 
+      /*tlen=*/mapping_in_memory.GetStrand() ? tlen : -tlen, 
+      mapping_in_memory.SAM_flag, mapping_in_memory.GetStrand(),
+      /*is_alt=*/0, mapping_in_memory.is_unique, mapping_in_memory.mapq,
+      mapping_in_memory.NM, mapping_in_memory.n_cigar, mapping_in_memory.cigar,
+      mapping_in_memory.MD_tag, std::string(mapping_in_memory.read_sequence),
+      std::string(mapping_in_memory.qual_sequence));
+  }
 }
 
 template <>
