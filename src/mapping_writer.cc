@@ -329,13 +329,19 @@ void MappingWriter<SAMMapping>::AppendMapping(uint32_t rid,
   // mapping.fragment_length;
   const char *reference_sequence_name =
       (mapping.flag_ & BAM_FUNMAP) > 0 ? "*" : reference.GetSequenceNameAt(rid);
+  const char *mate_ref_sequence_name =
+      mapping.mrid_ < 0 ? "*" : 
+      ((uint32_t)mapping.mrid_ == rid ? "=" : reference.GetSequenceNameAt(mapping.mrid_));
   const uint32_t mapping_start_position = mapping.GetStartPosition();
+  const uint32_t mate_mapping_start_position = mapping.mrid_ < 0 ? 0 : (mapping.mpos_ + 1);
   this->AppendMappingOutput(
       mapping.read_name_ + "\t" + std::to_string(mapping.flag_) + "\t" +
       std::string(reference_sequence_name) + "\t" +
       std::to_string(mapping_start_position) + "\t" +
       std::to_string(mapping.mapq_) + "\t" + mapping.GenerateCigarString() +
-      "\t*\t" + std::to_string(0) + "\t" + std::to_string(0) + "\t" +
+      "\t" + std::string(mate_ref_sequence_name) + "\t" + 
+      std::to_string(mate_mapping_start_position) + "\t" + 
+      std::to_string(mapping.tlen_) + "\t" +
       mapping.sequence_ + "\t" + mapping.sequence_qual_ + "\t" +
       mapping.GenerateIntTagString("NM", mapping.NM_) +
       "\tMD:Z:" + mapping.MD_);

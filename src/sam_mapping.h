@@ -135,6 +135,9 @@ class SAMMapping : public Mapping {
 
   int64_t pos_;  // forward strand 5'-end mapping position (inclusive)
   int rid_;      // reference sequence index in bntseq_t; <0 for unmapped
+  int64_t mpos_;  // forward strand 5'-end mapping position for mate (inclusive)
+  int mrid_;      // reference sequence index in bntseq_t; <0 for unmapped
+  int tlen_;      // template length
   int flag_;     // extra flag
   uint32_t is_rev_ : 1, is_alt_ : 1, is_unique_ : 1, mapq_ : 7,
       NM_ : 22;      // is_rev: whether on the reverse strand; mapq: mapping
@@ -152,6 +155,7 @@ class SAMMapping : public Mapping {
 
   SAMMapping(uint32_t read_id, const std::string &read_name,
              uint64_t cell_barcode, uint8_t num_dups, int64_t pos, int rid,
+             int64_t mpos, int mrid, int tlen, 
              int flag, uint8_t is_rev, uint8_t is_alt, uint8_t is_unique,
              uint8_t mapq, uint32_t NM, int n_cigar, uint32_t *cigar,
              const std::string &MD_tag, const std::string &sequence,
@@ -162,6 +166,9 @@ class SAMMapping : public Mapping {
         num_dups_(num_dups),
         pos_(pos),
         rid_(rid),
+        mpos_(mpos),
+        mrid_(mrid),
+        tlen_(tlen),
         flag_(flag),
         is_rev_(is_rev),
         is_alt_(is_alt),
@@ -194,13 +201,13 @@ class SAMMapping : public Mapping {
   bool operator<(const SAMMapping &m) const {
     int read1_flag = flag_ & BAM_FREAD1;
     int m_read1_flag = m.flag_ & BAM_FREAD1;
-    return std::tie(rid_, pos_, cell_barcode_, mapq_, read_id_, read1_flag) <
-           std::tie(m.rid_, m.pos_, m.cell_barcode_, m.mapq_, m.read_id_,
+    return std::tie(rid_, pos_, cell_barcode_, mapq_, mrid_, mpos_, read_id_, read1_flag) <
+           std::tie(m.rid_, m.pos_, m.cell_barcode_, m.mapq_, m.mrid_, m.mpos_, m.read_id_,
                     m_read1_flag);
   }
   bool operator==(const SAMMapping &m) const {
-    return std::tie(pos_, rid_, cell_barcode_, is_rev_) ==
-           std::tie(m.pos_, m.rid_, m.cell_barcode_, m.is_rev_);
+    return std::tie(pos_, rid_, cell_barcode_, is_rev_, mrid_, mpos_) ==
+           std::tie(m.pos_, m.rid_, m.cell_barcode_, m.is_rev_, mrid_, mpos_);
   }
   bool IsSamePosition(const SAMMapping &m) const {
     return std::tie(pos_, rid_, is_rev_) == std::tie(m.pos_, m.rid_, m.is_rev_);
@@ -300,6 +307,12 @@ class SAMMapping : public Mapping {
         fwrite(&rid_, sizeof(int), 1, temp_mapping_output_file);
     num_written_bytes +=
         fwrite(&flag_, sizeof(int), 1, temp_mapping_output_file);
+    num_written_bytes +=
+        fwrite(&mpos_, sizeof(int64_t), 1, temp_mapping_output_file);
+    num_written_bytes +=
+        fwrite(&mrid_, sizeof(int), 1, temp_mapping_output_file);
+    num_written_bytes +=
+        fwrite(&tlen_, sizeof(int), 1, temp_mapping_output_file);
     uint32_t rev_alt_unique_mapq_NM = (is_rev_ << 31) | (is_alt_ << 30) |
                                       (is_unique_ << 29) | (mapq_ << 22) | NM_;
     num_written_bytes += fwrite(&rev_alt_unique_mapq_NM, sizeof(uint32_t), 1,
@@ -344,6 +357,10 @@ class SAMMapping : public Mapping {
     num_read_bytes +=
         fread(&pos_, sizeof(int64_t), 1, temp_mapping_output_file);
     num_read_bytes += fread(&rid_, sizeof(int), 1, temp_mapping_output_file);
+    num_read_bytes +=
+        fread(&mpos_, sizeof(int64_t), 1, temp_mapping_output_file);
+    num_read_bytes += fread(&mrid_, sizeof(int), 1, temp_mapping_output_file);
+    num_read_bytes += fread(&tlen_, sizeof(int), 1, temp_mapping_output_file);
     num_read_bytes += fread(&flag_, sizeof(int), 1, temp_mapping_output_file);
     uint32_t rev_alt_unique_mapq_NM = 0;
     num_read_bytes += fread(&rev_alt_unique_mapq_NM, sizeof(uint32_t), 1,
