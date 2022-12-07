@@ -325,9 +325,9 @@ void Chromap::LoadBarcodeWhitelist() {
   if (1) {
     gzFile barcode_whitelist_file = 
       gzopen(mapping_parameters_.barcode_whitelist_file_path.c_str(), "r"); 
-    char barcode[256];
-
-    while (gzgets(barcode_whitelist_file, barcode, sizeof(barcode)) != NULL) {
+    const uint32_t barcode_buffer_size = 256;
+    char barcode[barcode_buffer_size];
+    while (gzgets(barcode_whitelist_file, barcode, barcode_buffer_size) != NULL) {
       size_t barcode_length = strlen(barcode);
       if (barcode[barcode_length - 1] == '\n') {
         barcode[barcode_length - 1] = '\0';
@@ -358,6 +358,9 @@ void Chromap::LoadBarcodeWhitelist() {
           barcode_whitelist_lookup_table_iterator) = 0;
       assert(khash_return_code != -1 && khash_return_code != 0);
       ++num_barcodes;
+    }
+    if (!gzeof(barcode_whitelist_file)) {
+      ExitWithMessage("ERROR: barcode whitelist file does not exist or is truncated!");
     }
     gzclose(barcode_whitelist_file);
   } else { 
