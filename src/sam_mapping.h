@@ -207,10 +207,11 @@ class SAMMapping : public Mapping {
   }
   bool operator==(const SAMMapping &m) const {
     return std::tie(pos_, rid_, cell_barcode_, is_rev_, mrid_, mpos_) ==
-           std::tie(m.pos_, m.rid_, m.cell_barcode_, m.is_rev_, mrid_, mpos_);
+           std::tie(m.pos_, m.rid_, m.cell_barcode_, m.is_rev_, m.mrid_, m.mpos_);
   }
   bool IsSamePosition(const SAMMapping &m) const {
-    return std::tie(pos_, rid_, is_rev_) == std::tie(m.pos_, m.rid_, m.is_rev_);
+    return std::tie(pos_, rid_, is_rev_, mrid_, mpos_) == 
+      std::tie(m.pos_, m.rid_, m.is_rev_, m.rid_, m.mpos_);
   }
   uint64_t GetBarcode() const { return cell_barcode_; }
   void Tn5Shift() {
@@ -306,13 +307,13 @@ class SAMMapping : public Mapping {
     num_written_bytes +=
         fwrite(&rid_, sizeof(int), 1, temp_mapping_output_file);
     num_written_bytes +=
-        fwrite(&flag_, sizeof(int), 1, temp_mapping_output_file);
-    num_written_bytes +=
         fwrite(&mpos_, sizeof(int64_t), 1, temp_mapping_output_file);
     num_written_bytes +=
         fwrite(&mrid_, sizeof(int), 1, temp_mapping_output_file);
     num_written_bytes +=
         fwrite(&tlen_, sizeof(int), 1, temp_mapping_output_file);
+    num_written_bytes +=
+        fwrite(&flag_, sizeof(int), 1, temp_mapping_output_file);
     uint32_t rev_alt_unique_mapq_NM = (is_rev_ << 31) | (is_alt_ << 30) |
                                       (is_unique_ << 29) | (mapq_ << 22) | NM_;
     num_written_bytes += fwrite(&rev_alt_unique_mapq_NM, sizeof(uint32_t), 1,
