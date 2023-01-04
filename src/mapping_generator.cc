@@ -48,7 +48,7 @@ void MappingGenerator<SAMMapping>::EmplaceBackSingleEndMappingRecord(
       mapping_in_memory.read_id, std::string(mapping_in_memory.read_name),
       mapping_in_memory.barcode_key, /*num_dups=*/1,
       mapping_in_memory.GetFragmentStartPosition(), mapping_in_memory.rid,
-      /*mpos=*/0, /*mrid=*/-1, 0, 
+      /*mpos=*/0, /*mrid=*/-1, /*tlen=*/0, 
       mapping_in_memory.SAM_flag, mapping_in_memory.GetStrand(),
       /*is_alt=*/0, mapping_in_memory.is_unique, mapping_in_memory.mapq,
       mapping_in_memory.NM, mapping_in_memory.n_cigar, mapping_in_memory.cigar,
