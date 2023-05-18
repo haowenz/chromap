@@ -528,6 +528,7 @@ void Chromap::MapSingleEndReads() {
     mapping_writer.OutputMappings(num_reference_sequences, reference,
                                   mappings_on_diff_ref_seqs);
   }
+  mapping_writer.OutputSummaryMetadata();
 
   reference.FinalizeLoading();
   std::cerr << "Total time: " << GetRealTime() - real_start_time << "s.\n";
@@ -1073,7 +1074,7 @@ void Chromap::MapPairedEndReads() {
     }
     mapping_writer.OutputMappings(num_reference_sequences, reference,
                                   mappings_on_diff_ref_seqs);
-
+    mapping_writer.OutputSummaryMetadata();
     // Temporarily disable feature matrix output. Do not delete the following
     // commented code.
     // if (!is_bulk_data_ && !matrix_output_prefix_.empty()) {
@@ -1096,7 +1097,7 @@ void Chromap::MapPairedEndReads() {
   }
 
   reference.FinalizeLoading();
-
+  
   std::cerr << "Total time: " << GetRealTime() - real_start_time << "s.\n";
 }
 
