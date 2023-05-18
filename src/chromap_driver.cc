@@ -120,7 +120,9 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
           cxxopts::value<std::string>(),
           "FILE")("barcode-translate",
                   "Convert barcode to the specified sequences during output",
-                  cxxopts::value<std::string>(), "FILE");
+                  cxxopts::value<std::string>(), "FILE")
+            ("summary", "Summarize the mapping metadata at bulk or barcode level",
+             cxxopts::value<std::string>(), "FILE");
   //("PAF", "Output mappings in PAF format (only for test)");
   options.add_options()("v,version", "Print version")("h,help", "Print help");
   options.add_options("Development options")("A,match-score", "Match score [1]",
@@ -427,6 +429,11 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
     if (result.count("barcode-translate")) {
       mapping_parameters.barcode_translate_table_file_path =
           result["barcode-translate"].as<std::string>();
+    }
+    
+    if (result.count("summary")) {
+      mapping_parameters.summary_metadata_file_path = 
+        result["summary"].as<std::string>();
     }
 
     if (result.count("skip-barcode-check")) {

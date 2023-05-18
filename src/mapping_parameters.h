@@ -66,6 +66,7 @@ struct MappingParameters {
   // The order for pairs format flipping.
   std::string pairs_flipping_custom_rid_order_file_path;
   std::string barcode_translate_table_file_path;
+  std::string summary_metadata_file_path;
   bool skip_barcode_check = false;
 
   int GetNumVPULanes() const {

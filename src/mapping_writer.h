@@ -21,6 +21,7 @@
 #include "sequence_batch.h"
 #include "temp_mapping.h"
 #include "utils.h"
+#include "summary_metadata.h"
 
 namespace chromap {
 
@@ -39,7 +40,7 @@ class MappingWriter {
       barcode_translator_.SetTranslateTable(
           mapping_parameters_.barcode_translate_table_file_path);
     }
-
+    summary_metadata_.SetBarcodeLength(cell_barcode_length);
     mapping_output_file_ =
         fopen(mapping_parameters_.mapping_output_file_path.c_str(), "w");
     assert(mapping_output_file_ != nullptr);
@@ -66,6 +67,8 @@ class MappingWriter {
       const khash_t(k64_seq) * barcode_whitelist_lookup_table,
       std::vector<TempMappingFileHandle<MappingRecord>>
           &temp_mapping_file_handles);
+
+  void OutputSummaryMetadata();
 
  protected:
   void AppendMapping(uint32_t rid, const SequenceBatch &reference,
@@ -110,6 +113,8 @@ class MappingWriter {
   const uint32_t cell_barcode_length_;
   FILE *mapping_output_file_ = nullptr;
   BarcodeTranslator barcode_translator_;
+  SummaryMetadata summary_metadata_;
+
   // for pairs
   const std::vector<int> pairs_custom_rid_rank_;
 };
@@ -277,6 +282,13 @@ void MappingWriter<MappingRecord>::ProcessAndOutputMappingsInLowMemory(
           }
           AppendMapping(last_rid, reference, last_mapping);
           ++num_mappings_passing_filters;
+          if (!mapping_parameters_.summary_metadata_file_path.empty())
+            summary_metadata_.UpdateCount(last_mapping.GetBarcode(), SUMMARY_METADATA_DUP,
+                last_mapping.num_dups_ - 1);
+        } else {
+          if (!mapping_parameters_.summary_metadata_file_path.empty())
+            summary_metadata_.UpdateCount(last_mapping.GetBarcode(), SUMMARY_METADATA_LOWMAPQ, 
+                last_mapping.num_dups_);
         }
 
         if (last_mapping.is_unique_ == 1) {
@@ -379,6 +391,13 @@ void MappingWriter<MappingRecord>::OutputMappingsInVector(
         AppendMapping(ri, reference, *it);
         ++num_mappings_passing_filters;
         //}
+        if (!mapping_parameters_.summary_metadata_file_path.empty())
+          summary_metadata_.UpdateCount(it->GetBarcode(), SUMMARY_METADATA_DUP,
+              it->num_dups_ - 1);
+      } else {
+        if (!mapping_parameters_.summary_metadata_file_path.empty())
+          summary_metadata_.UpdateCount(it->GetBarcode(), SUMMARY_METADATA_LOWMAPQ,
+              it->num_dups_);
       }
     }
   }
@@ -394,6 +413,12 @@ void MappingWriter<MappingRecord>::OutputMappings(
   //  mapq_threshold_ = 4;
   OutputMappingsInVector(mapping_parameters_.mapq_threshold,
                          num_reference_sequences, reference, mappings);
+}
+
+template <typename MappingRecord>
+void MappingWriter<MappingRecord>::OutputSummaryMetadata() {
+  if (!mapping_parameters_.summary_metadata_file_path.empty())
+    summary_metadata_.Output(mapping_parameters_.summary_metadata_file_path.c_str());
 }
 
 // Specialization for BED format.
