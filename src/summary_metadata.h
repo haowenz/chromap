@@ -16,7 +16,7 @@ namespace chromap {
 enum SummaryMetadataField {
   SUMMARY_METADATA_TOTAL = 0,
   SUMMARY_METADATA_DUP,
-  SUMMARY_METADATA_UNMAPPED,
+  SUMMARY_METADATA_MAPPED,
   SUMMARY_METADATA_LOWMAPQ,
   SUMMARY_METADATA_FIELDS
 };
@@ -50,7 +50,11 @@ class SummaryMetadata {
         fprintf(fp, "%s", Seed2Sequence(kh_key(barcode_metadata_, k), barcode_length_).c_str());
         int i;
         for (i = 0; i < SUMMARY_METADATA_FIELDS; ++i) {
-          fprintf(fp, ",%d", kh_value(barcode_metadata_, k).counts[i]);
+          if (i != SUMMARY_METADATA_MAPPED)
+            fprintf(fp, ",%d", kh_value(barcode_metadata_, k).counts[i]);
+          else
+            fprintf(fp, ",%d", kh_value(barcode_metadata_, k).counts[SUMMARY_METADATA_TOTAL]
+                - kh_value(barcode_metadata_, k).counts[SUMMARY_METADATA_MAPPED]);
         }
         fprintf(fp, "\n");
       }

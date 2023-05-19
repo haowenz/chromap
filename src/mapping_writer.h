@@ -69,6 +69,7 @@ class MappingWriter {
           &temp_mapping_file_handles);
 
   void OutputSummaryMetadata();
+  void UpdateSummaryMetadata(uint64_t barcode, int type, int change);
 
  protected:
   void AppendMapping(uint32_t rid, const SequenceBatch &reference,
@@ -288,8 +289,13 @@ void MappingWriter<MappingRecord>::ProcessAndOutputMappingsInLowMemory(
         } else {
           if (!mapping_parameters_.summary_metadata_file_path.empty())
             summary_metadata_.UpdateCount(last_mapping.GetBarcode(), SUMMARY_METADATA_LOWMAPQ, 
-                last_mapping.num_dups_);
+                std::min((uint32_t)std::numeric_limits<uint8_t>::max(),
+                                         num_last_mapping_dups));
         }
+        if (!mapping_parameters_.summary_metadata_file_path.empty())
+          summary_metadata_.UpdateCount(last_mapping.GetBarcode(), SUMMARY_METADATA_MAPPED, 
+              std::min((uint32_t)std::numeric_limits<uint8_t>::max(),
+                num_last_mapping_dups));
 
         if (last_mapping.is_unique_ == 1) {
           ++num_uni_mappings;
@@ -327,7 +333,20 @@ void MappingWriter<MappingRecord>::ProcessAndOutputMappingsInLowMemory(
     }
     AppendMapping(last_rid, reference, last_mapping);
     ++num_mappings_passing_filters;
+    
+    if (!mapping_parameters_.summary_metadata_file_path.empty())
+      summary_metadata_.UpdateCount(last_mapping.GetBarcode(), SUMMARY_METADATA_DUP,
+          last_mapping.num_dups_ - 1);
+  } else {
+    if (!mapping_parameters_.summary_metadata_file_path.empty())
+      summary_metadata_.UpdateCount(last_mapping.GetBarcode(), SUMMARY_METADATA_LOWMAPQ, 
+          std::min((uint32_t)std::numeric_limits<uint8_t>::max(),
+                                   num_last_mapping_dups));
   }
+  if (!mapping_parameters_.summary_metadata_file_path.empty())
+    summary_metadata_.UpdateCount(last_mapping.GetBarcode(), SUMMARY_METADATA_MAPPED, 
+        std::min((uint32_t)std::numeric_limits<uint8_t>::max(),
+          num_last_mapping_dups));
 
   if (last_mapping.is_unique_ == 1) {
     ++num_uni_mappings;
@@ -399,6 +418,9 @@ void MappingWriter<MappingRecord>::OutputMappingsInVector(
           summary_metadata_.UpdateCount(it->GetBarcode(), SUMMARY_METADATA_LOWMAPQ,
               it->num_dups_);
       }
+      if (!mapping_parameters_.summary_metadata_file_path.empty())
+        summary_metadata_.UpdateCount(it->GetBarcode(), SUMMARY_METADATA_MAPPED,
+            it->num_dups_);
     }
   }
   std::cerr << "Number of output mappings (passed filters): "
@@ -419,6 +441,13 @@ template <typename MappingRecord>
 void MappingWriter<MappingRecord>::OutputSummaryMetadata() {
   if (!mapping_parameters_.summary_metadata_file_path.empty())
     summary_metadata_.Output(mapping_parameters_.summary_metadata_file_path.c_str());
+}
+
+template <typename MappingRecord>
+  void MappingWriter<MappingRecord>::UpdateSummaryMetadata(uint64_t barcode, int type, int change)
+{
+  if (!mapping_parameters_.summary_metadata_file_path.empty())
+    summary_metadata_.UpdateCount(barcode, type, change);
 }
 
 // Specialization for BED format.
