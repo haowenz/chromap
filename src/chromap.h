@@ -425,6 +425,18 @@ void Chromap::MapSingleEndReads() {
           }
           // std::cerr<<"cache memusage: " <<
           // mm_to_candidates_cache.GetMemoryBytes() <<"\n" ;
+          if (!mapping_parameters_.summary_metadata_file_path.empty()) {
+            if (mapping_parameters_.is_bulk_data) 
+              mapping_writer.UpdateSummaryMetadata(0, SUMMARY_METADATA_TOTAL, 
+                  num_loaded_reads) ;
+            else
+            {
+              for (uint32_t read_index = 0; read_index < num_loaded_reads; ++read_index)
+                mapping_writer.UpdateSummaryMetadata(
+                    barcode_batch.GenerateSeedFromSequenceAt(read_index, 0, barcode_length_), 
+                    SUMMARY_METADATA_TOTAL, 1);
+            }
+          }
           num_loaded_reads = num_loaded_reads_for_loading;
           read_batch_for_loading.SwapSequenceBatch(read_batch);
           barcode_batch_for_loading.SwapSequenceBatch(barcode_batch);
@@ -961,6 +973,19 @@ void Chromap::MapPairedEndReads() {
             if (mm_history2[pair_index].negative_candidates.size() > 50) {
               std::vector<Candidate>().swap(
                   mm_history2[pair_index].negative_candidates);
+            }
+          }
+
+          if (!mapping_parameters_.summary_metadata_file_path.empty()) {
+            if (mapping_parameters_.is_bulk_data) 
+              mapping_writer.UpdateSummaryMetadata(0, SUMMARY_METADATA_TOTAL, 
+                  num_loaded_pairs) ;
+            else
+            {
+              for (uint32_t pair_index = 0; pair_index < num_loaded_pairs; ++pair_index)
+                mapping_writer.UpdateSummaryMetadata(
+                    barcode_batch.GenerateSeedFromSequenceAt(pair_index, 0, barcode_length_), 
+                    SUMMARY_METADATA_TOTAL, 1);
             }
           }
 
