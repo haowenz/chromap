@@ -285,17 +285,15 @@ void MappingWriter<MappingRecord>::ProcessAndOutputMappingsInLowMemory(
           ++num_mappings_passing_filters;
           if (!mapping_parameters_.summary_metadata_file_path.empty())
             summary_metadata_.UpdateCount(last_mapping.GetBarcode(), SUMMARY_METADATA_DUP,
-                last_mapping.num_dups_ - 1);
+              num_last_mapping_dups - 1);
         } else {
           if (!mapping_parameters_.summary_metadata_file_path.empty())
             summary_metadata_.UpdateCount(last_mapping.GetBarcode(), SUMMARY_METADATA_LOWMAPQ, 
-                std::min((uint32_t)std::numeric_limits<uint8_t>::max(),
-                                         num_last_mapping_dups));
+                      num_last_mapping_dups);
         }
         if (!mapping_parameters_.summary_metadata_file_path.empty())
           summary_metadata_.UpdateCount(last_mapping.GetBarcode(), SUMMARY_METADATA_MAPPED, 
-              std::min((uint32_t)std::numeric_limits<uint8_t>::max(),
-                num_last_mapping_dups));
+                num_last_mapping_dups);
 
         if (last_mapping.is_unique_ == 1) {
           ++num_uni_mappings;
@@ -336,17 +334,15 @@ void MappingWriter<MappingRecord>::ProcessAndOutputMappingsInLowMemory(
     
     if (!mapping_parameters_.summary_metadata_file_path.empty())
       summary_metadata_.UpdateCount(last_mapping.GetBarcode(), SUMMARY_METADATA_DUP,
-          last_mapping.num_dups_ - 1);
+          num_last_mapping_dups - 1);
   } else {
     if (!mapping_parameters_.summary_metadata_file_path.empty())
       summary_metadata_.UpdateCount(last_mapping.GetBarcode(), SUMMARY_METADATA_LOWMAPQ, 
-          std::min((uint32_t)std::numeric_limits<uint8_t>::max(),
-                                   num_last_mapping_dups));
+          num_last_mapping_dups);
   }
   if (!mapping_parameters_.summary_metadata_file_path.empty())
     summary_metadata_.UpdateCount(last_mapping.GetBarcode(), SUMMARY_METADATA_MAPPED, 
-        std::min((uint32_t)std::numeric_limits<uint8_t>::max(),
-          num_last_mapping_dups));
+          num_last_mapping_dups);
 
   if (last_mapping.is_unique_ == 1) {
     ++num_uni_mappings;
@@ -410,6 +406,8 @@ void MappingWriter<MappingRecord>::OutputMappingsInVector(
         AppendMapping(ri, reference, *it);
         ++num_mappings_passing_filters;
         //}
+        //it->num_dups_ is capped by 255 here, so the count might be different in the
+        //  low-mem mode.
         if (!mapping_parameters_.summary_metadata_file_path.empty())
           summary_metadata_.UpdateCount(it->GetBarcode(), SUMMARY_METADATA_DUP,
               it->num_dups_ - 1);

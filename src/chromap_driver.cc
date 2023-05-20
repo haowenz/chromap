@@ -121,7 +121,7 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
           "FILE")("barcode-translate",
                   "Convert barcode to the specified sequences during output",
                   cxxopts::value<std::string>(), "FILE")
-            ("summary", "Summarize the mapping metadata at bulk or barcode level",
+            ("summary", "Summarize the mapping statistics at bulk or barcode level",
              cxxopts::value<std::string>(), "FILE");
   //("PAF", "Output mappings in PAF format (only for test)");
   options.add_options()("v,version", "Print version")("h,help", "Print help");
