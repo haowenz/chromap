@@ -42,7 +42,7 @@ class SummaryMetadata {
   }
 
   void Output(const char *filename) {
-    FILE *fp = fopen(filename, "w") ;
+    FILE *fp = fopen(filename, "w");
     fprintf(fp, "barcode,total,duplicate,unmapped,lowmapq\n");   
     khiter_t k;
     for (k = kh_begin(barcode_metadata_); k != kh_end(barcode_metadata_); ++k)
