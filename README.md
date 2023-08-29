@@ -61,6 +61,11 @@ But note that the the processing of SAM files is not fully optimized and can be 
 ```sh
 chromap -x index -r ref.fa -1 query1.fq,query2.fq,query3.fq --SAM -o alignment.sam
 ```
+Chromap also supports wildcards in the read file names and will find all matched read files. To use this function, the read file names ***must*** be put in quotation marks:
+
+```sh
+chromap -x index -r ref.fa -1 "query*.fq" --SAM -o alignment.sam
+```
 Chromap works with gzip'd FASTA and FASTQ formats as input. You don't need to convert between FASTA and FASTQ or decompress gzip'd files first. 
 
 ***Importantly***, it should be noted that once you build the index, indexing parameters such as **-k**, **-w** and **--min-frag-length** can't be changed during mapping. If you are running Chromap for different data types, you will probably need to keep multiple indexes generated with different parameters.
