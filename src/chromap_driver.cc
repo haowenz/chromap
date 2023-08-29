@@ -1,5 +1,7 @@
 #include "chromap_driver.h"
 
+#include <glob.h>
+
 #include <cassert>
 #include <iomanip>
 #include <string>
@@ -159,6 +161,47 @@ void AddPeakOptions(cxxopts::Options &options) {
                     cxxopts::value<int>(), "INT")(
       "peak-merge-max-length", "Peaks within this length will be merged [30]",
       cxxopts::value<int>(), "INT");
+}
+
+// Return all file paths that match the input pattern.
+std::vector<std::string> GetMatchedFilePaths(const std::string &pattern) {
+  glob_t glob_result;
+  memset(&glob_result, 0, sizeof(glob_result));
+
+  const int return_value =
+      glob(pattern.c_str(), GLOB_TILDE, NULL, &glob_result);
+
+  if (return_value != 0) {
+    globfree(&glob_result);
+    chromap::ExitWithMessage("glob() failed with return value " +
+                             std::to_string(return_value) + "\n");
+  }
+
+  std::vector<std::string> matched_file_paths;
+  matched_file_paths.reserve(glob_result.gl_pathc);
+  for (size_t i = 0; i < glob_result.gl_pathc; ++i) {
+    matched_file_paths.push_back(std::string(glob_result.gl_pathv[i]));
+    std::cerr << matched_file_paths.back() << "\n";
+  }
+  globfree(&glob_result);
+
+  return matched_file_paths;
+}
+
+// Return all file paths that match the input patterns.
+std::vector<std::string> GetMatchedFilePaths(
+    const std::vector<std::string> &patterns) {
+  std::vector<std::string> all_matched_file_paths;
+  for (const auto &pattern : patterns) {
+    std::vector<std::string> matched_file_paths = GetMatchedFilePaths(pattern);
+    all_matched_file_paths.reserve(all_matched_file_paths.size() +
+                                   matched_file_paths.size());
+    all_matched_file_paths.insert(
+        std::end(all_matched_file_paths),
+        std::make_move_iterator(std::begin(matched_file_paths)),
+        std::make_move_iterator(std::end(matched_file_paths)));
+  }
+  return all_matched_file_paths;
 }
 
 }  // namespace
@@ -407,19 +450,19 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
     }
     if (result.count("1")) {
       mapping_parameters.read_file1_paths =
-          result["read1"].as<std::vector<std::string>>();
+          GetMatchedFilePaths(result["read1"].as<std::vector<std::string>>());
     } else {
       chromap::ExitWithMessage("No read file specified!");
     }
     if (result.count("2")) {
       mapping_parameters.read_file2_paths =
-          result["read2"].as<std::vector<std::string>>();
+          GetMatchedFilePaths(result["read2"].as<std::vector<std::string>>());
     }
 
     if (result.count("b")) {
       mapping_parameters.is_bulk_data = false;
       mapping_parameters.barcode_file_paths =
-          result["barcode"].as<std::vector<std::string>>();
+          GetMatchedFilePaths(result["barcode"].as<std::vector<std::string>>());
       if (result.count("barcode-whitelist") == 0) {
         std::cerr << "WARNING: there are input barcode files but a barcode "
                      "whitelist file is missing!\n";
