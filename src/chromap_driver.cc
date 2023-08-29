@@ -20,24 +20,16 @@ void AddIndexingOptions(cxxopts::Options &options) {
       "w,window", "Window size [7]", cxxopts::value<int>(), "INT");
 }
 
-}  // namespace
-
-void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
-  cxxopts::Options options(
-      "chromap", "Fast alignment and preprocessing of chromatin profiles");
-
-  AddIndexingOptions(options);
-
-  options.set_width(120).add_options("Mapping")
-      //("m,map", "Map reads")
-      ("preset",
-       "Preset parameters for mapping reads (always applied before other "
-       "options) []\natac: mapping ATAC-seq/scATAC-seq reads\nchip: mapping "
-       "ChIP-seq reads\nhic: mapping Hi-C reads",
-       cxxopts::value<std::string>(),
-       "STR")("split-alignment", "Allow split alignments")(
-          "e,error-threshold", "Max # errors allowed to map a read [8]",
-          cxxopts::value<int>(), "INT")
+void AddMappingOptions(cxxopts::Options &options) {
+  options.set_width(120).add_options("Mapping")(
+      "preset",
+      "Preset parameters for mapping reads (always applied before other "
+      "options) []\natac: mapping ATAC-seq/scATAC-seq reads\nchip: mapping "
+      "ChIP-seq reads\nhic: mapping Hi-C reads",
+      cxxopts::value<std::string>(),
+      "STR")("split-alignment", "Allow split alignments")(
+      "e,error-threshold", "Max # errors allowed to map a read [8]",
+      cxxopts::value<int>(), "INT")
       //("A,match-score", "Match score [1]", cxxopts::value<int>(), "INT")
       //("B,mismatch-penalty", "Mismatch penalty [4]", cxxopts::value<int>(),
       //"INT")
@@ -83,16 +75,9 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
                  cxxopts::value<double>(),
                  "FLT")("t,num-threads", "# threads for mapping [1]",
                         cxxopts::value<int>(), "INT");
-  // options.add_options("Peak")
-  //  ("cell-by-bin", "Generate cell-by-bin matrix")
-  //  ("bin-size", "Bin size to generate cell-by-bin matrix [5000]",
-  //  cxxopts::value<int>(), "INT")
-  //  ("depth-cutoff", "Depth cutoff for peak calling [3]",
-  //  cxxopts::value<int>(), "INT")
-  //  ("peak-min-length", "Min length of peaks to report [30]",
-  //  cxxopts::value<int>(), "INT")
-  //  ("peak-merge-max-length", "Peaks within this length will be merged [30]",
-  //  cxxopts::value<int>(), "INT");
+}
+
+void AddInputOptions(cxxopts::Options &options) {
   options.add_options("Input")("r,ref", "Reference file",
                                cxxopts::value<std::string>(), "FILE")(
       "x,index", "Index file", cxxopts::value<std::string>(), "FILE")(
@@ -108,6 +93,9 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
               "Format for read files and barcode files  [\"r1:0:-1,bc:0:-1\" "
               "as 10x Genomics single-end format]",
               cxxopts::value<std::string>(), "STR");
+}
+
+void AddOutputOptions(cxxopts::Options &options) {
   options.add_options("Output")("o,output", "Output file",
                                 cxxopts::value<std::string>(), "FILE")
       //("p,matrix-output-prefix", "Prefix of matrix output files",
@@ -134,7 +122,9 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
           "Summarize the mapping statistics at bulk or barcode level",
           cxxopts::value<std::string>(), "FILE");
   //("PAF", "Output mappings in PAF format (only for test)");
-  options.add_options()("v,version", "Print version")("h,help", "Print help");
+}
+
+void AddDevelopmentOptions(cxxopts::Options &options) {
   options.add_options("Development options")("A,match-score", "Match score [1]",
                                              cxxopts::value<int>(), "INT")(
       "B,mismatch-penalty", "Mismatch penalty [4]", cxxopts::value<int>(),
@@ -157,6 +147,38 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
       "PAF", "Output mappings in PAF format (only for test)")(
       "skip-barcode-check",
       "Do not check whether too few barcodes are in the whitelist");
+}
+
+void AddPeakOptions(cxxopts::Options &options) {
+  options.add_options("Peak")("cell-by-bin", "Generate cell-by-bin matrix")(
+      "bin-size", "Bin size to generate cell-by-bin matrix [5000]",
+      cxxopts::value<int>(),
+      "INT")("depth-cutoff", "Depth cutoff for peak calling [3]",
+             cxxopts::value<int>(),
+             "INT")("peak-min-length", "Min length of peaks to report [30]",
+                    cxxopts::value<int>(), "INT")(
+      "peak-merge-max-length", "Peaks within this length will be merged [30]",
+      cxxopts::value<int>(), "INT");
+}
+
+}  // namespace
+
+void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
+  cxxopts::Options options(
+      "chromap", "Fast alignment and preprocessing of chromatin profiles");
+
+  options.add_options()("v,version", "Print version")("h,help", "Print help");
+
+  AddIndexingOptions(options);
+  AddMappingOptions(options);
+
+  // We don't support peak options for now.
+  // AddPeakOptions(options);
+
+  AddInputOptions(options);
+  AddOutputOptions(options);
+
+  AddDevelopmentOptions(options);
 
   auto result = options.parse(argc, argv);
   if (result.count("h")) {
