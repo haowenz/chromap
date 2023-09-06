@@ -83,7 +83,7 @@ struct PairedEndMappingInMemory {
     return mapping_in_memory2.GetFragmentStartPosition();
   }
 
-  inline uint16_t GetFragmentLength() const {
+  inline int GetFragmentLength() const {
     if (mapping_in_memory1.strand == kPositive) {
       return mapping_in_memory2.ref_end_position -
              mapping_in_memory1.ref_start_position + 1;
