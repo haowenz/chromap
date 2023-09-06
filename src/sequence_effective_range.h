@@ -31,13 +31,13 @@ class SequenceEffectiveRange {
       return;
     }
 
-    std::sort(starts.begin(), starts.end());
+    /*std::sort(starts.begin(), starts.end());
     std::sort(ends.begin(), ends.end());
 
     if (ends[0] == -1) {
       ends.erase(ends.begin());
       ends.push_back(-1);
-    }
+    }*/
   }
 
   // Return false if it fails to parse the format string.
