@@ -18,6 +18,8 @@ enum SummaryMetadataField {
   SUMMARY_METADATA_DUP,
   SUMMARY_METADATA_MAPPED,
   SUMMARY_METADATA_LOWMAPQ,
+	SUMMARY_METADATA_CACHEHIT,
+  //SUMMARY_METADATA_CACHEHIT_FWD, 
   SUMMARY_METADATA_FIELDS
 };
 
@@ -43,7 +45,7 @@ class SummaryMetadata {
 
   void Output(const char *filename) {
     FILE *fp = fopen(filename, "w");
-    fprintf(fp, "barcode,total,duplicate,unmapped,lowmapq\n");   
+    fprintf(fp, "barcode,total,duplicate,unmapped,lowmapq,cachehit,fric\n");   
     khiter_t k;
     for (k = kh_begin(barcode_metadata_); k != kh_end(barcode_metadata_); ++k)
       if (kh_exist(barcode_metadata_, k)) {
@@ -52,10 +54,12 @@ class SummaryMetadata {
         for (i = 0; i < SUMMARY_METADATA_FIELDS; ++i) {
           if (i != SUMMARY_METADATA_MAPPED)
             fprintf(fp, ",%d", kh_value(barcode_metadata_, k).counts[i]);
-          else
+          else // the print is for unmapped
             fprintf(fp, ",%d", kh_value(barcode_metadata_, k).counts[SUMMARY_METADATA_TOTAL]
                 - kh_value(barcode_metadata_, k).counts[SUMMARY_METADATA_MAPPED]);
         }
+        // fric: fraction in cache
+        fprintf(fp, ",%lf", (double)kh_value(barcode_metadata_, k).counts[SUMMARY_METADATA_CACHEHIT] / (double)kh_value(barcode_metadata_, k).counts[SUMMARY_METADATA_MAPPED]);
         fprintf(fp, "\n");
       }
     fclose(fp);

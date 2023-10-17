@@ -29,7 +29,7 @@
 #include "temp_mapping.h"
 #include "utils.h"
 
-#define CHROMAP_VERSION "0.2.5-r478"
+#define CHROMAP_VERSION "0.2.5-r473"
 
 namespace chromap {
 
@@ -244,6 +244,9 @@ void Chromap::MapSingleEndReads() {
   mm_cache mm_to_candidates_cache(2000003);
   mm_to_candidates_cache.SetKmerLength(kmer_size);
   struct _mm_history *mm_history = new struct _mm_history[read_batch_size_];
+  bool *mm_cache_hit = NULL ;
+  if (!mapping_parameters_.summary_metadata_file_path.empty()) 
+    mm_cache_hit = new bool[read_batch_size_];
   static uint64_t thread_num_candidates = 0;
   static uint64_t thread_num_mappings = 0;
   static uint64_t thread_num_mapped_reads = 0;
@@ -328,6 +331,7 @@ void Chromap::MapSingleEndReads() {
           for (uint32_t read_index = 0; read_index < num_loaded_reads;
                ++read_index) {
             bool current_barcode_is_whitelisted = true;
+            int cache_miss = 0;
             if (!mapping_parameters_.barcode_whitelist_file_path.empty()) {
               current_barcode_is_whitelisted = CorrectBarcodeAt(
                   read_index, barcode_batch, thread_num_barcode_in_whitelist,
@@ -358,6 +362,7 @@ void Chromap::MapSingleEndReads() {
                 candidate_processor.GenerateCandidates(
                     mapping_parameters_.error_threshold, index,
                     mapping_metadata);
+                ++cache_miss;
               }
 
               if (read_index < history_update_threshold) {
@@ -395,6 +400,9 @@ void Chromap::MapSingleEndReads() {
                       std::min(mapping_metadata.GetNumBestMappings(),
                                mapping_parameters_.max_num_best_mappings);
                   ++thread_num_mapped_reads;
+                  
+                  if (mm_cache_hit != NULL && mapping_metadata.GetNumBestMappings() > 0)
+                    mm_cache_hit[read_index] = (cache_miss == 0) ;
 
                   if (mapping_metadata.GetNumBestMappings() == 1) {
                     ++thread_num_uniquely_mapped_reads;
@@ -436,6 +444,15 @@ void Chromap::MapSingleEndReads() {
                     barcode_batch.GenerateSeedFromSequenceAt(read_index, 0, barcode_length_), 
                     SUMMARY_METADATA_TOTAL, 1);
             }
+            
+            // Update cache hit
+            for (uint32_t read_index = 0; read_index < num_loaded_reads; ++read_index)
+              if (mm_cache_hit[read_index]) {
+                mapping_writer.UpdateSummaryMetadata(
+                    mapping_parameters_.is_bulk_data ? 0 : 
+                    barcode_batch.GenerateSeedFromSequenceAt(read_index, 0, barcode_length_),
+                    SUMMARY_METADATA_CACHEHIT, 1);
+              }
           }
           num_loaded_reads = num_loaded_reads_for_loading;
           read_batch_for_loading.SwapSequenceBatch(read_batch);
@@ -483,6 +500,8 @@ void Chromap::MapSingleEndReads() {
             << "s.\n";
 
   delete[] mm_history;
+  if (mm_cache_hit != NULL)
+    delete[] mm_cache_hit;
 
   OutputMappingStatistics();
   if (!mapping_parameters_.is_bulk_data) {
@@ -590,6 +609,9 @@ void Chromap::MapPairedEndReads() {
   mm_to_candidates_cache.SetKmerLength(kmer_size);
   struct _mm_history *mm_history1 = new struct _mm_history[read_batch_size_];
   struct _mm_history *mm_history2 = new struct _mm_history[read_batch_size_];
+  bool *mm_cache_hit = NULL ;
+  if (!mapping_parameters_.summary_metadata_file_path.empty()) 
+    mm_cache_hit = new bool[read_batch_size_];
 
   std::vector<std::vector<MappingRecord>> mappings_on_diff_ref_seqs;
   // Initialize mapping container
@@ -757,15 +779,17 @@ void Chromap::MapPairedEndReads() {
               minimizer_generator.GenerateMinimizers(
                   read_batch2, pair_index,
                   paired_end_mapping_metadata.mapping_metadata2_.minimizers_);
-
+            
               if (paired_end_mapping_metadata.BothEndsHaveMinimizers()) {
                 // Generate candidates
+                int cache_miss = 0;
                 if (mm_to_candidates_cache.Query(
                         paired_end_mapping_metadata.mapping_metadata1_,
                         read_batch1.GetSequenceLengthAt(pair_index)) == -1) {
                   candidate_processor.GenerateCandidates(
                       mapping_parameters_.error_threshold, index,
                       paired_end_mapping_metadata.mapping_metadata1_);
+                  ++cache_miss;
                 }
 
                 size_t current_num_candidates1 =
@@ -778,8 +802,9 @@ void Chromap::MapPairedEndReads() {
                   candidate_processor.GenerateCandidates(
                       mapping_parameters_.error_threshold, index,
                       paired_end_mapping_metadata.mapping_metadata2_);
+                  ++cache_miss;
                 }
-
+                
                 size_t current_num_candidates2 =
                     paired_end_mapping_metadata.mapping_metadata2_
                         .GetNumCandidates();
@@ -927,6 +952,9 @@ void Chromap::MapPairedEndReads() {
                     if (paired_end_mapping_metadata.GetNumBestMappings() > 0) {
                       ++thread_num_mapped_reads;
                       ++thread_num_mapped_reads;
+
+                      if (mm_cache_hit != NULL)
+                        mm_cache_hit[pair_index] = (cache_miss < 2) ;
                     }
                   }
                 }  // verify candidate
@@ -977,16 +1005,25 @@ void Chromap::MapPairedEndReads() {
           }
 
           if (!mapping_parameters_.summary_metadata_file_path.empty()) {
+            // Update total read count 
             if (mapping_parameters_.is_bulk_data) 
               mapping_writer.UpdateSummaryMetadata(0, SUMMARY_METADATA_TOTAL, 
                   num_loaded_pairs) ;
-            else
-            {
+            else {
               for (uint32_t pair_index = 0; pair_index < num_loaded_pairs; ++pair_index)
                 mapping_writer.UpdateSummaryMetadata(
                     barcode_batch.GenerateSeedFromSequenceAt(pair_index, 0, barcode_length_), 
                     SUMMARY_METADATA_TOTAL, 1);
             }
+
+            // Update cache hit
+            for (uint32_t pair_index = 0; pair_index < num_loaded_pairs; ++pair_index)
+              if (mm_cache_hit[pair_index]) {
+                mapping_writer.UpdateSummaryMetadata(
+                    mapping_parameters_.is_bulk_data ? 0 : 
+                    barcode_batch.GenerateSeedFromSequenceAt(pair_index, 0, barcode_length_),
+                    SUMMARY_METADATA_CACHEHIT, 1);
+              }
           }
 
           std::cerr << "Mapped " << num_loaded_pairs << " read pairs in "
@@ -1043,6 +1080,8 @@ void Chromap::MapPairedEndReads() {
 
   delete[] mm_history1;
   delete[] mm_history2;
+  if (mm_cache_hit != NULL)
+    delete[] mm_cache_hit;
 
   OutputMappingStatistics();
   if (!mapping_parameters_.is_bulk_data) {
