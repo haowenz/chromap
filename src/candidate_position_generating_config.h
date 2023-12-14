@@ -1,6 +1,8 @@
 #ifndef CANDIDATE_POSITION_GENERATING_CONFIG_H_
 #define CANDIDATE_POSITION_GENERATING_CONFIG_H_
 
+#include <stdint.h>
+
 namespace chromap {
 
 // This class holds the parameters to generate candidate position. Using the
