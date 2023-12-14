@@ -1,6 +1,8 @@
 #ifndef INDEX_UTILS_H_
 #define INDEX_UTILS_H_
 
+#include <stdint.h>
+
 #include "khash.h"
 
 // Note that the max kmer size is 28 and its hash value is always saved in the
