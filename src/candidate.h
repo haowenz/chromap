@@ -1,6 +1,8 @@
 #ifndef CANDIDATE_H_
 #define CANDIDATE_H_
 
+#include <stdint.h>
+
 namespace chromap {
 
 struct Candidate {
