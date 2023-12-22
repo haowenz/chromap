@@ -68,11 +68,11 @@ class MappingWithoutBarcode : public Mapping {
   uint16_t fragment_length_;
   // uint8_t mapq;
   uint8_t mapq_ : 6, direction_ : 1, is_unique_ : 1;
-  uint8_t num_dups_;
+  uint16_t num_dups_; // Need higher limit in bulk setting
 
   MappingWithoutBarcode() : num_dups_(0) {}
   MappingWithoutBarcode(uint32_t read_id, uint32_t fragment_start_position,
-                        uint16_t fragment_length, uint8_t mapq,
+                        uint16_t fragment_length, uint16_t mapq,
                         uint8_t direction, uint8_t is_unique, uint8_t num_dups)
       : read_id_(read_id),
         fragment_start_position_(fragment_start_position),
@@ -192,7 +192,7 @@ class PairedEndMappingWithoutBarcode : public Mapping {
                                  uint32_t fragment_start_position,
                                  uint16_t fragment_length, uint8_t mapq,
                                  uint8_t direction, uint8_t is_unique,
-                                 uint8_t num_dups,
+                                 uint16_t num_dups,
                                  uint16_t positive_alignment_length,
                                  uint16_t negative_alignment_length)
       : read_id_(read_id),

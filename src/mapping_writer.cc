@@ -50,7 +50,7 @@ void MappingWriter<MappingWithoutBarcode>::AppendMapping(
                               std::to_string(mapping.GetStartPosition()) +
                               "\t" + std::to_string(mapping_end_position) +
                               "\tN\t" + std::to_string(mapping.mapq_) + "\t" +
-                              strand + "\n");
+                              strand + "\t" + std::to_string(mapping.num_dups_) + "\n");
   } else {
     std::string strand = mapping.IsPositiveStrand() ? "+" : "-";
     const char *reference_sequence_name = reference.GetSequenceNameAt(rid);
@@ -59,7 +59,7 @@ void MappingWriter<MappingWithoutBarcode>::AppendMapping(
                               std::to_string(mapping.GetStartPosition()) +
                               "\t" + std::to_string(mapping_end_position) +
                               "\tN\t" + std::to_string(mapping.mapq_) + "\t" +
-                              strand + "\n");
+                              strand + "\t" + std::to_string(mapping.num_dups_) + "\n");
   }
 }
 
@@ -80,7 +80,7 @@ void MappingWriter<PairedEndMappingWithoutBarcode>::AppendMapping(
                               std::to_string(mapping.GetStartPosition()) +
                               "\t" + std::to_string(mapping_end_position) +
                               "\tN\t" + std::to_string(mapping.mapq_) + "\t" +
-                              strand + "\n");
+                              strand + "\t" + std::to_string(mapping.num_dups_) + "\n");
   } else {
     bool positive_strand = mapping.IsPositiveStrand();
     uint32_t positive_read_end =
@@ -99,7 +99,8 @@ void MappingWriter<PairedEndMappingWithoutBarcode>::AppendMapping(
           std::string(reference_sequence_name) + "\t" +
           std::to_string(negative_read_start) + "\t" +
           std::to_string(negative_read_end) + "\tN\t" +
-          std::to_string(mapping.mapq_) + "\t-\n");
+          std::to_string(mapping.mapq_) + "\t-\t" + 
+          std::to_string(mapping.num_dups_) + "\n");
     } else {
       this->AppendMappingOutput(
           std::string(reference_sequence_name) + "\t" +
@@ -109,7 +110,8 @@ void MappingWriter<PairedEndMappingWithoutBarcode>::AppendMapping(
           std::string(reference_sequence_name) + "\t" +
           std::to_string(mapping.fragment_start_position_) + "\t" +
           std::to_string(positive_read_end) + "\tN\t" +
-          std::to_string(mapping.mapq_) + "\t+\n");
+          std::to_string(mapping.mapq_) + "\t+\t" +
+          std::to_string(mapping.num_dups_) + "\n");
     }
   }
 }
