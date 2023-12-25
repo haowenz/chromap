@@ -1119,6 +1119,8 @@ void Chromap::MapPairedEndReads() {
     //  }
     //}
   }
+  if (mapping_parameters_.mapping_output_format == MAPPINGFORMAT_SAM)
+    mapping_writer.AdjustSummaryPairedEndOverCount() ;
   mapping_writer.OutputSummaryMetadata();
 
   reference.FinalizeLoading();

@@ -75,6 +75,17 @@ class SummaryMetadata {
     barcode_length_ = l;
   }
 
+  // In SAM format for paired-end data, some count will be counted twice
+  void AdjustPairedEndOverCount() {
+    khiter_t k;
+    for (k = kh_begin(barcode_metadata_); k != kh_end(barcode_metadata_); ++k)
+      if (kh_exist(barcode_metadata_, k)) {
+        kh_value(barcode_metadata_, k).counts[SUMMARY_METADATA_DUP] /= 2 ;
+        kh_value(barcode_metadata_, k).counts[SUMMARY_METADATA_LOWMAPQ] /= 2 ;
+        kh_value(barcode_metadata_, k).counts[SUMMARY_METADATA_MAPPED] /= 2 ;
+      } 
+  }
+
  private:
   khash_t(k64_barcode_metadata) *barcode_metadata_;    
   int barcode_length_;
