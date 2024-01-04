@@ -109,7 +109,7 @@ The start and end are inclusive and -1 means the end of the read. User may use m
 
 The output file formats for bulk and single-cell data are different except for the first three columns. For bulk data, the columns are
 
-    chrom chrom_start chrom_end N mapq strand
+    chrom chrom_start chrom_end N mapq strand duplicate_count
 For single-cell data, the columns are 
     
     chrom chrom_start chrom_end barcode duplicate_count
