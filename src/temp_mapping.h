@@ -39,6 +39,9 @@ struct TempMappingFileHandle {
 
   inline void InitializeTempMappingLoading(uint32_t temp_mapping_block_size) {
     file = fopen(file_path.c_str(), "rb");
+    if (file == NULL) {
+      std::cerr << "Temporary file " << file_path << " is missing.\n" ;
+    }
     assert(file != NULL);
     num_mappings = 0;
     block_size = temp_mapping_block_size;
