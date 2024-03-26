@@ -144,7 +144,7 @@ If you use Chromap, please cite:
 [release]: https://github.com/haowenz/chromap/releases
 [issue]: https://github.com/haowenz/chromap/issues
 [cellranger]: https://support.10xgenomics.com/single-cell-atac/software/pipelines/latest/output/fragments
-[manpage]: https://zhanghaowen.com/chromap/chromap.html
+[manpage]: https://haowenz.github.io/chromap/chromap.html
 [bioconda]: https://anaconda.org/bioconda/chromap
 [ArchR]: https://www.archrproject.com/index.html
 [MAESTRO]: https://github.com/liulab-dfci/MAESTRO
