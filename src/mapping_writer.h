@@ -381,6 +381,12 @@ void MappingWriter<MappingRecord>::OutputTempMappings(
   temp_mapping_file_handle.file_path =
       mapping_parameters_.mapping_output_file_path + ".temp" +
       std::to_string(temp_mapping_file_handles.size());
+  if (mapping_parameters_.mapping_output_file_path == "/dev/stdout"
+      || mapping_parameters_.mapping_output_file_path == "/dev/stderr")
+  {
+    temp_mapping_file_handle.file_path = "chromap_output.temp" +
+      std::to_string(temp_mapping_file_handles.size());
+  }
   temp_mapping_file_handles.emplace_back(temp_mapping_file_handle);
 
   OutputTempMapping(temp_mapping_file_handle.file_path, num_reference_sequences,
