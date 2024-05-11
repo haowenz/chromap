@@ -40,7 +40,7 @@ struct TempMappingFileHandle {
   inline void InitializeTempMappingLoading(uint32_t temp_mapping_block_size) {
     file = fopen(file_path.c_str(), "rb");
     if (file == NULL) {
-      std::cerr << "Temporary file " << file_path << " is missing.\n" ;
+      std::cerr << "Cannot open temporary file " << file_path << ". This may be caused by creating too many temporary files, please consider using command like \"ulimit -n 32768 -u 32768\" to increase the limit.\n" ;
     }
     assert(file != NULL);
     num_mappings = 0;
