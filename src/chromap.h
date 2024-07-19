@@ -458,9 +458,11 @@ void Chromap::MapSingleEndReads() {
                                                 mappings_on_diff_ref_seqs,
                                                 temp_mapping_file_handles);
 
-              if (temp_mapping_file_handles.size() > 900
-                  && temp_mapping_file_handles.size() % 10 == 1) // every 10 temp files, double the temp file size
+              if (temp_mapping_file_handles.size() > 850
+                  && temp_mapping_file_handles.size() % 10 == 1) { // every 10 temp files, double the temp file size
                 max_num_mappings_in_mem <<= 1;
+                std::cerr << "Used " << temp_mapping_file_handles.size() << "temp files. Double the temp file volume to " << max_num_mappings_in_mem << "\n" ;
+              }
               num_mappings_in_mem = 0;
             }
           }
@@ -1020,9 +1022,11 @@ void Chromap::MapPairedEndReads() {
               mapping_writer.OutputTempMappings(num_reference_sequences,
                                                 mappings_on_diff_ref_seqs,
                                                 temp_mapping_file_handles);
-              if (temp_mapping_file_handles.size() > 900
-                  && temp_mapping_file_handles.size() % 10 == 1) // every 10 temp files, double the temp file size
+              if (temp_mapping_file_handles.size() > 850
+                  && temp_mapping_file_handles.size() % 10 == 1) { // every 10 temp files, double the temp file size
                 max_num_mappings_in_mem <<= 1;
+                std::cerr << "Used " << temp_mapping_file_handles.size() << "temp files. Double the temp file volume to " << max_num_mappings_in_mem << "\n" ;
+              }
               num_mappings_in_mem = 0;
             }
           }  // end of omp task to handle output
