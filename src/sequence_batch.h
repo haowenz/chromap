@@ -104,6 +104,15 @@ class SequenceBatch {
     }
   }
 
+  inline bool IsNInSequenceAt(uint32_t sequence_index) {
+    const int l = sequence_batch_[sequence_index]->seq.l;
+    const char *s = sequence_batch_[sequence_index]->seq.s;
+    for (int i = 0 ; i < l ; ++i)
+      if (s[i] == 'N')
+        return true;
+    return false;
+  }
+
   //  inline char GetReverseComplementBaseOfSequenceAt(uint32_t sequence_index,
   //  uint32_t position) {
   //    kseq_t *sequence = sequence_batch_[sequence_index];

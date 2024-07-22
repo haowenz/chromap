@@ -35,7 +35,7 @@ struct BarcodeWithQual {
 };
 
 struct _mm_history {
-  unsigned int timestamp;
+  unsigned int timestamp = 0;
   std::vector<Minimizer> minimizers;
   std::vector<Candidate> positive_candidates;
   std::vector<Candidate> negative_candidates;
