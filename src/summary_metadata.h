@@ -41,23 +41,31 @@ class SummaryMetadata {
     kh_destroy(k64_barcode_metadata, barcode_metadata_);
   }
 
-  void Output(const char *filename) {
+  void OutputCounts(const char *barcode, const int *counts, FILE *fp)
+  {
+    fprintf(fp, "%s", barcode) ;
+    int i ;
+    for (i = 0; i < SUMMARY_METADATA_FIELDS; ++i) {
+      if (i != SUMMARY_METADATA_MAPPED)
+        fprintf(fp, ",%d", counts[i]);
+      else // The output in the summary is for unmapped reads
+        fprintf(fp, ",%d", counts[SUMMARY_METADATA_TOTAL] - counts[SUMMARY_METADATA_MAPPED]) ;
+    }
+    fprintf(fp, "\n");
+  }
+
+  void Output(const char *filename, bool has_white_list) {
     FILE *fp = fopen(filename, "w");
     fprintf(fp, "barcode,total,duplicate,unmapped,lowmapq\n");   
     khiter_t k;
     for (k = kh_begin(barcode_metadata_); k != kh_end(barcode_metadata_); ++k)
       if (kh_exist(barcode_metadata_, k)) {
-        fprintf(fp, "%s", Seed2Sequence(kh_key(barcode_metadata_, k), barcode_length_).c_str());
-        int i;
-        for (i = 0; i < SUMMARY_METADATA_FIELDS; ++i) {
-          if (i != SUMMARY_METADATA_MAPPED)
-            fprintf(fp, ",%d", kh_value(barcode_metadata_, k).counts[i]);
-          else
-            fprintf(fp, ",%d", kh_value(barcode_metadata_, k).counts[SUMMARY_METADATA_TOTAL]
-                - kh_value(barcode_metadata_, k).counts[SUMMARY_METADATA_MAPPED]);
-        }
-        fprintf(fp, "\n");
+        OutputCounts(Seed2Sequence(kh_key(barcode_metadata_, k), barcode_length_).c_str(),
+            kh_value(barcode_metadata_, k).counts, fp) ;
       }
+    if (has_white_list) {
+      OutputCounts("non-whitelist", nonwhitelist_summary_.counts, fp) ;
+    }
     fclose(fp);
   }
 
@@ -69,6 +77,10 @@ class SummaryMetadata {
       kh_value(barcode_metadata_, barcode_metadata_iter) = nb;
     }
     kh_value(barcode_metadata_, barcode_metadata_iter).counts[type] += change;
+  }
+
+  void UpdateNonWhitelistCount(int type, int change) {
+    nonwhitelist_summary_.counts[type] += change;
   }
 
   void SetBarcodeLength(int l) {
@@ -88,6 +100,7 @@ class SummaryMetadata {
 
  private:
   khash_t(k64_barcode_metadata) *barcode_metadata_;    
+  struct _barcodeSummaryMetadata nonwhitelist_summary_;  // summarize the fragments with no barcode information 
   int barcode_length_;
 
   std::string Seed2Sequence(uint64_t seed, uint32_t seed_length) const {
