@@ -70,6 +70,7 @@ class MappingWriter {
 
   void OutputSummaryMetadata();
   void UpdateSummaryMetadata(uint64_t barcode, int type, int change);
+  void UpdateSpeicalCategorySummaryMetadata(int category, int type, int change);
   void AdjustSummaryPairedEndOverCount();
 
  protected:
@@ -446,20 +447,28 @@ template <typename MappingRecord>
 void MappingWriter<MappingRecord>::OutputSummaryMetadata() {
   if (!mapping_parameters_.summary_metadata_file_path.empty())
   {
-    summary_metadata_.Output(mapping_parameters_.summary_metadata_file_path.c_str());
+    summary_metadata_.Output(mapping_parameters_.summary_metadata_file_path.c_str(),
+        !mapping_parameters_.barcode_whitelist_file_path.empty() && !mapping_parameters_.output_mappings_not_in_whitelist);
   }
 }
 
 template <typename MappingRecord>
-  void MappingWriter<MappingRecord>::UpdateSummaryMetadata(uint64_t barcode, int type, int change)
-{
+  void MappingWriter<MappingRecord>::UpdateSummaryMetadata(uint64_t barcode, int type, int change) {
   if (!mapping_parameters_.summary_metadata_file_path.empty())
     summary_metadata_.UpdateCount(barcode, type, change);
 }
 
+// category: 0: non-whitelist barcode
 template <typename MappingRecord>
-  void MappingWriter<MappingRecord>::AdjustSummaryPairedEndOverCount()
-{
+  void MappingWriter<MappingRecord>::UpdateSpeicalCategorySummaryMetadata(int category, int type, int change) {
+  if (!mapping_parameters_.summary_metadata_file_path.empty()) {
+    if (category == 0)
+      summary_metadata_.UpdateNonWhitelistCount(type, change);
+  }
+}
+
+template <typename MappingRecord>
+  void MappingWriter<MappingRecord>::AdjustSummaryPairedEndOverCount() {
   if (!mapping_parameters_.summary_metadata_file_path.empty()
       && mapping_parameters_.mapping_output_format == MAPPINGFORMAT_SAM)
       summary_metadata_.AdjustPairedEndOverCount() ; 

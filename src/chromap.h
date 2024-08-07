@@ -29,7 +29,7 @@
 #include "temp_mapping.h"
 #include "utils.h"
 
-#define CHROMAP_VERSION "0.2.7-r492"
+#define CHROMAP_VERSION "0.2.7-r493"
 
 namespace chromap {
 
@@ -441,12 +441,18 @@ void Chromap::MapSingleEndReads() {
               mapping_writer.UpdateSummaryMetadata(0, SUMMARY_METADATA_TOTAL, 
                   num_loaded_reads) ;
             else {
+              uint32_t nonwhitelist_count = 0;
               for (uint32_t read_index = 0; read_index < num_loaded_reads; ++read_index)
                 if (read_map_summary[read_index] & 1) {
                   mapping_writer.UpdateSummaryMetadata(
                       barcode_batch.GenerateSeedFromSequenceAt(read_index, 0, barcode_length_), 
                       SUMMARY_METADATA_TOTAL, 1);
+                } else {
+                  ++nonwhitelist_count;
                 }
+              
+              mapping_writer.UpdateSpeicalCategorySummaryMetadata(/*nonwhitelist*/0, 
+                  SUMMARY_METADATA_TOTAL, nonwhitelist_count);
             }
 
             // By default, set the lowest bit to 1 (whether the barcode is in the whitelist)
@@ -1015,12 +1021,17 @@ void Chromap::MapPairedEndReads() {
               mapping_writer.UpdateSummaryMetadata(0, SUMMARY_METADATA_TOTAL, 
                   num_loaded_pairs) ;
             else {
+              uint32_t nonwhitelist_count = 0 ;
               for (uint32_t pair_index = 0; pair_index < num_loaded_pairs; ++pair_index)
                 if (read_map_summary[pair_index] & 1) {
                   mapping_writer.UpdateSummaryMetadata(
                       barcode_batch.GenerateSeedFromSequenceAt(pair_index, 0, barcode_length_), 
                       SUMMARY_METADATA_TOTAL, 1);
+                } else {
+                  ++nonwhitelist_count ;
                 }
+              mapping_writer.UpdateSpeicalCategorySummaryMetadata(/*nonwhitelist*/0, 
+                  SUMMARY_METADATA_TOTAL, nonwhitelist_count);
             }
             
             memset(read_map_summary, 1, sizeof(*read_map_summary)*read_batch_size_);
