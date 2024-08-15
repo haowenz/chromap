@@ -110,10 +110,9 @@ void GenerateNMAndMDTag(const char *pattern, const char *text,
         } else {
           // a mismatch
           ++mapping_in_memory.NM;
-          if (num_matches != 0) {
-            mapping_in_memory.MD_tag.append(std::to_string(num_matches));
-            num_matches = 0;
-          }
+          
+          mapping_in_memory.MD_tag.append(std::to_string(num_matches));
+          num_matches = 0;
           mapping_in_memory.MD_tag.push_back(reference[reference_position]);
         }
         ++reference_position;
@@ -124,10 +123,9 @@ void GenerateNMAndMDTag(const char *pattern, const char *text,
       read_position += num_cigar_operations;
     } else if (cigar_operation == BAM_CDEL) {
       mapping_in_memory.NM += num_cigar_operations;
-      if (num_matches != 0) {
-        mapping_in_memory.MD_tag.append(std::to_string(num_matches));
-        num_matches = 0;
-      }
+      
+      mapping_in_memory.MD_tag.append(std::to_string(num_matches));
+      num_matches = 0;
       mapping_in_memory.MD_tag.push_back('^');
       for (int opi = 0; opi < num_cigar_operations; ++opi) {
         mapping_in_memory.MD_tag.push_back(reference[reference_position]);
@@ -137,9 +135,7 @@ void GenerateNMAndMDTag(const char *pattern, const char *text,
       std::cerr << "Unexpected cigar op: " << (int)cigar_operation << "\n";
     }
   }
-  if (num_matches != 0) {
-    mapping_in_memory.MD_tag.append(std::to_string(num_matches));
-  }
+  mapping_in_memory.MD_tag.append(std::to_string(num_matches));
 }
 
 int BandedAlignPatternToText(int error_threshold, const char *pattern,
