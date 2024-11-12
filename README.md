@@ -25,7 +25,7 @@ cd chromap && make
     - [Map ChIP-seq short reads](#map-chip)
     - [Map ATAC-seq/scATAC-seq short reads](#map-atac)
     - [Map Hi-C short reads](#map-hic)
-  - [Summarizing mapping statistcs/quality control](#atacseq-qc)
+  - [Summarizing mapping statistics/quality control](#atacseq-qc)
     - [Summary File](#summaryfile)
     - [Estimating FRiP](#estfrip)
     - [Features to assist in doublet detection](#doublet)
@@ -128,7 +128,7 @@ chromap --preset hic -x index -r ref.fa -1 read1.fa -2 read2.fa -o aln.pairs    
 ```
 Chromap will perform split alignment (**--split-alignment**) on Hi-C reads and output mappings in [pairs][pairs] format (**--pairs**), which is used in [4DN Hi-C data processing pipeline][4DN]. Some Hi-C data analysis pipelines may require the reads are sorted in specific chromosome order other than the one in the index. Therefore, Chromap provides the option **--chr-order** to specify the alignment order, and **--pairs-natural-chr-order** for flipping the pair in the pairs format. 
 
-### <a name="atacseq-qc"></a>Summarizing mapping statistcs/quality control
+### <a name="atacseq-qc"></a>Summarizing mapping statistics/quality control
 
 Chromap allows you to summarize the dataset's mapping statistics as well as quality metrics at either a *bulk* or *single cell* level. To enable this feature, users can specify a file path using this option, **--summary [FILE]**, where a csv file will be saved.
 
