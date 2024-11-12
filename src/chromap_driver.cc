@@ -79,10 +79,12 @@ void AddMappingOptions(cxxopts::Options &options) {
                         cxxopts::value<int>(), "INT")
       ("cache-size", "number of cache entries [4000003]", cxxopts::value<int>(), "INT")
       ("cache-update-param", "value used to control number of reads sampled [0.01]", cxxopts::value<double>(), "FLT")
-      ("use-all-reads", "use all reads for cache")
+      ("use-all-reads", "use all reads for cache (it will slow down execution)")
       ("debug-cache", "verbose output for debugging cache used in chromap")
-      ("frip-est-params", "coefficients used for chromap score calculation separated by semi-colons",
-      cxxopts::value<std::string>(), "STR");
+      ("frip-est-params", "coefficients used for frip est calculation, separated by semi-colons",
+      cxxopts::value<std::string>(), "STR")
+      ("turn-off-num-uniq-cache-slots", "turn off the output of number of cache slots in summary file")
+      ("k-for-minhash", "number of values stored in each MinHash sketch [250]", cxxopts::value<int>(), "INT");
 }
 
 void AddInputOptions(cxxopts::Options &options) {
@@ -354,7 +356,15 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
   if (result.count("frip-est-params")) {
     mapping_parameters.frip_est_params = result["frip-est-params"].as<std::string>();
   }
-
+  if (result.count("turn-off-num-uniq-cache-slots")) {
+    mapping_parameters.output_num_uniq_cache_slots = false;
+  } 
+  if (result.count("k-for-minhash")) {
+    mapping_parameters.k_for_minhash = result["k-for-minhash"].as<int>();
+    if (mapping_parameters.k_for_minhash < 1 || mapping_parameters.k_for_minhash >= 2000) {
+      chromap::ExitWithMessage("Invalid paramter for size of MinHash sketch (--k-for-minhash)");
+    }
+  }
 
 
   if (result.count("min-read-length")) {

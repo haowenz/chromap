@@ -68,7 +68,7 @@ class MappingWriter {
       std::vector<TempMappingFileHandle<MappingRecord>>
           &temp_mapping_file_handles);
 
-  void OutputSummaryMetadata(std::vector<double> frip_est_coeffs = {0.0, 0.0, 0.0, 0.0, 0.0});
+  void OutputSummaryMetadata(std::vector<double> frip_est_coeffs = {0.0, 0.0, 0.0, 0.0, 0.0}, bool output_num_cache_slots_info = true);
   void UpdateSummaryMetadata(uint64_t barcode, int type, int change);
   void UpdateSpeicalCategorySummaryMetadata(int category, int type, int change);
   void AdjustSummaryPairedEndOverCount();
@@ -444,13 +444,14 @@ void MappingWriter<MappingRecord>::OutputMappings(
 }
 
 template <typename MappingRecord>
-void MappingWriter<MappingRecord>::OutputSummaryMetadata(std::vector<double> frip_est_coeffs) {
+void MappingWriter<MappingRecord>::OutputSummaryMetadata(std::vector<double> frip_est_coeffs, bool output_num_cache_slots_info) {
   if (!mapping_parameters_.summary_metadata_file_path.empty())
   {
     summary_metadata_.Output(
         mapping_parameters_.summary_metadata_file_path.c_str(),
         !mapping_parameters_.barcode_whitelist_file_path.empty() && !mapping_parameters_.output_mappings_not_in_whitelist,
-        frip_est_coeffs
+        frip_est_coeffs,
+        output_num_cache_slots_info
         );
   }
 }

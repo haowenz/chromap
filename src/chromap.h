@@ -9,6 +9,9 @@
 #include <tuple>
 #include <vector>
 
+#include <queue> // Used these two for k-minhash
+#include <unordered_set>
+
 #include <sstream> // Used for frip est params splitting
 
 #include "candidate_processor.h"
@@ -34,6 +37,49 @@
 #define CHROMAP_VERSION "0.2.7-r494"
 
 namespace chromap {
+
+class K_MinHash {
+public:
+    /*
+     * MinHash Class - used to estimate the number of unique cache slots 
+     *                 hit by each barcode
+     *
+     * @param k - size of MinHash sketch
+     * @param range - range of possible cache ids
+     */
+    K_MinHash(size_t k, size_t range) : k_(k), range_(range) {}
+
+    // K_MinHash(): k_(250), range_(4000003) {}
+
+    void add(size_t num) {
+      /* If num is not present in queue, we will add it */
+        if (unique_slots_.find(num) == unique_slots_.end()) {
+            unique_slots_.insert(num);
+            pq_.push(num);
+            // only keep smallest k numbers
+            if (pq_.size() > k_) {
+                unique_slots_.erase(pq_.top());
+                pq_.pop();
+            }
+        }
+    }
+
+    size_t compute_cardinality() {
+      /* Use k-MinHash estimator to return estimated cardinality */
+      size_t k_for_calc = k_;
+      if (pq_.size() < k_) {k_for_calc = pq_.size();}
+      size_t cardinality = (k_for_calc * range_)/pq_.top() - 1;
+      return cardinality;
+    }
+
+private:
+    size_t k_;
+    size_t range_;
+
+    /* Uses an unordered set to have O(1) find queries*/
+    std::priority_queue<uint32_t> pq_; // max-heap
+    std::unordered_set<uint32_t> unique_slots_; // keep track of unique values
+};
 
 class Chromap {
  public:
@@ -635,6 +681,19 @@ void Chromap::MapPairedEndReads() {
   
   std::vector<uint64_t> seeds_for_batch(500000, 0);
 
+  // Variables used for counting number of associated cache slots
+  bool output_num_cache_slots_info = mapping_parameters_.output_num_uniq_cache_slots;
+  const size_t k_for_minhash = mapping_parameters_.k_for_minhash;
+
+  std::cerr << "Output number of associated cache slots: " << output_num_cache_slots_info << std::endl;
+  std::cerr << "K for MinHash: " << k_for_minhash << std::endl;
+
+  int num_locks_for_map = 1000;
+  omp_lock_t map_locks[num_locks_for_map];
+  for (int i = 0; i < num_locks_for_map; ++i) {omp_init_lock(&map_locks[i]);}
+  
+  std::vector<std::unordered_map<size_t, K_MinHash>> barcode_peak_map(num_locks_for_map);
+
   // Parse out the parameters for chromap score (const, fric, dup, unmapped, lowmapq)
   std::vector<double> frip_est_params; 
   std::stringstream ss(mapping_parameters_.frip_est_params);
@@ -887,24 +946,24 @@ void Chromap::MapPairedEndReads() {
                 size_t current_num_candidates2 = paired_end_mapping_metadata.mapping_metadata2_.GetNumCandidates();
 
                 // increment variable for cache_hits
-                //bool curr_read_hit_cache = false;
+                bool curr_read_hit_cache = false;
                 if (cache_query_result1 >= 0 || cache_query_result2 >= 0) {
                   cache_hits_for_batch++;
-                  //curr_read_hit_cache = true;
+                  curr_read_hit_cache = true;
                 }
 
                 // update the peak counting data-structure
-                // if (output_peak_info && curr_read_hit_cache) {
-                //   // calculate which map this barcode is in
-                //   size_t map_id = curr_seed_val % num_locks_for_map;
+                if (output_num_cache_slots_info && curr_read_hit_cache) {
+                  // calculate which map this barcode is in
+                  size_t map_id = curr_seed_val % num_locks_for_map;
                 
-                //   // grab lock for this map, and add to the K-MinHash for this particular barcode
-                //   omp_set_lock(&map_locks[map_id]);
-                //   auto it = barcode_peak_map[map_id].emplace(curr_seed_val, K_MinHash(k_for_minhash, mapping_parameters_.cache_size)).first;
-                //   if (cache_query_result1 >= 0) {it->second.add(cache_query_result1);}
-                //   if (cache_query_result2 >= 0) {it->second.add(cache_query_result2);}
-                //   omp_unset_lock(&map_locks[map_id]);
-                // }
+                  // grab lock for this map, and add to the K-MinHash for this particular barcode
+                  omp_set_lock(&map_locks[map_id]);
+                  auto it = barcode_peak_map[map_id].emplace(curr_seed_val, K_MinHash(k_for_minhash, mapping_parameters_.cache_size)).first;
+                  if (cache_query_result1 >= 0) {it->second.add(cache_query_result1);}
+                  if (cache_query_result2 >= 0) {it->second.add(cache_query_result2);}
+                  omp_unset_lock(&map_locks[map_id]);
+                }
 
                 if (pair_index < history_update_threshold) {
                   mm_history1[pair_index].timestamp =
@@ -1284,10 +1343,31 @@ void Chromap::MapPairedEndReads() {
     //  }
     //}
   }
+  
   if (mapping_parameters_.mapping_output_format == MAPPINGFORMAT_SAM)
     mapping_writer.AdjustSummaryPairedEndOverCount() ;
-  
-  mapping_writer.OutputSummaryMetadata(frip_est_params);
+
+  // Destory the locks used for map
+  for (int i = 0; i < num_locks_for_map; ++i) {
+    omp_destroy_lock(&map_locks[i]);
+  }
+
+  // Add cardinality information to summary metadata
+  if (output_num_cache_slots_info) {
+    for (auto curr_map: barcode_peak_map) {
+      for (auto &pair: curr_map) {
+        size_t curr_seed = pair.first;
+        size_t est_num_slots = pair.second.compute_cardinality();
+
+        mapping_writer.UpdateSummaryMetadata( 
+                          curr_seed,
+                          SUMMARY_METADATA_CARDINALITY, 
+                          est_num_slots);
+      }
+    }
+  }
+
+  mapping_writer.OutputSummaryMetadata(frip_est_params, output_num_cache_slots_info);
   reference.FinalizeLoading();
   
   std::cerr << "Total time: " << GetRealTime() - real_start_time << "s.\n";
