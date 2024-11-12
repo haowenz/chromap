@@ -9,6 +9,8 @@
 #include <tuple>
 #include <vector>
 
+#include <sstream> // Used for frip est params splitting
+
 #include "candidate_processor.h"
 #include "cxxopts.hpp"
 #include "draft_mapping_generator.h"
@@ -632,6 +634,29 @@ void Chromap::MapPairedEndReads() {
   std::cerr << "Cache Update Param: " << mapping_parameters_.cache_update_param << std::endl;
   
   std::vector<uint64_t> seeds_for_batch(500000, 0);
+
+  // Parse out the parameters for chromap score (const, fric, dup, unmapped, lowmapq)
+  std::vector<double> frip_est_params; 
+  std::stringstream ss(mapping_parameters_.frip_est_params);
+  std::string token;
+
+  while(std::getline(ss, token, ';')) {
+    try {
+      auto curr_param = std::stod(token);
+      frip_est_params.push_back(curr_param);
+    } catch(...) {
+      chromap::ExitWithMessage(
+        "\nException occurred while processing chromap score parameters\n"
+        );
+    }
+  }
+  if (frip_est_params.size() != 5) {
+    chromap::ExitWithMessage(
+      "\nInvalid number of parameters, expecting 5 parameters but found " 
+      + std::to_string(frip_est_params.size()) 
+      + " parameters\n"
+      );
+  }
 
   // Initialize cache
   mm_cache mm_to_candidates_cache(mapping_parameters_.cache_size);
@@ -1261,8 +1286,8 @@ void Chromap::MapPairedEndReads() {
   }
   if (mapping_parameters_.mapping_output_format == MAPPINGFORMAT_SAM)
     mapping_writer.AdjustSummaryPairedEndOverCount() ;
-  mapping_writer.OutputSummaryMetadata();
-
+  
+  mapping_writer.OutputSummaryMetadata(frip_est_params);
   reference.FinalizeLoading();
   
   std::cerr << "Total time: " << GetRealTime() - real_start_time << "s.\n";
