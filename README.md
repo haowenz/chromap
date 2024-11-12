@@ -25,6 +25,10 @@ cd chromap && make
     - [Map ChIP-seq short reads](#map-chip)
     - [Map ATAC-seq/scATAC-seq short reads](#map-atac)
     - [Map Hi-C short reads](#map-hic)
+  - [Summarizing mapping statistcs/quality control](#atacseq-qc)
+    - [Summary File](#summaryfile)
+    - [Estimating FRiP](#estfrip)
+    - [Features to assist in doublet detection](#doublet)
   - [Getting help](#help)
   - [Citing Chromap](#cite)
 
@@ -123,6 +127,52 @@ Besides, Chromap can translate input cell barcodes to another set of barcodes. U
 chromap --preset hic -x index -r ref.fa -1 read1.fa -2 read2.fa -o aln.pairs           # Hi-C reads and pairs output
 ```
 Chromap will perform split alignment (**--split-alignment**) on Hi-C reads and output mappings in [pairs][pairs] format (**--pairs**), which is used in [4DN Hi-C data processing pipeline][4DN]. Some Hi-C data analysis pipelines may require the reads are sorted in specific chromosome order other than the one in the index. Therefore, Chromap provides the option **--chr-order** to specify the alignment order, and **--pairs-natural-chr-order** for flipping the pair in the pairs format. 
+
+### <a name="atacseq-qc"></a>Summarizing mapping statistcs/quality control
+
+Chromap allows you to summarize the dataset's mapping statistics as well as quality metrics at either a *bulk* or *single cell* level. To enable this feature, users can specify a file path using this option, **--summary [FILE]**, where a csv file will be saved.
+
+This summary file will output a series of metrics for each barcode (or the overall dataset if it is bulk). Here are the different columns contained within the summary file:
+
+```sh
+barcode,total,duplicate,unmapped,lowmapq,cachehit,fric,estfrip,numcacheslots
+```
+
+- `barcode` - Barcode label for cell
+- `total` - Total number of fragments
+- `duplicate` - Number of duplicate fragments
+- `unmapped` - Number of unmapped fragments 
+- `lowmapq` - Number of fragments with a low MAPQ
+- `cachehit` - Number of fragments that were found in the chromap cache during alignment
+- `fric` - Fraction of fragments in the chromap cache
+- `estfrip` - Estimated FRiP value based on a linear model ([See below for more details](#estfrip))
+- `numcacheslots` - Number of unique associated cache slots for this barcode (Relevant feature for doublet detection, [see below for more](#doublet))
+
+The summary contains metrics relevant to the mappability of fragments from each barcode. 
+However, it also contains metrics (`estfrip` and `numcacheslots`) relevant to quality control for chromatin profiling assays like ATAC-seq, CHIP-seq and Hi-C data. 
+The next two sections briefly describe these two metrics and how they can be useful for users.
+
+#### <a name="estfrip"></a>Estimating FRiP
+
+The `estfrip` column in Chromap's summary file represents an estimate of the FRiP score (Fraction of Reads in Peak Regions) computed by Chromap.
+Chromap uses a simple multi-variate linear model to estimate the FRiP for each barcode and the features used in this model are `fric`, `duplicate`, `unmapped` and `lowmapq`.
+
+Typically, the FRiP score is used to assess the quality of chromatin profiles, where typically the higher the FRiP score the better. 
+
+For users, this `estfrip` can be used to quickly gauge the quality of the data by plotting all the values in a histogram and looking to see if you a multi-modal distribution.
+In addition, when combining Chromap with downstream analysis tools such as [SnapATAC2](https://github.com/kaizhang/SnapATAC2) that perform clustering, the `estfrip` can be used to quickly identify any specific clusters that are lower quality than the rest.
+
+**An important note to users**, the `estfrip` values for every barcode should not be taken by themselves and used as the true FRiP score.
+These estimates are mainly intended to be used for quality control at a dataset level where we compare different `estfrip` values to each other.
+
+#### <a name="doublet"></a>Features to assist in doublet detection
+
+The `numcacheslots` column in Chromap's summary file estimates the number of unique cache slots queried for each barcode during the alignment. This feature can be useful in assisting users for doublet detection/filtering.
+
+Typically for doublet detection in single-cell datasets, a simple and naive metric used to identify potential doublets is the number of fragments in cells (i.e. more reads, more likely a doublet). 
+
+Chromap uses the simple intuition that barcodes with higher number of peaks than usual, could be doublets. The number of unique cache slots that are queried can be seen as a proxy for the number of peaks. In our experiments, using `numcacheslots` yields a larger AUC compared using `total` for binary classification of doublets. Therefore, users can potentially use this metric as an additional check/feature along with other doublet-detection specific methods.
+
 
 ### <a name="help"></a>Getting help
 
