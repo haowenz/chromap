@@ -19,6 +19,7 @@ enum SummaryMetadataField {
   SUMMARY_METADATA_MAPPED,
   SUMMARY_METADATA_LOWMAPQ,
 	SUMMARY_METADATA_CACHEHIT,
+  SUMMARY_METADATA_CARDINALITY,
   SUMMARY_METADATA_FIELDS
 };
 
@@ -42,7 +43,7 @@ class SummaryMetadata {
     kh_destroy(k64_barcode_metadata, barcode_metadata_);
   }
 
-  inline void OutputCounts(const char *barcode, const int *counts, FILE *fp, std::vector<double> frip_est_coeffs)
+  inline void OutputCounts(const char *barcode, const int *counts, FILE *fp, std::vector<double> frip_est_coeffs, bool output_num_cache_slots_info)
   {
     // define variables to store values
     size_t num_total = counts[SUMMARY_METADATA_TOTAL];
@@ -55,6 +56,8 @@ class SummaryMetadata {
     size_t num_cachehit = counts[SUMMARY_METADATA_CACHEHIT];
     double fric = (double) num_cachehit / (double) num_mapped;
 
+    size_t num_cache_slots = counts[SUMMARY_METADATA_CARDINALITY];
+
     // compute the estimated frip
     double est_frip = frip_est_coeffs[0] + /* constant */
                       (frip_est_coeffs[1] * fric) +
@@ -62,21 +65,40 @@ class SummaryMetadata {
                       (frip_est_coeffs[3] * num_unmapped)  +
                       (frip_est_coeffs[4] * num_lowmapq);
 
-    // print barcode as string
-    fprintf(fp, "%s,%ld,%ld,%ld,%ld,%ld,%.5lf,%.5lf\n", 
-            barcode,
-            num_total,
-            num_dup,
-            num_unmapped,
-            num_lowmapq,
-            num_cachehit,
-            fric,
-            est_frip);
+    // print out data for current barcode
+    if (!output_num_cache_slots_info) {
+      fprintf(fp, "%s,%ld,%ld,%ld,%ld,%ld,%.5lf,%.5lf\n", 
+              barcode,
+              num_total,
+              num_dup,
+              num_unmapped,
+              num_lowmapq,
+              num_cachehit,
+              fric,
+              est_frip);
+    } else {
+      fprintf(fp, "%s,%ld,%ld,%ld,%ld,%ld,%.5lf,%.5lf,%ld\n", 
+              barcode,
+              num_total,
+              num_dup,
+              num_unmapped,
+              num_lowmapq,
+              num_cachehit,
+              fric,
+              est_frip,
+              num_cache_slots);
+    }
   }
 
-  void Output(const char *filename, bool has_white_list, std::vector<double> frip_est_coeffs) {
+  void Output(const char *filename, bool has_white_list, std::vector<double> frip_est_coeffs, bool output_num_cache_slots_info) {
     FILE *fp = fopen(filename, "w");
-    fprintf(fp, "barcode,total,duplicate,unmapped,lowmapq,cachehit,fric,estfrip\n");   
+
+    // Change summary file header depending on options
+    if (!output_num_cache_slots_info)
+      fprintf(fp, "barcode,total,duplicate,unmapped,lowmapq,cachehit,fric,estfrip\n");   
+    else
+      fprintf(fp, "barcode,total,duplicate,unmapped,lowmapq,cachehit,fric,estfrip,numcacheslots\n"); 
+
     khiter_t k;
     for (k = kh_begin(barcode_metadata_); k != kh_end(barcode_metadata_); ++k)
       if (kh_exist(barcode_metadata_, k)) {
@@ -84,7 +106,8 @@ class SummaryMetadata {
                     Seed2Sequence(kh_key(barcode_metadata_, k), barcode_length_).c_str(),
                     kh_value(barcode_metadata_, k).counts, 
                     fp,
-                    frip_est_coeffs
+                    frip_est_coeffs,
+                    output_num_cache_slots_info
                     );
       }
     if (has_white_list) {
@@ -92,7 +115,8 @@ class SummaryMetadata {
                    "non-whitelist", 
                    nonwhitelist_summary_.counts, 
                    fp,
-                   frip_est_coeffs
+                   frip_est_coeffs,
+                   output_num_cache_slots_info
                    ) ;
     }
     fclose(fp);

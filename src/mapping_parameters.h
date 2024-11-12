@@ -29,6 +29,8 @@ struct MappingParameters {
   bool use_all_reads = false;
   bool debug_cache = false;
   std::string frip_est_params = "0.2809;0.8921;7.490e-06;-1.893e-05;-2.178e-05";
+  bool output_num_uniq_cache_slots = true;
+  int k_for_minhash = 250;
 
   // Read with # best mappings greater than it will have this number of best
   // mappings reported.
