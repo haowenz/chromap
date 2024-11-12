@@ -54,16 +54,16 @@ class SummaryMetadata {
 
     size_t num_lowmapq = counts[SUMMARY_METADATA_LOWMAPQ];
     size_t num_cachehit = counts[SUMMARY_METADATA_CACHEHIT];
-    double fric = (double) num_cachehit / (double) num_mapped;
+    double fric = (num_mapped != 0) ? (double) num_cachehit / (double) num_mapped : 0.0;
 
     size_t num_cache_slots = counts[SUMMARY_METADATA_CARDINALITY];
 
     // compute the estimated frip
-    double est_frip = frip_est_coeffs[0] + /* constant */
+    double est_frip = (fric != 0.0) ? frip_est_coeffs[0] + /* constant */
                       (frip_est_coeffs[1] * fric) +
                       (frip_est_coeffs[2] * num_dup) +
                       (frip_est_coeffs[3] * num_unmapped)  +
-                      (frip_est_coeffs[4] * num_lowmapq);
+                      (frip_est_coeffs[4] * num_lowmapq) : 0.0;
 
     // print out data for current barcode
     if (!output_num_cache_slots_info) {
