@@ -76,7 +76,11 @@ void AddMappingOptions(cxxopts::Options &options) {
                  "Min probability to correct a barcode [0.9]",
                  cxxopts::value<double>(),
                  "FLT")("t,num-threads", "# threads for mapping [1]",
-                        cxxopts::value<int>(), "INT");
+                        cxxopts::value<int>(), "INT")
+      ("cache-size", "number of cache entries [4000003]", cxxopts::value<int>(), "INT")
+      ("cache-update-param", "value used to control number of reads sampled [0.01]", cxxopts::value<double>(), "FLT")
+      ("use-all-reads", "use all reads for cache")
+      ("debug-cache", "verbose output for debugging cache used in chromap");
 }
 
 void AddInputOptions(cxxopts::Options &options) {
@@ -324,6 +328,30 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
   if (result.count("t")) {
     mapping_parameters.num_threads = result["num-threads"].as<int>();
   }
+
+
+  // check cache-related parameters
+  if (result.count("cache-update-param")) {
+    mapping_parameters.cache_update_param = result["cache-update-param"].as<double>();
+    if (mapping_parameters.cache_update_param < 0.0 || mapping_parameters.cache_update_param > 1.0){
+      chromap::ExitWithMessage("cache update param is not approriate, must be in this range (0, 1]");
+    }
+  } 
+  if (result.count("cache-size")) {
+    mapping_parameters.cache_size = result["cache-size"].as<int>();
+    if (mapping_parameters.cache_size < 2000000 || mapping_parameters.cache_size > 15000000) {
+        chromap::ExitWithMessage("cache size is not in appropriate range\n");
+    }
+  }
+  if (result.count("use-all-reads")) {
+    mapping_parameters.use_all_reads = true;
+  }
+  if (result.count("debug-cache")) {
+    mapping_parameters.debug_cache = true;
+  }
+
+
+
   if (result.count("min-read-length")) {
     mapping_parameters.min_read_length = result["min-read-length"].as<int>();
   }

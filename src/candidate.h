@@ -18,6 +18,8 @@ struct Candidate {
 
   inline uint32_t GetReferenceSequencePosition() const { return position; }
 
+  inline uint8_t GetCount() { return count; }
+
   inline bool operator<(const Candidate &c) const {
     if (count > c.count) {
       return true;

@@ -23,6 +23,12 @@ struct MappingParameters {
   std::vector<int> gap_extension_penalties = {1, 1};
   int min_num_seeds_required_for_mapping = 2;
   std::vector<int> max_seed_frequencies = {500, 1000};
+
+  double cache_update_param = 0.01;
+  int cache_size = 4000003;
+  bool use_all_reads = false;
+  bool debug_cache = false;
+
   // Read with # best mappings greater than it will have this number of best
   // mappings reported.
   int max_num_best_mappings = 1;
