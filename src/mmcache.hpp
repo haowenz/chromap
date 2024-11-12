@@ -3,6 +3,7 @@
 
 #include "index.h"
 #include "minimizer.h"
+#include <mutex>
 
 #define FINGER_PRINT_SIZE 103
 
@@ -27,6 +28,9 @@ class mm_cache {
  private:
   int cache_size;
   struct _mm_cache_entry *cache;
+  int num_locks_for_cache = 1000;
+  omp_lock_t entry_locks_omp[1000];
+  std::mutex print_lock;
   int kmer_length;
   int update_limit;
   int saturate_count;
@@ -92,11 +96,21 @@ class mm_cache {
     memset(head_mm, 0, sizeof(uint64_t) * HEAD_MM_ARRAY_SIZE);
     update_limit = 10;
     saturate_count = 100;
+
+    // initialize the array of OpenMP locks
+    for (int i = 0; i < num_locks_for_cache; ++i) {
+        omp_init_lock(&entry_locks_omp[i]);
+    }
   }
 
   ~mm_cache() {
     delete[] cache;
     delete[] head_mm;
+  
+    // destory OpenMP locks for parallelizing cache update
+    for (int i = 0; i < num_locks_for_cache; ++i) {
+      omp_destroy_lock(&entry_locks_omp[i]);
+    }
   }
 
   void SetKmerLength(int kl) { kmer_length = kl; }
@@ -173,16 +187,14 @@ class mm_cache {
   void Update(const std::vector<Minimizer> &minimizers,
               std::vector<Candidate> &pos_candidates,
               std::vector<Candidate> &neg_candidates,
-              uint32_t repetitive_seed_length) {
+              uint32_t repetitive_seed_length,
+              bool debug=false) {
     int i;
     int msize = minimizers.size();
 
     uint64_t h = 0;  // for hash
     uint64_t f = 0;  // for finger printing
-    /*for (i = 0; i < msize; ++i) {
-      h += (minimizers[i].first);
-      f ^= (minimizers[i].first);
-    }*/
+
     if (msize == 0)
       return;
     else if (msize == 1) {
@@ -194,61 +206,60 @@ class mm_cache {
     int hidx = h % cache_size;
     int finger_print = f % FINGER_PRINT_SIZE;
 
+    // beginning of locking phase - make sure to release it wherever we exit
+    int lock_index = hidx % num_locks_for_cache;
+    omp_set_lock(&entry_locks_omp[lock_index]);  
+
     ++cache[hidx].finger_print_cnt[finger_print];
     ++cache[hidx].finger_print_cnt_sum;
-    if (cache[hidx].finger_print_cnt_sum > saturate_count) return;
 
-    /*int rate = 2;
-if (cache[hidx].finger_print_cnt_sum <= 2)
-            rate = 0;
-    else if (cache[hidx].finger_print_cnt_sum < 5)
-            rate = 2;
-    else if (cache[hidx].finger_print_cnt_sum < 10)
-            rate = 4;
-    else
-            rate = 5;*/
+    // case 1: already saturated
+    if (cache[hidx].finger_print_cnt_sum > saturate_count){ 
+      omp_unset_lock(&entry_locks_omp[lock_index]);
+      return;
+    }
 
-    /*int rate = 2;
-if (cache[hidx].finger_print_cnt_sum <= 5)
-            rate = 0;
-    else if (cache[hidx].finger_print_cnt_sum < 10)
-            rate = 3;
-    else
-            rate = 5;*/
-
+    // case 2: no heavy hitter or not enough yet
     if (cache[hidx].finger_print_cnt_sum < 10 ||
         (int)cache[hidx].finger_print_cnt[finger_print] * 5 <
             cache[hidx].finger_print_cnt_sum) {
+      omp_unset_lock(&entry_locks_omp[lock_index]);
       return;
     }
-    /*if ((int)cache[hidx].finger_print_cnt[finger_print] * rate <
-       cache[hidx].finger_print_cnt_sum) { return ;
-                }*/
+
     int direction = IsMinimizersMatchCache(minimizers, cache[hidx]);
     if (direction != 0)
       ++cache[hidx].weight;
     else
       --cache[hidx].weight;
     cache[hidx].activated = 1;
+
     // Renew the cache
     if (cache[hidx].weight < 0) {
       cache[hidx].weight = 1;
       cache[hidx].minimizers.resize(msize);
+
       if (msize == 0) {
         cache[hidx].offsets.clear();
         cache[hidx].strands.clear();
+        omp_unset_lock(&entry_locks_omp[lock_index]);
         return;
       }
+
       int size = pos_candidates.size();
       int shift = (int)minimizers[0].GetSequencePosition();
+
       // Do not cache if it is too near the start.
       for (i = 0; i < size; ++i)
         if ((int)pos_candidates[i].position < kmer_length + shift) {
           cache[hidx].offsets.clear();
           cache[hidx].strands.clear();
           cache[hidx].minimizers.clear();
+
+          omp_unset_lock(&entry_locks_omp[lock_index]);
           return;
         }
+
       size = neg_candidates.size();
       for (i = 0; i < size; ++i)
         if ((int)neg_candidates[i].position -
@@ -257,6 +268,8 @@ if (cache[hidx].finger_print_cnt_sum <= 5)
           cache[hidx].offsets.clear();
           cache[hidx].strands.clear();
           cache[hidx].minimizers.clear();
+
+          omp_unset_lock(&entry_locks_omp[lock_index]);
           return;
         }
       cache[hidx].offsets.resize(msize - 1);
@@ -284,12 +297,45 @@ if (cache[hidx].finger_print_cnt_sum <= 5)
       for (i = 0; i < size; ++i)
         cache[hidx].negative_candidates[i].position -= shift;
 
+      // Debugging output (candidate stored in cache)
+      if (debug) {
+        print_lock.lock();
+        std::cout << "[DEBUG][CACHE][1] hidx = " << hidx << std::endl;
+        std::cout << "[DEBUG][CACHE][2]" << " pos.size() = " 
+                                << cache[hidx].positive_candidates.size() 
+                                << " , " << "neg.size() = " 
+                                << cache[hidx].negative_candidates.size()  
+                                << " , msize = " << msize << std::endl;
+        std::cout << "[DEBUG][CACHE][3] ";
+        for (const auto &minimizer : minimizers) {
+          std::cout << minimizer.GetHash() << " ";
+        } std::cout << std::endl;
+
+        for (size_t j = 0; j < cache[hidx].positive_candidates.size(); ++j) {
+          std::cout << "[DEBUG][CACHE][+] " 
+                    << "hidx = " << hidx
+                    << " , cand_ref_seq = " << cache[hidx].positive_candidates[j].GetReferenceSequenceIndex() 
+                    << " , cand_ref_pos = " << cache[hidx].positive_candidates[j].GetReferenceSequencePosition()
+                    << " , support = " << unsigned(cache[hidx].positive_candidates[j].GetCount()) << std::endl;
+        }
+
+        for (size_t j = 0; j < cache[hidx].negative_candidates.size(); ++j) {
+          std::cout << "[DEBUG][CACHE][-] " 
+                    << "hidx = " << hidx
+                    << " , cand_ref_seq = " << cache[hidx].negative_candidates[j].GetReferenceSequenceIndex() 
+                    << " , cand_ref_pos = " << cache[hidx].negative_candidates[j].GetReferenceSequencePosition() 
+                    << " , support = " << unsigned(cache[hidx].negative_candidates[j].GetCount()) << std::endl;
+        }
+        print_lock.unlock();
+      }
+
       // Update head mm array
       head_mm[(minimizers[0].GetHash() >> 6) & HEAD_MM_ARRAY_MASK] |=
           (1ull << (minimizers[0].GetHash() & 0x3f));
       head_mm[(minimizers[msize - 1].GetHash() >> 6) & HEAD_MM_ARRAY_MASK] |=
           (1ull << (minimizers[msize - 1].GetHash() & 0x3f));
     }
+    omp_unset_lock(&entry_locks_omp[lock_index]);
   }
 
   void DirectUpdateWeight(int idx, int weight) { cache[idx].weight += weight; }
@@ -309,13 +355,19 @@ if (cache[hidx].finger_print_cnt_sum <= 5)
 
   // How many reads from a batch we want to use to update the cache.
   // paired end data has twice the amount reads, so the threshold is lower
-  uint32_t GetUpdateThreshold(uint32_t num_loaded_reads, uint64_t num_reads,
-                              bool paired) {
-    const uint32_t block = paired ? 2500000 : 5000000;
+  uint32_t GetUpdateThreshold(uint32_t num_loaded_reads, 
+                              uint64_t num_reads,
+                              bool paired,
+                              bool use_all_reads,
+                              double cache_update_param
+                              ) {
+    const uint32_t block = paired ? 2500000 : 5000000;    
+    if (use_all_reads) {return num_loaded_reads;}
+
     if (num_reads <= block)
       return num_loaded_reads;
     else
-      return num_loaded_reads / (1 + (num_reads / block));
+      return num_loaded_reads / (1 + (cache_update_param * (num_reads / block)));
   }
 
   void PrintStats() {

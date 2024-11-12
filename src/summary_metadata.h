@@ -18,6 +18,7 @@ enum SummaryMetadataField {
   SUMMARY_METADATA_DUP,
   SUMMARY_METADATA_MAPPED,
   SUMMARY_METADATA_LOWMAPQ,
+	SUMMARY_METADATA_CACHEHIT,
   SUMMARY_METADATA_FIELDS
 };
 
@@ -41,27 +42,41 @@ class SummaryMetadata {
     kh_destroy(k64_barcode_metadata, barcode_metadata_);
   }
 
-  void OutputCounts(const char *barcode, const int *counts, FILE *fp)
+  inline void OutputCounts(const char *barcode, const int *counts, FILE *fp)
   {
-    fprintf(fp, "%s", barcode) ;
-    int i ;
-    for (i = 0; i < SUMMARY_METADATA_FIELDS; ++i) {
-      if (i != SUMMARY_METADATA_MAPPED)
-        fprintf(fp, ",%d", counts[i]);
-      else // The output in the summary is for unmapped reads
-        fprintf(fp, ",%d", counts[SUMMARY_METADATA_TOTAL] - counts[SUMMARY_METADATA_MAPPED]) ;
-    }
-    fprintf(fp, "\n");
+    // define variables to store values
+    size_t num_total = counts[SUMMARY_METADATA_TOTAL];
+    size_t num_dup = counts[SUMMARY_METADATA_DUP]; 
+    
+    size_t num_mapped = counts[SUMMARY_METADATA_MAPPED];
+    size_t num_unmapped = num_total - num_mapped;
+
+    size_t num_lowmapq = counts[SUMMARY_METADATA_LOWMAPQ];
+    size_t num_cachehit = counts[SUMMARY_METADATA_CACHEHIT];
+    double fric = (double) num_cachehit / (double) num_mapped;
+    
+    // print barcode as string
+    fprintf(fp, "%s,%ld,%ld,%ld,%ld,%ld,%.5lf\n", 
+            barcode,
+            num_total,
+            num_dup,
+            num_unmapped,
+            num_lowmapq,
+            num_cachehit,
+            fric);
   }
 
   void Output(const char *filename, bool has_white_list) {
     FILE *fp = fopen(filename, "w");
-    fprintf(fp, "barcode,total,duplicate,unmapped,lowmapq\n");   
+    fprintf(fp, "barcode,total,duplicate,unmapped,lowmapq,cachehit,fric\n");   
     khiter_t k;
     for (k = kh_begin(barcode_metadata_); k != kh_end(barcode_metadata_); ++k)
       if (kh_exist(barcode_metadata_, k)) {
-        OutputCounts(Seed2Sequence(kh_key(barcode_metadata_, k), barcode_length_).c_str(),
-            kh_value(barcode_metadata_, k).counts, fp) ;
+        OutputCounts(
+                    Seed2Sequence(kh_key(barcode_metadata_, k), barcode_length_).c_str(),
+                    kh_value(barcode_metadata_, k).counts, 
+                    fp
+                    );
       }
     if (has_white_list) {
       OutputCounts("non-whitelist", nonwhitelist_summary_.counts, fp) ;
