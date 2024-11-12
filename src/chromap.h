@@ -1366,6 +1366,7 @@ void Chromap::MapPairedEndReads() {
 
   mapping_writer.OutputSummaryMetadata(frip_est_params, output_num_cache_slots_info);
   reference.FinalizeLoading();
+  if (mapping_parameters_.debug_cache) {mm_to_candidates_cache.PrintStats();}
   
   std::cerr << "Total time: " << GetRealTime() - real_start_time << "s.\n";
 }
