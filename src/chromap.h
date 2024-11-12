@@ -49,9 +49,7 @@ public:
      */
     K_MinHash(size_t k, size_t range) : k_(k), range_(range) {}
 
-    // K_MinHash(): k_(250), range_(4000003) {}
-
-    void add(size_t num) {
+    inline void add(size_t num) {
       /* If num is not present in queue, we will add it */
         if (unique_slots_.find(num) == unique_slots_.end()) {
             unique_slots_.insert(num);
@@ -64,11 +62,10 @@ public:
         }
     }
 
-    size_t compute_cardinality() {
+    inline size_t compute_cardinality() {
       /* Use k-MinHash estimator to return estimated cardinality */
-      size_t k_for_calc = k_;
-      if (pq_.size() < k_) {k_for_calc = pq_.size();}
-      size_t cardinality = (k_for_calc * range_)/pq_.top() - 1;
+      if (pq_.size() < k_) {return 0;}
+      size_t cardinality = (k_ * range_)/pq_.top() - 1;
       return cardinality;
     }
 
