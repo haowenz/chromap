@@ -80,7 +80,9 @@ void AddMappingOptions(cxxopts::Options &options) {
       ("cache-size", "number of cache entries [4000003]", cxxopts::value<int>(), "INT")
       ("cache-update-param", "value used to control number of reads sampled [0.01]", cxxopts::value<double>(), "FLT")
       ("use-all-reads", "use all reads for cache")
-      ("debug-cache", "verbose output for debugging cache used in chromap");
+      ("debug-cache", "verbose output for debugging cache used in chromap")
+      ("frip-est-params", "coefficients used for chromap score calculation separated by semi-colons",
+      cxxopts::value<std::string>(), "STR");
 }
 
 void AddInputOptions(cxxopts::Options &options) {
@@ -348,6 +350,9 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
   }
   if (result.count("debug-cache")) {
     mapping_parameters.debug_cache = true;
+  }
+  if (result.count("frip-est-params")) {
+    mapping_parameters.frip_est_params = result["frip-est-params"].as<std::string>();
   }
 
 

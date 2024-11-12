@@ -42,7 +42,7 @@ class SummaryMetadata {
     kh_destroy(k64_barcode_metadata, barcode_metadata_);
   }
 
-  inline void OutputCounts(const char *barcode, const int *counts, FILE *fp)
+  inline void OutputCounts(const char *barcode, const int *counts, FILE *fp, std::vector<double> frip_est_coeffs)
   {
     // define variables to store values
     size_t num_total = counts[SUMMARY_METADATA_TOTAL];
@@ -54,32 +54,46 @@ class SummaryMetadata {
     size_t num_lowmapq = counts[SUMMARY_METADATA_LOWMAPQ];
     size_t num_cachehit = counts[SUMMARY_METADATA_CACHEHIT];
     double fric = (double) num_cachehit / (double) num_mapped;
-    
+
+    // compute the estimated frip
+    double est_frip = frip_est_coeffs[0] + /* constant */
+                      (frip_est_coeffs[1] * fric) +
+                      (frip_est_coeffs[2] * num_dup) +
+                      (frip_est_coeffs[3] * num_unmapped)  +
+                      (frip_est_coeffs[4] * num_lowmapq);
+
     // print barcode as string
-    fprintf(fp, "%s,%ld,%ld,%ld,%ld,%ld,%.5lf\n", 
+    fprintf(fp, "%s,%ld,%ld,%ld,%ld,%ld,%.5lf,%.5lf\n", 
             barcode,
             num_total,
             num_dup,
             num_unmapped,
             num_lowmapq,
             num_cachehit,
-            fric);
+            fric,
+            est_frip);
   }
 
-  void Output(const char *filename, bool has_white_list) {
+  void Output(const char *filename, bool has_white_list, std::vector<double> frip_est_coeffs) {
     FILE *fp = fopen(filename, "w");
-    fprintf(fp, "barcode,total,duplicate,unmapped,lowmapq,cachehit,fric\n");   
+    fprintf(fp, "barcode,total,duplicate,unmapped,lowmapq,cachehit,fric,estfrip\n");   
     khiter_t k;
     for (k = kh_begin(barcode_metadata_); k != kh_end(barcode_metadata_); ++k)
       if (kh_exist(barcode_metadata_, k)) {
         OutputCounts(
                     Seed2Sequence(kh_key(barcode_metadata_, k), barcode_length_).c_str(),
                     kh_value(barcode_metadata_, k).counts, 
-                    fp
+                    fp,
+                    frip_est_coeffs
                     );
       }
     if (has_white_list) {
-      OutputCounts("non-whitelist", nonwhitelist_summary_.counts, fp) ;
+      OutputCounts(
+                   "non-whitelist", 
+                   nonwhitelist_summary_.counts, 
+                   fp,
+                   frip_est_coeffs
+                   ) ;
     }
     fclose(fp);
   }
