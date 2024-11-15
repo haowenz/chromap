@@ -77,13 +77,9 @@ void AddMappingOptions(cxxopts::Options &options) {
                  cxxopts::value<double>(),
                  "FLT")("t,num-threads", "# threads for mapping [1]",
                         cxxopts::value<int>(), "INT")
-      ("cache-size", "number of cache entries [4000003]", cxxopts::value<int>(), "INT")
-      ("cache-update-param", "value used to control number of reads sampled [0.01]", cxxopts::value<double>(), "FLT")
-      ("debug-cache", "verbose output for debugging cache used in chromap")
       ("frip-est-params", "coefficients used for frip est calculation, separated by semi-colons",
       cxxopts::value<std::string>(), "STR")
-      ("turn-off-num-uniq-cache-slots", "turn off the output of number of cache slots in summary file")
-      ("k-for-minhash", "number of values stored in each MinHash sketch [250]", cxxopts::value<int>(), "INT");
+      ("turn-off-num-uniq-cache-slots", "turn off the output of number of cache slots in summary file");
 }
 
 void AddInputOptions(cxxopts::Options &options) {
@@ -155,7 +151,11 @@ void AddDevelopmentOptions(cxxopts::Options &options) {
       "INT")("allocate-multi-mappings", "Allocate multi-mappings")(
       "PAF", "Output mappings in PAF format (only for test)")(
       "skip-barcode-check",
-      "Do not check whether too few barcodes are in the whitelist");
+      "Do not check whether too few barcodes are in the whitelist")
+      ("cache-size", "number of cache entries [4000003]", cxxopts::value<int>(), "INT")
+      ("cache-update-param", "value used to control number of reads sampled [0.01]", cxxopts::value<double>(), "FLT")
+      ("debug-cache", "verbose output for debugging cache used in chromap")
+      ("k-for-minhash", "number of values stored in each MinHash sketch [250]", cxxopts::value<int>(), "INT");
 }
 
 void AddPeakOptions(cxxopts::Options &options) {
