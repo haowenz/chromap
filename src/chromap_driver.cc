@@ -79,7 +79,6 @@ void AddMappingOptions(cxxopts::Options &options) {
                         cxxopts::value<int>(), "INT")
       ("cache-size", "number of cache entries [4000003]", cxxopts::value<int>(), "INT")
       ("cache-update-param", "value used to control number of reads sampled [0.01]", cxxopts::value<double>(), "FLT")
-      ("use-all-reads", "use all reads for cache (it will slow down execution)")
       ("debug-cache", "verbose output for debugging cache used in chromap")
       ("frip-est-params", "coefficients used for frip est calculation, separated by semi-colons",
       cxxopts::value<std::string>(), "STR")
@@ -346,9 +345,6 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
     if (mapping_parameters.cache_size < 2000000 || mapping_parameters.cache_size > 15000000) {
         chromap::ExitWithMessage("cache size is not in appropriate range\n");
     }
-  }
-  if (result.count("use-all-reads")) {
-    mapping_parameters.use_all_reads = true;
   }
   if (result.count("debug-cache")) {
     mapping_parameters.debug_cache = true;

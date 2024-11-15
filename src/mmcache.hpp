@@ -358,11 +358,9 @@ class mm_cache {
   uint32_t GetUpdateThreshold(uint32_t num_loaded_reads, 
                               uint64_t num_reads,
                               bool paired,
-                              bool use_all_reads,
                               double cache_update_param
                               ) {
     const uint32_t block = paired ? 2500000 : 5000000;    
-    if (use_all_reads) {return num_loaded_reads;}
 
     if (num_reads <= block)
       return num_loaded_reads;
