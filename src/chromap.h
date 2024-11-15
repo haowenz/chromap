@@ -375,7 +375,6 @@ void Chromap::MapSingleEndReads() {
           mm_to_candidates_cache.GetUpdateThreshold(num_loaded_reads,
                                                     num_reads_, 
                                                     false,
-                                                    false,
                                                     0.01);
           // int grain_size = 10000;
 //#pragma omp taskloop grainsize(grain_size) //num_tasks(num_threads_* 50)
@@ -673,7 +672,6 @@ void Chromap::MapPairedEndReads() {
 
   // Check cache-related parameters
   std::cerr << "Cache Size: " << mapping_parameters_.cache_size << std::endl;
-  std::cerr << "Use All Reads for Cache: " << mapping_parameters_.use_all_reads << std::endl;
   std::cerr << "Cache Update Param: " << mapping_parameters_.cache_update_param << std::endl;
   
   std::vector<uint64_t> seeds_for_batch(500000, 0);
@@ -865,7 +863,6 @@ void Chromap::MapPairedEndReads() {
           mm_to_candidates_cache.GetUpdateThreshold(num_loaded_pairs,
                                                     num_reads_, 
                                                     true,
-                                                    mapping_parameters_.use_all_reads,
                                                     mapping_parameters_.cache_update_param
                                                     );
           int cache_hits_for_batch = 0;
