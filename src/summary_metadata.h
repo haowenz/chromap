@@ -5,6 +5,7 @@
 
 #include <stdio.h>
 #include <stdint.h>
+#include <cmath>
 
 #include "khash.h"
 #include "utils.h"
@@ -43,6 +44,10 @@ class SummaryMetadata {
     kh_destroy(k64_barcode_metadata, barcode_metadata_);
   }
 
+  inline double inverse_logit(double frip) {
+    return (1.0/(1.0 + std::exp(-frip)));
+  }
+
   inline void OutputCounts(const char *barcode, const int *counts, FILE *fp, std::vector<double> frip_est_coeffs, bool output_num_cache_slots_info)
   {
     // define variables to store values
@@ -59,11 +64,11 @@ class SummaryMetadata {
     size_t num_cache_slots = counts[SUMMARY_METADATA_CARDINALITY];
 
     // compute the estimated frip
-    double est_frip = (fric != 0.0) ? frip_est_coeffs[0] + /* constant */
-                      (frip_est_coeffs[1] * fric) +
-                      (frip_est_coeffs[2] * num_dup) +
-                      (frip_est_coeffs[3] * num_unmapped)  +
-                      (frip_est_coeffs[4] * num_lowmapq) : 0.0;
+    double est_frip = (fric != 0.0) ? inverse_logit(frip_est_coeffs[0] + /* constant */
+                                           (frip_est_coeffs[1] * fric) +
+                                           (frip_est_coeffs[2] * num_dup) +
+                                           (frip_est_coeffs[3] * num_unmapped)  +
+                                           (frip_est_coeffs[4] * num_lowmapq)) : 0.0;
 
     // print out data for current barcode
     if (!output_num_cache_slots_info) {
