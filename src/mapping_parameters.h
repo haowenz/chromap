@@ -27,7 +27,7 @@ struct MappingParameters {
   double cache_update_param = 0.01;
   int cache_size = 4000003;
   bool debug_cache = false;
-  std::string frip_est_params = "0.2771;0.9153;6.0499e-06;-6.1495e-05;-5.8978e-05";
+  std::string frip_est_params = "-1.0996;4.2391;3.0164e-05;-2.1087e-04;-5.5825e-05";
   bool output_num_uniq_cache_slots = true;
   int k_for_minhash = 250;
 
