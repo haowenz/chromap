@@ -712,6 +712,9 @@ void Chromap::MapPairedEndReads() {
       );
   }
 
+  // Initialize vector to keep track of cache hits for each thread
+  std::vector<int> cache_hits_per_thread(mapping_parameters_.num_threads, 0);
+
   // Initialize cache
   mm_cache mm_to_candidates_cache(mapping_parameters_.cache_size);
   mm_to_candidates_cache.SetKmerLength(kmer_size);
@@ -865,15 +868,16 @@ void Chromap::MapPairedEndReads() {
                                                     true,
                                                     mapping_parameters_.cache_update_param
                                                     );
-          int cache_hits_for_batch = 0;
+          std::fill(cache_hits_per_thread.begin(), cache_hits_per_thread.end(), 0);
 
           if (mapping_parameters_.debug_cache) {
             std::cout << "[DEBUG][UPDATE] update_threshold = " << history_update_threshold << std::endl;
           }
 
-#pragma omp taskloop grainsize(grain_size) reduction(+:cache_hits_for_batch)
+#pragma omp taskloop grainsize(grain_size)
           for (uint32_t pair_index = 0; pair_index < num_loaded_pairs;
                ++pair_index) {
+            int thread_id = omp_get_thread_num();
             
             bool current_barcode_is_whitelisted = true;
             if (!mapping_parameters_.barcode_whitelist_file_path.empty()) {
@@ -942,7 +946,7 @@ void Chromap::MapPairedEndReads() {
                 // increment variable for cache_hits
                 bool curr_read_hit_cache = false;
                 if (cache_query_result1 >= 0 || cache_query_result2 >= 0) {
-                  cache_hits_for_batch++;
+                  cache_hits_per_thread[thread_id]++;
                   curr_read_hit_cache = true;
                 }
 
@@ -1164,6 +1168,11 @@ void Chromap::MapPairedEndReads() {
             // Update total read count and number of cache hits
             if (mapping_parameters_.is_bulk_data) 
             {
+              // Sum up cache hits for each thread
+              int cache_hits_for_batch = 0;
+              for (int hits: cache_hits_per_thread) {
+                cache_hits_for_batch += hits;
+              }
               mapping_writer.UpdateSummaryMetadata(0, 
                                                    SUMMARY_METADATA_TOTAL, 
                                                    num_loaded_pairs);
