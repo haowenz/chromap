@@ -149,7 +149,7 @@ barcode,total,duplicate,unmapped,lowmapq,cachehit,fric,estfrip,numcacheslots
 - `numcacheslots` - Number of unique associated cache slots for this barcode (Relevant feature for doublet detection, [see below for more](#doublet))
 
 The summary contains metrics relevant to the mappability of fragments from each barcode. 
-However, it also contains metrics (`estfrip` and `numcacheslots`) relevant to quality control for chromatin profiling assays like ATAC-seq, CHIP-seq and Hi-C data. 
+However, it also contains metrics (`estfrip` and `numcacheslots`) relevant to quality control for chromatin profiling assays like scATAC-seq. These cache-related metrics require overall deep sequencing depth, so it is more useful for single-cell data. 
 The next two sections briefly describe these two metrics and how they can be useful for users.
 
 #### <a name="estfrip"></a>Estimating FRiP
