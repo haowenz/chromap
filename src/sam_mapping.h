@@ -201,13 +201,14 @@ class SAMMapping : public Mapping {
   bool operator<(const SAMMapping &m) const {
     int read1_flag = flag_ & BAM_FREAD1;
     int m_read1_flag = m.flag_ & BAM_FREAD1;
-    return std::tie(rid_, pos_, cell_barcode_, mapq_, mrid_, mpos_, read_id_, read1_flag) <
-           std::tie(m.rid_, m.pos_, m.cell_barcode_, m.mapq_, m.mrid_, m.mpos_, m.read_id_,
-                    m_read1_flag);
+    return std::tie(rid_, pos_, cell_barcode_, mrid_, mpos_, read1_flag, mapq_, read_id_) <
+           std::tie(m.rid_, m.pos_, m.cell_barcode_, m.mrid_, m.mpos_, m_read1_flag, m.mapq_, m.read_id_);
   }
   bool operator==(const SAMMapping &m) const {
-    return std::tie(pos_, rid_, cell_barcode_, is_rev_, mrid_, mpos_) ==
-           std::tie(m.pos_, m.rid_, m.cell_barcode_, m.is_rev_, m.mrid_, m.mpos_);
+    int read1_flag = flag_ & BAM_FREAD1;
+    int m_read1_flag = m.flag_ & BAM_FREAD1;
+    return std::tie(pos_, rid_, cell_barcode_, read1_flag, mrid_, mpos_) ==
+           std::tie(m.pos_, m.rid_, m.cell_barcode_, m_read1_flag, m.mrid_, m.mpos_);
   }
   bool IsSamePosition(const SAMMapping &m) const {
     return std::tie(pos_, rid_, is_rev_, mrid_, mpos_) == 
