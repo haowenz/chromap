@@ -118,23 +118,25 @@ void MappingProcessor<MappingRecord>::RemovePCRDuplicate(
   for (uint32_t ri = 0; ri < num_reference_sequences; ++ri) {
     deduped_mappings.push_back(std::vector<MappingRecord>());
     if (mappings[ri].size() != 0) {
-      // Ideally I should output the last of the dups of first mappings.
-      deduped_mappings[ri].emplace_back(mappings[ri].front());
+      // Haowen: Ideally I should output the last of the dups of first mappings.
+      // Li: The mappings' mapq are sorted in increasing order, so we should put the last
+      // map
       auto last_it = mappings[ri].begin();
       uint32_t last_dup_count = 1;
 
       for (auto it = ++(mappings[ri].begin()); it != mappings[ri].end(); ++it) {
         if (!((*it) == (*last_it))) {
+          deduped_mappings[ri].emplace_back((*last_it));
           deduped_mappings[ri].back().num_dups_ = std::min(
               (uint32_t)std::numeric_limits<uint8_t>::max(), last_dup_count);
           last_dup_count = 1;
-          deduped_mappings[ri].emplace_back((*it));
-          last_it = it;
         } else {
           ++last_dup_count;
         }
+        last_it = it;
       }
 
+      deduped_mappings[ri].emplace_back((*last_it));
       deduped_mappings[ri].back().num_dups_ = std::min(
           (uint32_t)std::numeric_limits<uint8_t>::max(), last_dup_count);
       num_mappings += deduped_mappings[ri].size();
