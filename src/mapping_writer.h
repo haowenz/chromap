@@ -251,7 +251,6 @@ void MappingWriter<MappingRecord>::ProcessAndOutputMappingsInLowMemory(
     const bool current_mapping_is_duplicated =
         last_rid == min_rid && (current_mapping_is_duplicated_at_cell_level ||
                                 current_mapping_is_duplicated_at_bulk_level);
-
     if (mapping_parameters_.remove_pcr_duplicates &&
         current_mapping_is_duplicated) {
       ++num_last_mapping_dups;
@@ -265,6 +264,9 @@ void MappingWriter<MappingRecord>::ProcessAndOutputMappingsInLowMemory(
           temp_dups_for_bulk_level_dedup.push_back(current_min_mapping);
           temp_dups_for_bulk_level_dedup.back().num_dups_ = 1;
         }
+      }
+      if (current_min_mapping.mapq_ > last_mapping.mapq_) {
+        last_mapping = current_min_mapping ;
       }
     } else {
       if (!is_first_iteration) {
@@ -283,6 +285,7 @@ void MappingWriter<MappingRecord>::ProcessAndOutputMappingsInLowMemory(
           if (mapping_parameters_.Tn5_shift) {
             last_mapping.Tn5Shift();
           }
+
           AppendMapping(last_rid, reference, last_mapping);
           ++num_mappings_passing_filters;
           if (!mapping_parameters_.summary_metadata_file_path.empty())
