@@ -34,7 +34,7 @@
 #include "temp_mapping.h"
 #include "utils.h"
 
-#define CHROMAP_VERSION "0.3.1-r512"
+#define CHROMAP_VERSION "0.3.1-r513"
 
 namespace chromap {
 
@@ -123,11 +123,13 @@ class Chromap {
 
  private:
   uint32_t LoadSingleEndReadsWithBarcodes(SequenceBatch &read_batch,
-                                          SequenceBatch &barcode_batch);
+                                          SequenceBatch &barcode_batch,
+                                          bool parallel_parsing);
 
   uint32_t LoadPairedEndReadsWithBarcodes(SequenceBatch &read_batch1,
                                           SequenceBatch &read_batch2,
-                                          SequenceBatch &barcode_batch);
+                                          SequenceBatch &barcode_batch,
+                                          bool parallel_parsing);
 
   void TrimAdapterForPairedEndRead(uint32_t pair_index,
                                    SequenceBatch &read_batch1,
@@ -321,7 +323,8 @@ void Chromap::MapSingleEndReads() {
 
     uint32_t num_loaded_reads_for_loading = 0;
     uint32_t num_loaded_reads = LoadSingleEndReadsWithBarcodes(
-        read_batch_for_loading, barcode_batch_for_loading);
+        read_batch_for_loading, barcode_batch_for_loading,
+        mapping_parameters_.num_threads >= 3 ? true : false);
     read_batch_for_loading.SwapSequenceBatch(read_batch);
 
     if (!mapping_parameters_.is_bulk_data) {
@@ -369,7 +372,8 @@ void Chromap::MapSingleEndReads() {
 #pragma omp task
           {
             num_loaded_reads_for_loading = LoadSingleEndReadsWithBarcodes(
-                read_batch_for_loading, barcode_batch_for_loading);
+                read_batch_for_loading, barcode_batch_for_loading,
+                mapping_parameters_.num_threads >= 12 ? true : false);
           }  // end of openmp loading task
           uint32_t history_update_threshold =
           mm_to_candidates_cache.GetUpdateThreshold(num_loaded_reads,
@@ -394,6 +398,11 @@ void Chromap::MapSingleEndReads() {
               if (read_map_summary != NULL)
                 read_map_summary[read_index] = 0;
               continue;
+            }
+            
+            if (read_batch.GetSequenceLengthAt(read_index) <
+                (uint32_t)mapping_parameters_.min_read_length) {
+              continue;  // reads are too short, just drop.
             }
 
             read_batch.PrepareNegativeSequenceAt(read_index);
@@ -534,8 +543,8 @@ void Chromap::MapSingleEndReads() {
               num_mappings_in_mem = 0;
             }
           }
-          std::cerr << "Mapped in " << GetRealTime() - real_batch_start_time
-                    << "s.\n";
+          std::cerr << "Mapped " << num_loaded_reads << " reads in "
+                    << GetRealTime() - real_batch_start_time << "s.\n";
         }
       }  // end of openmp single
       {
@@ -801,7 +810,7 @@ void Chromap::MapPairedEndReads() {
     uint32_t num_loaded_pairs_for_loading = 0;
     uint32_t num_loaded_pairs = LoadPairedEndReadsWithBarcodes(
         read_batch1_for_loading, read_batch2_for_loading,
-        barcode_batch_for_loading);
+        barcode_batch_for_loading, mapping_parameters_.num_threads >= 3 ? true : false);
     read_batch1_for_loading.SwapSequenceBatch(read_batch1);
     read_batch2_for_loading.SwapSequenceBatch(read_batch2);
     if (!mapping_parameters_.is_bulk_data) {
@@ -858,7 +867,8 @@ void Chromap::MapPairedEndReads() {
           {
             num_loaded_pairs_for_loading = LoadPairedEndReadsWithBarcodes(
                 read_batch1_for_loading, read_batch2_for_loading,
-                barcode_batch_for_loading);
+                barcode_batch_for_loading, 
+                mapping_parameters_.num_threads >= 12 ? true : false);
           }  // end of openmp loading task
 
           int grain_size = 5000;
@@ -892,6 +902,14 @@ void Chromap::MapPairedEndReads() {
 
             if (current_barcode_is_whitelisted ||
                 mapping_parameters_.output_mappings_not_in_whitelist) {
+              
+              if (read_batch1.GetSequenceLengthAt(pair_index) <
+                  (uint32_t)mapping_parameters_.min_read_length ||
+                  read_batch2.GetSequenceLengthAt(pair_index) <
+                  (uint32_t)mapping_parameters_.min_read_length) {
+                continue;  // reads are too short, just drop.
+              }
+
               read_batch1.PrepareNegativeSequenceAt(pair_index);
               read_batch2.PrepareNegativeSequenceAt(pair_index);
 

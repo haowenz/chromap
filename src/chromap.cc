@@ -29,73 +29,140 @@ void Chromap::ConstructIndex() {
 }
 
 uint32_t Chromap::LoadSingleEndReadsWithBarcodes(SequenceBatch &read_batch,
-                                                 SequenceBatch &barcode_batch) {
-  double real_start_time = GetRealTime();
+                                                 SequenceBatch &barcode_batch,
+                                                 bool parallel_parsing) {
+  //double real_start_time = GetRealTime();
   uint32_t num_loaded_reads = 0;
-  while (num_loaded_reads < read_batch_size_) {
-    bool no_more_read = read_batch.LoadOneSequenceAndSaveAt(num_loaded_reads);
-    bool no_more_barcode = no_more_read;
-    if (!mapping_parameters_.is_bulk_data) {
-      no_more_barcode =
+
+  if (!parallel_parsing || mapping_parameters_.is_bulk_data) {
+    while (num_loaded_reads < read_batch_size_) {
+      bool no_more_read = read_batch.LoadOneSequenceAndSaveAt(num_loaded_reads);
+      bool no_more_barcode = no_more_read;
+      if (!mapping_parameters_.is_bulk_data) {
+        no_more_barcode =
           barcode_batch.LoadOneSequenceAndSaveAt(num_loaded_reads);
-    }
-    if ((!no_more_read) && (!no_more_barcode)) {
-      if (read_batch.GetSequenceLengthAt(num_loaded_reads) <
-          (uint32_t)mapping_parameters_.min_read_length) {
-        continue;  // reads are too short, just drop.
       }
-      // if (PairedEndReadWithBarcodeIsDuplicate(num_loaded_pairs,
-      // (*barcode_batch), (*read_batch1), (*read_batch2))) {
-      //  num_duplicated_reads_ += 2;
-      //  continue;
-      //}
-    } else if (no_more_read && no_more_barcode) {
-      break;
-    } else {
-      ExitWithMessage("Numbers of reads and barcodes don't match!");
+
+      if (no_more_read && no_more_barcode) {
+        break;
+      } else if (no_more_read || no_more_barcode){
+        ExitWithMessage("Numbers of reads and barcodes don't match!");
+      }
+      ++num_loaded_reads;
     }
-    ++num_loaded_reads;
+  } else {
+    uint32_t num_loaded_barcode = 0 ;
+    
+#pragma omp task shared(num_loaded_reads, read_batch)
+    {
+      uint32_t i = 0 ;
+      for (i = 0 ; i < read_batch_size_; ++i) {
+        if (read_batch.LoadOneSequenceAndSaveAt(i) == true) { // true: no more read
+          break ;
+        }
+      }
+      num_loaded_reads = i ;
+    }
+
+#pragma omp task shared(num_loaded_barcode, barcode_batch)
+    { // bulk data will go to the other big branch
+      uint32_t i = 0 ;
+      for (i = 0 ; i < read_batch_size_; ++i) {
+        if (barcode_batch.LoadOneSequenceAndSaveAt(i) == true) { // true: no more read
+          break ;
+        }
+      }
+      num_loaded_barcode = i ;
+    }
+
+#pragma omp taskwait
+
+    if (num_loaded_reads != num_loaded_barcode) {
+        ExitWithMessage("Numbers of reads and barcodes don't match!");
+    }
   }
-  if (num_loaded_reads > 0) {
+  /*if (num_loaded_reads > 0) {
     std::cerr << "Loaded " << num_loaded_reads << " reads in "
               << GetRealTime() - real_start_time << "s.\n";
   } else {
     std::cerr << "No more reads.\n";
-  }
+  }*/
   return num_loaded_reads;
 }
 
 uint32_t Chromap::LoadPairedEndReadsWithBarcodes(SequenceBatch &read_batch1,
                                                  SequenceBatch &read_batch2,
-                                                 SequenceBatch &barcode_batch) {
+                                                 SequenceBatch &barcode_batch,
+                                                 bool parallel_parsing) {
   // double real_start_time = Chromap<>::GetRealTime();
   uint32_t num_loaded_pairs = 0;
-  while (num_loaded_pairs < read_batch_size_) {
-    bool no_more_read1 = read_batch1.LoadOneSequenceAndSaveAt(num_loaded_pairs);
-    bool no_more_read2 = read_batch2.LoadOneSequenceAndSaveAt(num_loaded_pairs);
-    bool no_more_barcode = no_more_read2;
-    if (!mapping_parameters_.is_bulk_data) {
-      no_more_barcode =
+  
+  if (!parallel_parsing) {
+    while (num_loaded_pairs < read_batch_size_) {
+      bool no_more_read1 = read_batch1.LoadOneSequenceAndSaveAt(num_loaded_pairs);
+      bool no_more_read2 = read_batch2.LoadOneSequenceAndSaveAt(num_loaded_pairs);
+      bool no_more_barcode = no_more_read2;
+      if (!mapping_parameters_.is_bulk_data) {
+        no_more_barcode =
           barcode_batch.LoadOneSequenceAndSaveAt(num_loaded_pairs);
-    }
-    if ((!no_more_read1) && (!no_more_read2) && (!no_more_barcode)) {
-      if (read_batch1.GetSequenceLengthAt(num_loaded_pairs) <
-              (uint32_t)mapping_parameters_.min_read_length ||
-          read_batch2.GetSequenceLengthAt(num_loaded_pairs) <
-              (uint32_t)mapping_parameters_.min_read_length) {
-        continue;  // reads are too short, just drop.
       }
-      // if (PairedEndReadWithBarcodeIsDuplicate(num_loaded_pairs,
-      // (*barcode_batch), (*read_batch1), (*read_batch2))) {
-      //  num_duplicated_reads_ += 2;
-      //  continue;
-      //}
-    } else if (no_more_read1 && no_more_read2 && no_more_barcode) {
-      break;
-    } else {
-      ExitWithMessage("Numbers of reads and barcodes don't match!");
+      
+      if (no_more_read1 && no_more_read2 && no_more_barcode) {
+        break;
+      } else if (no_more_read1 || no_more_read2 || no_more_barcode){
+        ExitWithMessage("Numbers of reads and barcodes don't match!");
+      }
+      ++num_loaded_pairs;
     }
-    ++num_loaded_pairs;
+  } else {
+    uint32_t num_loaded_read1 = 0;
+    uint32_t num_loaded_read2 = 0;
+    uint32_t num_loaded_barcode = 0;
+    
+#pragma omp task shared(num_loaded_read1, read_batch1)
+    {
+      uint32_t i = 0 ;
+      for (i = 0 ; i < read_batch_size_; ++i) {
+        if (read_batch1.LoadOneSequenceAndSaveAt(i) == true) { // true: no more read
+          break ;
+        }
+      }
+      num_loaded_read1 = i ;
+    }
+
+#pragma omp task shared(num_loaded_read2, read_batch2)
+    {
+      uint32_t i = 0 ;
+      for (i = 0 ; i < read_batch_size_; ++i) {
+        if (read_batch2.LoadOneSequenceAndSaveAt(i) == true) { // true: no more read
+          break ;
+        }
+      }
+      num_loaded_read2 = i ;
+    }
+
+#pragma omp task shared(num_loaded_barcode, barcode_batch)
+    {
+      if (!mapping_parameters_.is_bulk_data) {
+        uint32_t i = 0 ;
+        for (i = 0 ; i < read_batch_size_; ++i) {
+          if (barcode_batch.LoadOneSequenceAndSaveAt(i) == true) { // true: no more read
+            break ;
+          }
+        }
+        num_loaded_barcode = i ;
+      }
+    }
+
+#pragma omp taskwait
+    if (mapping_parameters_.is_bulk_data) {
+      num_loaded_barcode = num_loaded_read2;
+    }
+    if (num_loaded_read1 != num_loaded_read2 || num_loaded_read2 != num_loaded_barcode) {
+        ExitWithMessage("Numbers of reads and barcodes don't match!");
+    }
+
+    num_loaded_pairs = num_loaded_read1 ;
   }
   // if (num_loaded_pairs > 0) {
   //  std::cerr << "Loaded " << num_loaded_pairs << " pairs in "<<
