@@ -34,7 +34,7 @@
 #include "temp_mapping.h"
 #include "utils.h"
 
-#define CHROMAP_VERSION "0.3.1-r513"
+#define CHROMAP_VERSION "0.3.1-r514"
 
 namespace chromap {
 
@@ -528,8 +528,8 @@ void Chromap::MapSingleEndReads() {
                     mappings_on_diff_ref_seqs);
             if (mapping_parameters_.low_memory_mode &&
                 num_mappings_in_mem > max_num_mappings_in_mem) {
-              mapping_processor.SortOutputMappings(num_reference_sequences,
-                                                   mappings_on_diff_ref_seqs);
+              mapping_processor.ParallelSortOutputMappings(num_reference_sequences,
+                                                   mappings_on_diff_ref_seqs, 0);
 
               mapping_writer.OutputTempMappings(num_reference_sequences,
                                                 mappings_on_diff_ref_seqs,
@@ -600,13 +600,15 @@ void Chromap::MapSingleEndReads() {
 
     if (mapping_parameters_.remove_pcr_duplicates) {
       mapping_processor.RemovePCRDuplicate(num_reference_sequences,
-                                           mappings_on_diff_ref_seqs);
+                                           mappings_on_diff_ref_seqs,
+                                           mapping_parameters_.num_threads);
       std::cerr << "After removing PCR duplications, ";
       mapping_processor.OutputMappingStatistics(num_reference_sequences,
                                                 mappings_on_diff_ref_seqs);
     } else {
-      mapping_processor.SortOutputMappings(num_reference_sequences,
-                                           mappings_on_diff_ref_seqs);
+      mapping_processor.ParallelSortOutputMappings(num_reference_sequences,
+                                           mappings_on_diff_ref_seqs,
+                                           mapping_parameters_.num_threads);
     }
 
     if (mapping_parameters_.allocate_multi_mappings) {
@@ -1247,8 +1249,8 @@ void Chromap::MapPairedEndReads() {
                     mappings_on_diff_ref_seqs);
             if (mapping_parameters_.low_memory_mode &&
                 num_mappings_in_mem > max_num_mappings_in_mem) {
-              mapping_processor.SortOutputMappings(num_reference_sequences,
-                                                   mappings_on_diff_ref_seqs);
+              mapping_processor.ParallelSortOutputMappings(num_reference_sequences,
+                                                   mappings_on_diff_ref_seqs, 0);
 
               mapping_writer.OutputTempMappings(num_reference_sequences,
                                                 mappings_on_diff_ref_seqs,
@@ -1320,13 +1322,15 @@ void Chromap::MapPairedEndReads() {
 
     if (mapping_parameters_.remove_pcr_duplicates) {
       mapping_processor.RemovePCRDuplicate(num_reference_sequences,
-                                           mappings_on_diff_ref_seqs);
+                                           mappings_on_diff_ref_seqs,
+                                           mapping_parameters_.num_threads);
       std::cerr << "After removing PCR duplications, ";
       mapping_processor.OutputMappingStatistics(num_reference_sequences,
                                                 mappings_on_diff_ref_seqs);
     } else {
-      mapping_processor.SortOutputMappings(num_reference_sequences,
-                                           mappings_on_diff_ref_seqs);
+      mapping_processor.ParallelSortOutputMappings(num_reference_sequences,
+                                           mappings_on_diff_ref_seqs,
+                                           mapping_parameters_.num_threads);
     }
 
     if (mapping_parameters_.allocate_multi_mappings) {
