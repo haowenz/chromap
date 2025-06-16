@@ -34,7 +34,7 @@
 #include "temp_mapping.h"
 #include "utils.h"
 
-#define CHROMAP_VERSION "0.3.1-r514"
+#define CHROMAP_VERSION "0.3.1-r515"
 
 namespace chromap {
 
@@ -689,6 +689,9 @@ void Chromap::MapPairedEndReads() {
 
   // Variables used for counting number of associated cache slots
   bool output_num_cache_slots_info = mapping_parameters_.output_num_uniq_cache_slots;
+  if (mapping_parameters_.summary_metadata_file_path.empty()) {
+    output_num_cache_slots_info = false;
+  }
   const size_t k_for_minhash = mapping_parameters_.k_for_minhash;
 
   std::cerr << "Output number of associated cache slots: " << output_num_cache_slots_info << std::endl;
