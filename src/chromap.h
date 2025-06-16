@@ -34,7 +34,7 @@
 #include "temp_mapping.h"
 #include "utils.h"
 
-#define CHROMAP_VERSION "0.3.1-r515"
+#define CHROMAP_VERSION "0.3.1-r516"
 
 namespace chromap {
 
@@ -1149,7 +1149,7 @@ void Chromap::MapPairedEndReads() {
           //    }
           //  }
           //}
-#pragma omp taskloop grainsize(grain_size)
+#pragma omp taskloop grainsize( std::max(history_update_threshold / mapping_parameters_.num_threads, (unsigned int)grain_size) )
           // Update cache
           for (uint32_t pair_index = 0; pair_index < history_update_threshold;
                ++pair_index) {
