@@ -334,13 +334,13 @@ int Index::GenerateCandidatePositions(
   }
 
 #ifdef LI_DEBUG
-  for (uint32_t mi = 0; mi < positive_hits.size(); ++mi)
-    printf("+ %llu %d %d\n", positive_hits[mi],
-           (int)(positive_hits[mi] >> 32), (int)(positive_hits[mi]));
+  for (uint32_t mi = 0; mi < mapping_metadata.positive_hits_.size(); ++mi)
+    printf("+ %llu %d %d\n", mapping_metadata.positive_hits_[mi],
+           (int)(mapping_metadata.positive_hits_[mi] >> 32), (int)(mapping_metadata.positive_hits_[mi]));
 
-  for (uint32_t mi = 0; mi < negative_hits.size(); ++mi)
-    printf("- %llu %d %d\n", negative_hits[mi],
-           (int)(negative_hits[mi] >> 32), (int)(negative_hits[mi]));
+  for (uint32_t mi = 0; mi < mapping_metadata.negative_hits_.size(); ++mi)
+    printf("- %llu %d %d\n", mapping_metadata.negative_hits_[mi],
+           (int)(mapping_metadata.negative_hits_[mi] >> 32), (int)(mapping_metadata.negative_hits_[mi]));
 #endif
 
   mapping_metadata.repetitive_seed_length_ =
