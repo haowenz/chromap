@@ -441,10 +441,10 @@ void MappingGenerator<MappingRecord>::
           ((first_read_strand == kPositive &&
             mappings2[current_i2].position <=
                 mappings1[i1].position + mapping_parameters_.max_insert_size -
-                    read2_length) ||
+                    read1_length) ||
            (first_read_strand == kNegative &&
             mappings2[current_i2].position <=
-                mappings1[i1].position + read1_length - min_overlap_length))) {
+                mappings1[i1].position + read2_length - min_overlap_length))) {
 #ifdef LI_DEBUG
         printf(
             "%s passed: %llu %d %d %llu %d %d: %d %d %d\n", __func__,
