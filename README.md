@@ -182,8 +182,12 @@ Detailed description of Chromap command line options and optional tags can be di
 
 If you use Chromap, please cite:
 
-> Zhang, H., Song, L., Wang, X., Cheng, H., Wang, C., Meyer, C. A., ... & Li, H. (2021). Fast alignment and preprocessing of chromatin profiles with Chromap. Nature communications, 12(1), 1-6.
+> Zhang, H., Song, L., Wang, X., Cheng, H., Wang, C., Meyer, C. A., ..., Liu, X. S., Li, H. (2021). Fast alignment and preprocessing of chromatin profiles with Chromap. Nature communications, 12(1), 1-6.
 > https://doi.org/10.1038/s41467-021-26865-w
+
+The summary file for QC is described in the manuscript:
+> Ahmed, O., Zhang, H., Langmead, B., Song, L. (2025). Quality control of single-cell ATAC-seq data without peak calling using Chromap. Biorxiv.
+> https://doi.org/10.1101/2025.07.15.664951
 
 [bed]: https://genome.ucsc.edu/FAQ/FAQformat.html#format1
 [paf]: https://github.com/lh3/miniasm/blob/master/PAF.md
