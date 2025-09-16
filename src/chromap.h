@@ -34,7 +34,7 @@
 #include "temp_mapping.h"
 #include "utils.h"
 
-#define CHROMAP_VERSION "0.3.2-r518"
+#define CHROMAP_VERSION "0.3.3-r519"
 
 namespace chromap {
 
@@ -1189,8 +1189,7 @@ void Chromap::MapPairedEndReads() {
 #pragma omp taskwait
           if (!mapping_parameters_.summary_metadata_file_path.empty()) {
             // Update total read count and number of cache hits
-            if (mapping_parameters_.is_bulk_data) 
-            {
+            if (mapping_parameters_.is_bulk_data) {
               // Sum up cache hits for each thread
               int cache_hits_for_batch = 0;
               for (int hits: cache_hits_per_thread) {
@@ -1203,27 +1202,30 @@ void Chromap::MapPairedEndReads() {
                                                    SUMMARY_METADATA_CACHEHIT, 
                                                    cache_hits_for_batch);
             }
-            else 
-            {
-              for (uint32_t pair_index = 0; pair_index < num_loaded_pairs; ++pair_index) 
-              {
+            else {
+              uint32_t nonwhitelist_count = 0;
+              for (uint32_t pair_index = 0; pair_index < num_loaded_pairs; ++pair_index) {
                 uint64_t pair_seed = seeds_for_batch[pair_index];
-                if (read_map_summary[pair_index] & 1) 
-                {
+                if (read_map_summary[pair_index] & 1) {
                   mapping_writer.UpdateSummaryMetadata(
                                             pair_seed, 
                                             SUMMARY_METADATA_TOTAL, 
                                             1);
+                } else {
+                  ++nonwhitelist_count ;
                 }
-                if (read_map_summary[pair_index] & 2) 
-                {
+
+                if (read_map_summary[pair_index] & 2) {
                   mapping_writer.UpdateSummaryMetadata( 
                                             pair_seed,
                                             SUMMARY_METADATA_CACHEHIT, 
                                             1);
                 }
               }
-            }            
+              mapping_writer.UpdateSpeicalCategorySummaryMetadata(/*nonwhitelist*/0, 
+                  SUMMARY_METADATA_TOTAL, nonwhitelist_count);
+            }  
+
             memset(read_map_summary, 1, sizeof(*read_map_summary)*read_batch_size_);
           }
 
