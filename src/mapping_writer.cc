@@ -398,7 +398,7 @@ void MappingWriter<PairsMapping>::OutputHeader(uint32_t num_reference_sequences,
         std::to_string(reference_sequence_length) + "\n");
   }
   this->AppendMappingOutput(
-      "#columns: readID chrom1 pos1 chrom2 pos2 strand1 strand2 pair_type\n");
+      "#columns: readID chrom1 pos1 chrom2 pos2 strand1 strand2 pair_type mapq1 mapq2\n");
 }
 
 template <>
@@ -415,7 +415,9 @@ void MappingWriter<PairsMapping>::AppendMapping(uint32_t rid,
                             std::string(reference_sequence_name2) + "\t" +
                             std::to_string(mapping.GetPosition(2)) + "\t" +
                             std::string(1, mapping.GetStrand(1)) + "\t" +
-                            std::string(1, mapping.GetStrand(2)) + "\tUU\n");
+                            std::string(1, mapping.GetStrand(2)) + "\tUU\t" +
+                            std::to_string(mapping.mapq_) + "\t" + // mapq1
+                            std::to_string(mapping.mapq_) + "\n"); // mapq2
 }
 
 template <>
