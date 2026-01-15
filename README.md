@@ -42,7 +42,7 @@ To compile from the source, you need to have the GCC compiler with version>=7.3.
 
 Chromap is also available on [bioconda][bioconda]. Thus you can easily install Chromap with Conda
 ```sh
-conda install -c bioconda -c conda-forge chromap
+conda install -c conda-forge -c bioconda chromap
 ```
 
 ### <a name="general"></a>General usage
