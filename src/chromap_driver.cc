@@ -401,6 +401,15 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
   if (result.count("allocate-multi-mappings")) {
     mapping_parameters.allocate_multi_mappings = true;
     mapping_parameters.only_output_unique_mappings = false;
+    // When allocating multi-mappings, we need to store all candidate positions
+    // for each multi-mapped read (up to drop_repetitive_reads). If the user
+    // did not explicitly set max_num_best_mappings, set it to
+    // drop_repetitive_reads so that all positions are available for the
+    // allocation algorithm.
+    if (!result.count("n")) {
+      mapping_parameters.max_num_best_mappings =
+          mapping_parameters.drop_repetitive_reads;
+    }
   }
   if (result.count("Tn5-shift")) {
     mapping_parameters.Tn5_shift = true;
@@ -609,6 +618,11 @@ void ChromapDriver::ParseArgsAndRun(int argc, char *argv[]) {
     }
     if (mapping_parameters.allocate_multi_mappings) {
       std::cerr << "Will allocate multi-mappings after mapping.\n";
+      if (mapping_parameters.low_memory_mode) {
+        std::cerr << "WARNING: --allocate-multi-mappings is not supported in "
+                     "low-memory mode (--low-mem). Multi-mapping allocation "
+                     "will be skipped.\n";
+      }
     } else {
       std::cerr << "Won't allocate multi-mappings after mapping.\n";
     }

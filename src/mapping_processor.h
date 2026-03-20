@@ -367,17 +367,23 @@ void MappingProcessor<MappingRecord>::AllocateMultiMappings(
   }
   std::cerr << "Got all " << multi_mappings.size() << " multi-mappings!\n";
 
+  if (multi_mappings.empty()) {
+    // No multi-mappings to allocate. Restore the mappings from allocated_mappings.
+    mappings.swap(allocated_mappings);
+    return;
+  }
+
   std::stable_sort(multi_mappings.begin(), multi_mappings.end(),
                    ReadIdLess<MappingRecord>);
   std::vector<uint32_t> weights;
   weights.reserve(max_num_best_mappings_);
   uint32_t sum_weight = 0;
-  assert(multi_mappings.size() > 0);
+  // Guard against the edge case where the number of multi-mappings equals
+  // UINT32_MAX, which would collide with the sentinel read_id (UINT32_MAX)
+  // used below to terminate the allocation loop.
+  assert(multi_mappings.size() != UINT32_MAX);
   uint32_t previous_read_id = multi_mappings[0].second.read_id_;
   uint32_t start_mapping_index = 0;
-  // add a fake mapping at the end and make sure its id is different from the
-  // last one
-  assert(multi_mappings.size() != UINT32_MAX);
   std::pair<uint32_t, MappingRecord> foo_mapping = multi_mappings.back();
   foo_mapping.second.read_id_ = UINT32_MAX;
   multi_mappings.emplace_back(foo_mapping);
@@ -413,12 +419,17 @@ void MappingProcessor<MappingRecord>::AllocateMultiMappings(
         std::discrete_distribution<uint32_t> distribution(weights.begin(),
                                                           weights.end());
         uint32_t randomly_assigned_mapping_index = distribution(generator);
-        allocated_mappings[multi_mappings[start_mapping_index +
-                                          randomly_assigned_mapping_index]
-                               .first]
-            .emplace_back(multi_mappings[start_mapping_index +
-                                         randomly_assigned_mapping_index]
-                              .second);
+        uint32_t alloc_ref_id =
+            multi_mappings[start_mapping_index + randomly_assigned_mapping_index]
+                .first;
+        allocated_mappings[alloc_ref_id].emplace_back(
+            multi_mappings[start_mapping_index + randomly_assigned_mapping_index]
+                .second);
+        // Update the MAPQ of the allocated multi-mapping to
+        // min_unique_mapping_mapq_ so it is treated as uniquely placed and
+        // passes downstream MAPQ filtering.
+        allocated_mappings[alloc_ref_id].back().mapq_ =
+            min_unique_mapping_mapq_;
         ++num_allocated_multi_mappings;
       }
       // update current
