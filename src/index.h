@@ -2,8 +2,12 @@
 #define INDEX_H_
 
 #include <limits>
+#include <memory>
+#include <new>
+#include <ostream>
 #include <queue>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "candidate_position_generating_config.h"
@@ -15,6 +19,33 @@
 #include "utils.h"
 
 namespace chromap {
+
+// An allocator whose value construction (as in std::vector::resize) leaves a
+// trivial type uninitialized, so Index::Load can size the occurrence table
+// without writing every page on one thread before the threads that read it
+// from the file touch those pages.
+template <typename T>
+struct DefaultInitAllocator : std::allocator<T> {
+  template <typename U>
+  struct rebind {
+    typedef DefaultInitAllocator<U> other;
+  };
+
+  DefaultInitAllocator() = default;
+
+  template <typename U>
+  DefaultInitAllocator(const DefaultInitAllocator<U> &) noexcept {}
+
+  template <typename U>
+  void construct(U *pointer) {
+    ::new (static_cast<void *>(pointer)) U;
+  }
+
+  template <typename U, typename... Args>
+  void construct(U *pointer, Args &&...args) {
+    ::new (static_cast<void *>(pointer)) U(std::forward<Args>(args)...);
+  }
+};
 
 class Index {
  public:
@@ -43,7 +74,8 @@ class Index {
       lookup_table_ = nullptr;
     }
 
-    std::vector<uint64_t>().swap(occurrence_table_);
+    std::vector<uint64_t, DefaultInitAllocator<uint64_t>>().swap(
+        occurrence_table_);
   }
 
   void Construct(uint32_t num_sequences, const SequenceBatch &reference);
@@ -51,6 +83,10 @@ class Index {
   void Save() const;
 
   void Load();
+
+  // As Load(), but writes its log lines to 'log' and reads the lookup table's
+  // arrays and the occurrence table on up to 'num_threads' threads.
+  void Load(std::ostream &log, int num_threads = 1);
 
   // Output index stats.
   void Statistics(uint32_t num_sequences, const SequenceBatch &reference) const;
@@ -83,6 +119,31 @@ class Index {
   uint32_t GetLookupTableSize() const { return kh_size(lookup_table_); }
 
  private:
+  // Prefetches the flags word, key and value of the lookup table bucket that
+  // kh_get(k64, ...) probes first for this minimizer. Called for every
+  // minimizer of a read before its lookups, so that their cache misses overlap
+  // instead of running one after another. A hint only: the lookups and their
+  // results are unchanged, and where the compiler has no prefetch builtin it
+  // does nothing. It must be inlined: GCC 13 at -O3 deduces a function whose
+  // only effect is __builtin_prefetch to be pure and deletes calls to it.
+#if defined(__GNUC__) || defined(__clang__)
+  __attribute__((always_inline)) void PrefetchLookupTableBucket(
+      uint64_t minimizer_hash) const {
+    if (lookup_table_->n_buckets == 0) {
+      return;
+    }
+    const khint_t i =
+        (khint_t)KHashFunctionForIndex(
+            GenerateHashInLookupTable(minimizer_hash)) &
+        (lookup_table_->n_buckets - 1);
+    __builtin_prefetch(&lookup_table_->flags[i >> 4]);
+    __builtin_prefetch(&lookup_table_->keys[i]);
+    __builtin_prefetch(&lookup_table_->vals[i]);
+  }
+#else
+  void PrefetchLookupTableBucket(uint64_t /*minimizer_hash*/) const {}
+#endif
+
   uint64_t GenerateCandidatePositionFromHits(uint64_t reference_hit,
                                              uint64_t read_hit) const;
 
@@ -95,7 +156,7 @@ class Index {
   int num_threads_ = 1;
   const std::string index_file_path_;
   khash_t(k64) *lookup_table_ = nullptr;
-  std::vector<uint64_t> occurrence_table_;
+  std::vector<uint64_t, DefaultInitAllocator<uint64_t>> occurrence_table_;
 };
 
 }  // namespace chromap

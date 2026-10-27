@@ -3,7 +3,9 @@
 
 #include "index.h"
 #include "minimizer.h"
+#include <stdlib.h>
 #include <mutex>
+#include <new>
 
 #define FINGER_PRINT_SIZE 103
 
@@ -36,6 +38,39 @@ class mm_cache {
   int saturate_count;
   uint64_t *
       head_mm;  // the first and last minimizer for each cached minimizer vector
+
+  // Returns uninitialized memory for size entries, freed with FreeEntries.
+  // The entries (4,000,003 of 344 bytes, 1.38 GB, for paired-end reads) are
+  // probed at random by every read's Query and Update. On Linux the array
+  // starts on a 2 MiB boundary, is rounded up to whole 2 MiB pages and asks
+  // for huge pages (kmadvise_huge) before it is first touched, so the
+  // constructor's first touch takes about 660 page faults instead of about
+  // 336,000 and a probe fewer TLB misses. Elsewhere it is an ordinary
+  // allocation. The entries are constructed and destroyed in place either way.
+  static struct _mm_cache_entry *AllocateEntries(int size) {
+    const size_t num_bytes = sizeof(struct _mm_cache_entry) * (size_t)size;
+#if defined(__linux__) && defined(MADV_HUGEPAGE)
+    const size_t huge_page_bytes = (size_t)2 << 20;
+    const size_t num_allocated_bytes =
+        (num_bytes + huge_page_bytes - 1) / huge_page_bytes * huge_page_bytes;
+    void *entries = NULL;
+    if (posix_memalign(&entries, huge_page_bytes, num_allocated_bytes) != 0) {
+      throw std::bad_alloc();
+    }
+    kmadvise_huge(entries, num_allocated_bytes);
+    return static_cast<struct _mm_cache_entry *>(entries);
+#else
+    return static_cast<struct _mm_cache_entry *>(::operator new(num_bytes));
+#endif
+  }
+
+  static void FreeEntries(struct _mm_cache_entry *entries) {
+#if defined(__linux__) && defined(MADV_HUGEPAGE)
+    free(entries);
+#else
+    ::operator delete(entries);
+#endif
+  }
 
   // 0: not match. -1: opposite order. 1: same order
   int IsMinimizersMatchCache(const std::vector<Minimizer> &minimizers,
@@ -82,11 +117,12 @@ class mm_cache {
 
  public:
   mm_cache(int size) {
-    cache = new struct _mm_cache_entry[size];
+    cache = AllocateEntries(size);
     head_mm = new uint64_t[HEAD_MM_ARRAY_SIZE];
     cache_size = size;
     // memset(cache, 0, sizeof(cache[0]) * size) ;
     for (int i = 0; i < size; ++i) {
+      new (&cache[i]) _mm_cache_entry;
       cache[i].weight = 0;
       memset(cache[i].finger_print_cnt, 0,
              sizeof(unsigned short) * FINGER_PRINT_SIZE);
@@ -104,7 +140,10 @@ class mm_cache {
   }
 
   ~mm_cache() {
-    delete[] cache;
+    for (int i = 0; i < cache_size; ++i) {
+      cache[i].~_mm_cache_entry();
+    }
+    FreeEntries(cache);
     delete[] head_mm;
   
     // destory OpenMP locks for parallelizing cache update
@@ -114,6 +153,20 @@ class mm_cache {
   }
 
   void SetKmerLength(int kl) { kmer_length = kl; }
+
+  // Returns the index of the cache entry that Update reads and writes for a
+  // non-empty minimizer vector. Update touches no other entry, so calls for
+  // different entries may run concurrently in any order.
+  int GetEntryIndex(const std::vector<Minimizer> &minimizers) const {
+    const int msize = minimizers.size();
+    uint64_t h = 0;
+    if (msize == 1) {
+      h = minimizers[0].GetHash();
+    } else {
+      h = minimizers[0].GetHash() + minimizers[msize - 1].GetHash();
+    }
+    return h % cache_size;
+  }
 
   // Return the hash entry index. -1 if failed.
   int Query(MappingMetadata &mapping_metadata, uint32_t read_len) {
@@ -329,11 +382,17 @@ class mm_cache {
         print_lock.unlock();
       }
 
-      // Update head mm array
-      head_mm[(minimizers[0].GetHash() >> 6) & HEAD_MM_ARRAY_MASK] |=
-          (1ull << (minimizers[0].GetHash() & 0x3f));
-      head_mm[(minimizers[msize - 1].GetHash() >> 6) & HEAD_MM_ARRAY_MASK] |=
-          (1ull << (minimizers[msize - 1].GetHash() & 0x3f));
+      // Update head mm array. Entries guarded by different locks share
+      // head_mm words, and Update runs concurrently for such entries, so the
+      // ORs are atomic; their order does not change the result.
+      const uint64_t first_hash = minimizers[0].GetHash();
+      const uint64_t last_hash = minimizers[msize - 1].GetHash();
+#pragma omp atomic
+      head_mm[(first_hash >> 6) & HEAD_MM_ARRAY_MASK] |=
+          (1ull << (first_hash & 0x3f));
+#pragma omp atomic
+      head_mm[(last_hash >> 6) & HEAD_MM_ARRAY_MASK] |=
+          (1ull << (last_hash & 0x3f));
     }
     omp_unset_lock(&entry_locks_omp[lock_index]);
   }

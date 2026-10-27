@@ -5,6 +5,7 @@
 #include <sys/time.h>
 
 #include <iostream>
+#include <string>
 #include <tuple>
 #include <vector>
 
@@ -68,7 +69,25 @@ inline static double GetCPUTime() {
          1e-6 * (r.ru_utime.tv_usec + r.ru_stime.tv_usec);
 }
 
+// Thrown by ExitWithMessage in place of writing the message and exiting, on a
+// thread where ExitIsDeferredOnThisThread() is true: work that runs beside
+// other threads hands its error to the main thread, which exits with the
+// message once the other threads have joined.
+struct DeferredExit {
+  std::string message;
+};
+
+// One flag per thread, shared by every translation unit (an inline function's
+// static is a single object).
+inline bool &ExitIsDeferredOnThisThread() {
+  static thread_local bool is_deferred = false;
+  return is_deferred;
+}
+
 inline static void ExitWithMessage(const std::string &message) {
+  if (ExitIsDeferredOnThisThread()) {
+    throw DeferredExit{message};
+  }
   std::cerr << message << std::endl;
   exit(-1);
 }

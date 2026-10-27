@@ -3,22 +3,237 @@
 #include <assert.h>
 #include <math.h>
 
+#include <algorithm>
+#include <atomic>
+#include <condition_variable>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <limits>
+#include <memory>
+#include <mutex>
 #include <random>
 #include <sstream>
+#include <system_error>
+#include <thread>
 #include <type_traits>
 #include <unordered_map>
 
 namespace chromap {
 
+namespace {
+
+// Loads sequences into slots 0, 1, ... of 'batch' until its file ends or
+// 'max_num_sequences' are loaded, and returns how many it loaded.
+uint32_t LoadUpToOneBatch(SequenceBatch &batch, uint32_t max_num_sequences) {
+  uint32_t i = 0;
+  for (i = 0; i < max_num_sequences; ++i) {
+    if (batch.LoadOneSequenceAndSaveAt(i) == true) {  // true: no more read
+      break;
+    }
+  }
+  return i;
+}
+
+}  // namespace
+
+// Reads the barcode files in order, in batches of up to batch_size records
+// each, as SequenceBatch::LoadBatch would after InitializeLoading, but keeps
+// only the whitelist key of each barcode without an N, in record order: the
+// records go through one slot, so no batch of slots is built or filled.
+// 'file_paths' must outlive it; each is read when its file is opened.
+class BarcodeKeyBatchLoader {
+ public:
+  BarcodeKeyBatchLoader(const std::vector<std::string> &file_paths,
+                        uint32_t batch_size,
+                        const SequenceEffectiveRange &effective_range)
+      : file_paths_(file_paths),
+        batch_size_(batch_size),
+        barcode_(/*max_num_sequences=*/1, effective_range) {}
+
+  ~BarcodeKeyBatchLoader() {
+    if (is_open_) {
+      barcode_.FinalizeLoading();
+    }
+  }
+
+  // Loads the next batch of the file being read, opening the next file first
+  // when the last one ended, into 'keys', and writes the log line LoadBatch
+  // writes. Returns the number of barcodes it read, N or not, 0 at the end of
+  // a file. Exits (ExitWithMessage) where InitializeLoading and LoadBatch
+  // would have exited, on a missing or truncated file.
+  uint32_t LoadNextBatch(std::vector<uint64_t> &keys, std::ostream &log) {
+    if (!is_open_) {
+      barcode_.InitializeLoading(file_paths_[next_file_index_]);
+      ++next_file_index_;
+      is_open_ = true;
+    }
+    const double real_start_time = GetRealTime();
+    keys.clear();
+    uint32_t num_loaded_barcodes = 0;
+    for (; num_loaded_barcodes < batch_size_; ++num_loaded_barcodes) {
+      if (barcode_.LoadOneSequenceAndSaveAt(0)) {
+        break;
+      }
+      std::vector<int> N_pos;  // position of Ns
+      barcode_.GetSequenceNsAt(0, /*little_endian=*/true, N_pos);
+      if (N_pos.size() > 0) continue;
+      keys.push_back(barcode_.GenerateSeedFromSequenceAt(
+          0, 0, barcode_.GetSequenceLengthAt(0)));
+    }
+    // As SequenceBatch::LoadBatch logs it.
+    if (num_loaded_barcodes != 0) {
+      log << "Loaded sequence batch successfully in "
+          << GetRealTime() - real_start_time << "s, ";
+      log << "number of sequences: " << num_loaded_barcodes << ".\n";
+    } else {
+      log << "No more sequences.\n";
+      barcode_.FinalizeLoading();
+      is_open_ = false;
+    }
+    return num_loaded_barcodes;
+  }
+
+ private:
+  const std::vector<std::string> &file_paths_;
+  const uint32_t batch_size_;
+  SequenceBatch barcode_;
+  size_t next_file_index_ = 0;
+  bool is_open_ = false;
+};
+
+// Runs a BarcodeKeyBatchLoader over the first num_files of 'file_paths' on a
+// thread of its own, up to two batches ahead of ComputeBarcodeAbundance, which
+// takes them in order with TakeNextBatch, with their log lines and any exit
+// the loading defers (a missing or truncated file) at the batch where the
+// loader would have exited, so that the log and the first error are
+// unchanged. Batches loaded ahead and never taken are dropped with their log
+// lines and errors.
+class BarcodeBatchReadAhead {
+ public:
+  BarcodeBatchReadAhead(const std::vector<std::string> &file_paths,
+                        size_t num_files, uint32_t batch_size,
+                        const SequenceEffectiveRange &effective_range,
+                        const std::ostream &log_format)
+      : num_files_(num_files),
+        loader_(file_paths, batch_size, effective_range),
+        log_flags_(log_format.flags()),
+        log_precision_(log_format.precision()),
+        log_locale_(log_format.getloc()) {}
+
+  // Stops the loading after the batch it is loading and waits for it.
+  ~BarcodeBatchReadAhead() {
+    if (loading_thread_.joinable()) {
+      {
+        std::lock_guard<std::mutex> lock(mutex_);
+        stop_ = true;
+      }
+      changed_.notify_all();
+      loading_thread_.join();
+    }
+  }
+
+  // Starts loading on a new thread. Returns false, having loaded nothing, when
+  // the thread cannot be created.
+  bool Start() {
+    try {
+      loading_thread_ = std::thread(&BarcodeBatchReadAhead::Load, this);
+    } catch (const std::system_error &) {
+      return false;
+    }
+    return true;
+  }
+
+  // Waits for the next batch and returns what BarcodeKeyBatchLoader::
+  // LoadNextBatch(keys, log) returned for it, or exits as it did.
+  uint32_t TakeNextBatch(std::vector<uint64_t> &keys, std::ostream &log) {
+    std::string error;
+    uint32_t num_loaded_barcodes = 0;
+    {
+      std::unique_lock<std::mutex> lock(mutex_);
+      changed_.wait(lock, [this]() { return is_ready_; });
+      log << log_;
+      error.swap(error_);
+      num_loaded_barcodes = num_loaded_barcodes_;
+      keys.swap(keys_);
+      is_ready_ = false;
+    }
+    changed_.notify_all();
+    if (!error.empty()) {
+      ExitWithMessage(error);
+    }
+    return num_loaded_barcodes;
+  }
+
+ private:
+  // Hands a batch, or an error, to TakeNextBatch once it has taken the one
+  // before. Returns false when the loading is to stop instead.
+  bool Publish(uint32_t num_loaded_barcodes, const std::string &log,
+               const std::string &error, std::vector<uint64_t> &keys) {
+    std::unique_lock<std::mutex> lock(mutex_);
+    changed_.wait(lock, [this]() { return !is_ready_ || stop_; });
+    if (stop_) {
+      return false;
+    }
+    num_loaded_barcodes_ = num_loaded_barcodes;
+    log_ = log;
+    error_ = error;
+    keys_.swap(keys);
+    is_ready_ = true;
+    lock.unlock();
+    changed_.notify_all();
+    return true;
+  }
+
+  void Load() {
+    ExitIsDeferredOnThisThread() = true;
+    std::vector<uint64_t> keys;
+    for (size_t file_index = 0; file_index < num_files_; ++file_index) {
+      uint32_t num_loaded_barcodes = 0;
+      do {
+        std::ostringstream log;
+        log.flags(log_flags_);
+        log.precision(log_precision_);
+        log.imbue(log_locale_);
+        std::string error;
+        num_loaded_barcodes = 0;
+        try {
+          num_loaded_barcodes = loader_.LoadNextBatch(keys, log);
+        } catch (const DeferredExit &deferred_exit) {
+          error = deferred_exit.message;
+        }
+        if (!Publish(num_loaded_barcodes, log.str(), error, keys) ||
+            !error.empty()) {
+          return;
+        }
+      } while (num_loaded_barcodes > 0);
+    }
+  }
+
+  const size_t num_files_;
+  BarcodeKeyBatchLoader loader_;
+  const std::ios_base::fmtflags log_flags_;
+  const std::streamsize log_precision_;
+  const std::locale log_locale_;
+
+  std::mutex mutex_;
+  std::condition_variable changed_;
+  // Set while a batch, or an error, waits for TakeNextBatch.
+  bool is_ready_ = false;
+  bool stop_ = false;
+  uint32_t num_loaded_barcodes_ = 0;
+  std::string log_;
+  std::string error_;
+  std::vector<uint64_t> keys_;
+  std::thread loading_thread_;
+};
+
 void Chromap::ConstructIndex() {
   // TODO(Haowen): Need a faster algorithm
   // Load all sequences in the reference into one batch
   SequenceBatch reference;
-  reference.InitializeLoading(index_parameters_.reference_file_path);
+  reference.InitializeLoading(index_parameters_.reference_file_path,
+                              /*default_buffers=*/true);
   reference.LoadAllSequences();
   const uint32_t num_sequences = reference.GetNumSequences();
   Index index(index_parameters_);
@@ -53,29 +268,25 @@ uint32_t Chromap::LoadSingleEndReadsWithBarcodes(SequenceBatch &read_batch,
   } else {
     uint32_t num_loaded_barcode = 0 ;
     
+    if (omp_in_parallel()) {
 #pragma omp task shared(num_loaded_reads, read_batch)
-    {
-      uint32_t i = 0 ;
-      for (i = 0 ; i < read_batch_size_; ++i) {
-        if (read_batch.LoadOneSequenceAndSaveAt(i) == true) { // true: no more read
-          break ;
-        }
+      {
+        num_loaded_reads = LoadUpToOneBatch(read_batch, read_batch_size_);
       }
-      num_loaded_reads = i ;
-    }
 
 #pragma omp task shared(num_loaded_barcode, barcode_batch)
-    { // bulk data will go to the other big branch
-      uint32_t i = 0 ;
-      for (i = 0 ; i < read_batch_size_; ++i) {
-        if (barcode_batch.LoadOneSequenceAndSaveAt(i) == true) { // true: no more read
-          break ;
-        }
+      { // bulk data will go to the other big branch
+        num_loaded_barcode = LoadUpToOneBatch(barcode_batch, read_batch_size_);
       }
-      num_loaded_barcode = i ;
-    }
 
 #pragma omp taskwait
+    } else {
+      // Outside a parallel region the tasks above run at once, one after the
+      // other, on this thread. These are the same loads in the same order,
+      // without the tasks, which an exit deferred on this thread cannot leave.
+      num_loaded_reads = LoadUpToOneBatch(read_batch, read_batch_size_);
+      num_loaded_barcode = LoadUpToOneBatch(barcode_batch, read_batch_size_);
+    }
 
     if (num_loaded_reads != num_loaded_barcode) {
         ExitWithMessage("Numbers of reads and barcodes don't match!");
@@ -93,7 +304,8 @@ uint32_t Chromap::LoadSingleEndReadsWithBarcodes(SequenceBatch &read_batch,
 uint32_t Chromap::LoadPairedEndReadsWithBarcodes(SequenceBatch &read_batch1,
                                                  SequenceBatch &read_batch2,
                                                  SequenceBatch &barcode_batch,
-                                                 bool parallel_parsing) {
+                                                 bool parallel_parsing,
+                                                 int num_loading_helpers) {
   // double real_start_time = Chromap<>::GetRealTime();
   uint32_t num_loaded_pairs = 0;
   
@@ -119,42 +331,76 @@ uint32_t Chromap::LoadPairedEndReadsWithBarcodes(SequenceBatch &read_batch1,
     uint32_t num_loaded_read2 = 0;
     uint32_t num_loaded_barcode = 0;
     
+    if (omp_in_parallel()) {
 #pragma omp task shared(num_loaded_read1, read_batch1)
-    {
-      uint32_t i = 0 ;
-      for (i = 0 ; i < read_batch_size_; ++i) {
-        if (read_batch1.LoadOneSequenceAndSaveAt(i) == true) { // true: no more read
-          break ;
-        }
+      {
+        num_loaded_read1 = LoadUpToOneBatch(read_batch1, read_batch_size_);
       }
-      num_loaded_read1 = i ;
-    }
 
 #pragma omp task shared(num_loaded_read2, read_batch2)
-    {
-      uint32_t i = 0 ;
-      for (i = 0 ; i < read_batch_size_; ++i) {
-        if (read_batch2.LoadOneSequenceAndSaveAt(i) == true) { // true: no more read
-          break ;
-        }
+      {
+        num_loaded_read2 = LoadUpToOneBatch(read_batch2, read_batch_size_);
       }
-      num_loaded_read2 = i ;
-    }
 
 #pragma omp task shared(num_loaded_barcode, barcode_batch)
-    {
-      if (!mapping_parameters_.is_bulk_data) {
-        uint32_t i = 0 ;
-        for (i = 0 ; i < read_batch_size_; ++i) {
-          if (barcode_batch.LoadOneSequenceAndSaveAt(i) == true) { // true: no more read
-            break ;
-          }
+      {
+        if (!mapping_parameters_.is_bulk_data) {
+          num_loaded_barcode =
+              LoadUpToOneBatch(barcode_batch, read_batch_size_);
         }
-        num_loaded_barcode = i ;
       }
-    }
 
 #pragma omp taskwait
+    } else if (num_loading_helpers > 0) {
+      // The same loads, each file by one thread: this one and up to
+      // num_loading_helpers more, which take the files in order as they come
+      // free. Each load defers its exit, and the first exit in that order is
+      // taken once every load has returned: the one loading the files one
+      // after the other, below, would take.
+      SequenceBatch *const batches[3] = {&read_batch1, &read_batch2,
+                                         &barcode_batch};
+      uint32_t *const num_loaded[3] = {&num_loaded_read1, &num_loaded_read2,
+                                       &num_loaded_barcode};
+      const size_t num_files = mapping_parameters_.is_bulk_data ? 2 : 3;
+      std::string errors[3];
+      std::atomic<size_t> next_file(0);
+      const auto load_files = [&]() {
+        for (size_t i = next_file.fetch_add(1); i < num_files;
+             i = next_file.fetch_add(1)) {
+          errors[i] = RunWithExitDeferred([&]() {
+            *num_loaded[i] = LoadUpToOneBatch(*batches[i], read_batch_size_);
+          });
+        }
+      };
+      std::vector<std::thread> loaders;
+      for (int t = 0; t < num_loading_helpers && loaders.size() + 1 < num_files;
+           ++t) {
+        try {
+          loaders.emplace_back(load_files);
+        } catch (const std::system_error &) {
+          // This thread loads what the missing ones would have.
+          break;
+        }
+      }
+      load_files();
+      for (std::thread &loader : loaders) {
+        loader.join();
+      }
+      for (size_t i = 0; i < num_files; ++i) {
+        if (!errors[i].empty()) {
+          ExitWithMessage(errors[i]);
+        }
+      }
+    } else {
+      // Outside a parallel region the tasks above run at once, one after the
+      // other, on this thread. These are the same loads in the same order,
+      // without the tasks, which an exit deferred on this thread cannot leave.
+      num_loaded_read1 = LoadUpToOneBatch(read_batch1, read_batch_size_);
+      num_loaded_read2 = LoadUpToOneBatch(read_batch2, read_batch_size_);
+      if (!mapping_parameters_.is_bulk_data) {
+        num_loaded_barcode = LoadUpToOneBatch(barcode_batch, read_batch_size_);
+      }
+    }
     if (mapping_parameters_.is_bulk_data) {
       num_loaded_barcode = num_loaded_read2;
     }
@@ -171,6 +417,52 @@ uint32_t Chromap::LoadPairedEndReadsWithBarcodes(SequenceBatch &read_batch1,
   //  std::cerr << "No more reads.\n";
   //}
   return num_loaded_pairs;
+}
+
+uint32_t Chromap::OpenAndLoadFirstSingleEndBatch(size_t read_file_index,
+                                                 SequenceBatch &read_batch,
+                                                 SequenceBatch &barcode_batch) {
+  read_batch.InitializeLoading(
+      mapping_parameters_.read_file1_paths[read_file_index]);
+  if (!mapping_parameters_.is_bulk_data) {
+    barcode_batch.InitializeLoading(
+        mapping_parameters_.barcode_file_paths[read_file_index]);
+  }
+  return LoadSingleEndReadsWithBarcodes(
+      read_batch, barcode_batch,
+      mapping_parameters_.num_threads >= 3 ? true : false);
+}
+
+uint32_t Chromap::OpenAndLoadFirstPairedEndBatch(size_t read_file_index,
+                                                 SequenceBatch &read_batch1,
+                                                 SequenceBatch &read_batch2,
+                                                 SequenceBatch &barcode_batch,
+                                                 int num_loading_helpers) {
+  read_batch1.InitializeLoading(
+      mapping_parameters_.read_file1_paths[read_file_index]);
+  read_batch2.InitializeLoading(
+      mapping_parameters_.read_file2_paths[read_file_index]);
+  if (!mapping_parameters_.is_bulk_data) {
+    barcode_batch.InitializeLoading(
+        mapping_parameters_.barcode_file_paths[read_file_index]);
+  }
+  return LoadPairedEndReadsWithBarcodes(
+      read_batch1, read_batch2, barcode_batch,
+      mapping_parameters_.num_threads >= 3 ? true : false,
+      num_loading_helpers);
+}
+
+std::string Chromap::RunWithExitDeferred(const std::function<void()> &work) {
+  std::string error;
+  const bool was_deferred = ExitIsDeferredOnThisThread();
+  ExitIsDeferredOnThisThread() = true;
+  try {
+    work();
+  } catch (const DeferredExit &deferred_exit) {
+    error = deferred_exit.message;
+  }
+  ExitIsDeferredOnThisThread() = was_deferred;
+  return error;
 }
 
 void Chromap::TrimAdapterForPairedEndRead(uint32_t pair_index,
@@ -361,7 +653,7 @@ bool Chromap::PairedEndReadWithBarcodeIsDuplicate(
   }
 }
 
-uint32_t Chromap::SampleInputBarcodesAndExamineLength() {
+uint32_t Chromap::SampleInputBarcodesAndExamineLength(std::ostream &log) {
   if (mapping_parameters_.is_bulk_data) {
     return 0;
   }
@@ -371,7 +663,7 @@ uint32_t Chromap::SampleInputBarcodesAndExamineLength() {
 
   barcode_batch.InitializeLoading(mapping_parameters_.barcode_file_paths[0]);
 
-  uint32_t num_loaded_barcodes = barcode_batch.LoadBatch();
+  uint32_t num_loaded_barcodes = barcode_batch.LoadBatch(log);
 
   uint32_t cell_barcode_length = barcode_batch.GetSequenceLengthAt(0);
   for (uint32_t i = 1; i < num_loaded_barcodes; ++i) {
@@ -385,7 +677,7 @@ uint32_t Chromap::SampleInputBarcodesAndExamineLength() {
   return cell_barcode_length;
 }
 
-void Chromap::LoadBarcodeWhitelist() {
+void Chromap::LoadBarcodeWhitelist(std::ostream &log) {
   double real_start_time = GetRealTime();
   int num_barcodes = 0;
 
@@ -485,33 +777,50 @@ void Chromap::LoadBarcodeWhitelist() {
     }
     barcode_whitelist_file_stream.close();
   }
-  std::cerr << "Loaded " << num_barcodes << " barcodes in "
-            << GetRealTime() - real_start_time << "s.\n";
+  log << "Loaded " << num_barcodes << " barcodes in "
+      << GetRealTime() - real_start_time << "s.\n";
 }
 
-void Chromap::ComputeBarcodeAbundance(uint64_t max_num_sample_barcodes) {
+void Chromap::ComputeBarcodeAbundance(uint64_t max_num_sample_barcodes,
+                                      std::ostream &log,
+                                      BarcodeBatchReadAhead *read_ahead) {
   double real_start_time = GetRealTime();
-  SequenceBatch barcode_batch(read_batch_size_, barcode_effective_range_);
+  std::unique_ptr<BarcodeKeyBatchLoader> loader;
+  if (read_ahead == nullptr) {
+    loader.reset(new BarcodeKeyBatchLoader(
+        mapping_parameters_.barcode_file_paths, read_batch_size_,
+        barcode_effective_range_));
+  }
+  // The whitelist keys of a batch's barcodes without an N, in batch order.
+  std::vector<uint64_t> barcode_keys;
   for (size_t read_file_index = 0;
        read_file_index < mapping_parameters_.read_file1_paths.size();
        ++read_file_index) {
-    barcode_batch.InitializeLoading(
-        mapping_parameters_.barcode_file_paths[read_file_index]);
-    uint32_t num_loaded_barcodes = barcode_batch.LoadBatch();
+    uint32_t num_loaded_barcodes =
+        read_ahead != nullptr ? read_ahead->TakeNextBatch(barcode_keys, log)
+                              : loader->LoadNextBatch(barcode_keys, log);
     while (num_loaded_barcodes > 0) {
-      for (uint32_t barcode_index = 0; barcode_index < num_loaded_barcodes;
-           ++barcode_index) {
-        std::vector<int> N_pos;  // position of Ns
-        barcode_batch.GetSequenceNsAt(barcode_index, /*little_endian=*/true,
-                                      N_pos);
-        if (N_pos.size() > 0) continue;
-
-        uint32_t barcode_length =
-            barcode_batch.GetSequenceLengthAt(barcode_index);
-        uint64_t barcode_key = barcode_batch.GenerateSeedFromSequenceAt(
-            barcode_index, 0, barcode_length);
+      // The lookups, in barcode order, each with the first bucket kh_get
+      // probes for the key kPrefetchDistance later prefetched (flags word, key
+      // and value), so that their cache misses overlap.
+      const size_t kPrefetchDistance = 16;
+      const khash_t(k64_seq) *whitelist = barcode_whitelist_lookup_table_;
+      for (size_t key_index = 0; key_index < barcode_keys.size();
+           ++key_index) {
+#if defined(__GNUC__) || defined(__clang__)
+        if (key_index + kPrefetchDistance < barcode_keys.size() &&
+            whitelist->n_buckets > 0) {
+          const khint_t i =
+              kh_int64_hash_func(barcode_keys[key_index + kPrefetchDistance]) &
+              (whitelist->n_buckets - 1);
+          __builtin_prefetch(&whitelist->flags[i >> 4]);
+          __builtin_prefetch(&whitelist->keys[i]);
+          __builtin_prefetch(&whitelist->vals[i]);
+        }
+#endif
         khiter_t barcode_whitelist_lookup_table_iterator =
-            kh_get(k64_seq, barcode_whitelist_lookup_table_, barcode_key);
+            kh_get(k64_seq, barcode_whitelist_lookup_table_,
+                   barcode_keys[key_index]);
         if (barcode_whitelist_lookup_table_iterator !=
             kh_end(barcode_whitelist_lookup_table_)) {
           // Correct barcode
@@ -535,16 +844,52 @@ void Chromap::ComputeBarcodeAbundance(uint64_t max_num_sample_barcodes) {
       if (num_sample_barcodes_ >= max_num_sample_barcodes) {
         break;
       }
-      num_loaded_barcodes = barcode_batch.LoadBatch();
+      num_loaded_barcodes =
+          read_ahead != nullptr ? read_ahead->TakeNextBatch(barcode_keys, log)
+                                : loader->LoadNextBatch(barcode_keys, log);
     }
-    barcode_batch.FinalizeLoading();
     if (num_sample_barcodes_ >= max_num_sample_barcodes) {
       break;
     }
   }
 
-  std::cerr << "Compute barcode abundance using " << num_sample_barcodes_
-            << " in " << GetRealTime() - real_start_time << "s.\n";
+  log << "Compute barcode abundance using " << num_sample_barcodes_ << " in "
+      << GetRealTime() - real_start_time << "s.\n";
+}
+
+std::string Chromap::PrepareBarcodes(std::ostream &log,
+                                     int num_loading_helpers) {
+  std::string error;
+  const bool was_deferred = ExitIsDeferredOnThisThread();
+  ExitIsDeferredOnThisThread() = true;
+  try {
+    barcode_length_ = SampleInputBarcodesAndExamineLength(log);
+    if (!mapping_parameters_.barcode_whitelist_file_path.empty()) {
+      // With a helper, the abundance pass's barcode batches load on it from
+      // now on, while the whitelist loads; it is stopped and joined before
+      // this returns or an exit leaves. The pass reads a barcode file per read
+      // file, and with fewer barcode files it runs here, as it did.
+      std::unique_ptr<BarcodeBatchReadAhead> read_ahead;
+      const size_t num_files = mapping_parameters_.read_file1_paths.size();
+      if (num_loading_helpers > 0 &&
+          mapping_parameters_.barcode_file_paths.size() >= num_files) {
+        read_ahead.reset(new BarcodeBatchReadAhead(
+            mapping_parameters_.barcode_file_paths, num_files,
+            read_batch_size_, barcode_effective_range_, log));
+        if (!read_ahead->Start()) {
+          // This thread loads them in the pass.
+          read_ahead.reset();
+        }
+      }
+      LoadBarcodeWhitelist(log);
+      ComputeBarcodeAbundance(initial_num_sample_barcodes_, log,
+                              read_ahead.get());
+    }
+  } catch (const DeferredExit &deferred_exit) {
+    error = deferred_exit.message;
+  }
+  ExitIsDeferredOnThisThread() = was_deferred;
+  return error;
 }
 
 void Chromap::UpdateBarcodeAbundance(uint32_t num_loaded_barcodes,
@@ -911,6 +1256,86 @@ void Chromap::GenerateCustomRidRanks(
     ExitWithMessage(
         "ERROR: unknown chromsome names found in chromosome order file.");
   }
+}
+
+std::string Chromap::LoadReferenceAndIndex(
+    SequenceBatch &reference, Index &index,
+    const std::function<void(int)> &prepare_mapping,
+    const std::function<void(int)> &prepare_barcodes,
+    int max_num_preparing_helpers, int max_num_barcode_helpers) {
+  // The log lines are formatted as std::cerr formats them.
+  std::ostringstream index_log;
+  index_log.flags(std::cerr.flags());
+  index_log.precision(std::cerr.precision());
+  index_log.imbue(std::cerr.getloc());
+
+  if (mapping_parameters_.num_threads < 2) {
+    reference.LoadAllSequences();
+    index.Load(index_log);
+    prepare_mapping(/*num_preparing_helpers=*/0);
+    if (prepare_barcodes) {
+      prepare_barcodes(/*num_barcode_helpers=*/0);
+    }
+    return index_log.str();
+  }
+
+  std::ostringstream reference_log;
+  reference_log.flags(std::cerr.flags());
+  reference_log.precision(std::cerr.precision());
+  reference_log.imbue(std::cerr.getloc());
+
+  // The loader thread must not call exit(), which would run the exit handlers
+  // while this thread reads the index, so a truncated reference file is
+  // reported after the join, as LoadAllSequences() reports it.
+  bool is_reference_complete = false;
+  // The threads besides the loader's own that may load the reference (a plain
+  // FASTA file): none while the index loads, then those the index load used
+  // but this one and those prepare_mapping runs, and all but the loader's
+  // once this thread waits for it.
+  std::atomic<int> num_reference_helpers(0);
+  std::thread reference_loader([&reference, &reference_log,
+                                &is_reference_complete,
+                                &num_reference_helpers]() {
+    is_reference_complete =
+        reference.LoadAllSequences(reference_log, &num_reference_helpers);
+  });
+  // The index is read on the other mapping threads. With three threads or
+  // more, one of them prepares the barcodes instead (with a whitelist, a pass
+  // over the whole barcode file, longer than the index load), and with four or
+  // more up to max_num_barcode_helpers more help it; with two, this thread
+  // prepares them after the mapping's set-up.
+  int num_index_threads = mapping_parameters_.num_threads - 1;
+  std::thread barcode_preparer;
+  if (prepare_barcodes && num_index_threads >= 2) {
+    --num_index_threads;
+    const int num_barcode_helpers =
+        std::max(0, std::min(max_num_barcode_helpers, num_index_threads - 1));
+    num_index_threads -= num_barcode_helpers;
+    barcode_preparer = std::thread(prepare_barcodes, num_barcode_helpers);
+  }
+  index.Load(index_log, num_index_threads);
+  // The index loads faster than the reference, so this thread, idle until the
+  // join, does the mapping's set-up meanwhile, on up to
+  // max_num_preparing_helpers of the threads the index load used but this
+  // one; the reference loader may take the others.
+  const int num_preparing_helpers =
+      std::max(0, std::min(max_num_preparing_helpers, num_index_threads - 1));
+  num_reference_helpers.store(num_index_threads - 1 - num_preparing_helpers);
+  prepare_mapping(num_preparing_helpers);
+  num_reference_helpers.store(num_index_threads - 1);
+  if (barcode_preparer.joinable()) {
+    barcode_preparer.join();
+  } else if (prepare_barcodes) {
+    prepare_barcodes(/*num_barcode_helpers=*/0);
+  }
+  num_reference_helpers.store(mapping_parameters_.num_threads - 1);
+  reference_loader.join();
+
+  if (!is_reference_complete) {
+    ExitWithMessage(SequenceBatch::IncompleteFileMessage());
+  }
+  std::cerr << reference_log.str();
+  return index_log.str();
 }
 
 void Chromap::RerankCandidatesRid(std::vector<Candidate> &candidates) {

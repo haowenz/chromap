@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <zlib.h>
 
+#include <atomic>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -13,6 +14,17 @@
 #include "utils.h"
 
 namespace chromap {
+
+// Sequence files are read through a zlib buffer of kGzBufferSize bytes (zlib's
+// default is 8 KiB) into a kseq stream buffer of kKseqBufferSize bytes (kseq's
+// default is 16 KiB): a plain file is read 512 KiB per read() rather than
+// 16 KiB, and a gzip file is inflated from 128 KiB of input at a time rather
+// than 8 KiB, into 512 KiB of output rather than 16 KiB. The stream buffer is
+// four times zlib's: gzread copies a request smaller than twice zlib's buffer
+// through zlib's own output buffer, and reads or inflates a larger one straight
+// into the stream buffer.
+constexpr unsigned kGzBufferSize = 128 * 1024;
+constexpr int kKseqBufferSize = 4 * kGzBufferSize;
 
 class SequenceBatch {
  public:
@@ -36,6 +48,7 @@ class SequenceBatch {
   }
 
   ~SequenceBatch() {
+    ReleaseArena();
     if (sequence_batch_.size() > 0) {
       for (uint32_t i = 0; i < sequence_batch_.size(); ++i) {
         kseq_destroy(sequence_batch_[i]);
@@ -155,7 +168,13 @@ class SequenceBatch {
     negative_sequence_batch_.swap(batch.GetNegativeSequenceBatch());
   }
 
-  void InitializeLoading(const std::string &sequence_file_path);
+  // Opens the file and reads it through the buffers above, or, with
+  // default_buffers, through zlib's and kseq's default buffers. Index
+  // construction uses the defaults: the index file holds the uninitialized
+  // keys and values of empty hash buckets (kh_save), whose bytes depend on the
+  // heap's layout, and so on the buffers allocated before the index is built.
+  void InitializeLoading(const std::string &sequence_file_path,
+                         bool default_buffers = false);
 
   void FinalizeLoading();
 
@@ -168,10 +187,30 @@ class SequenceBatch {
   // is no more sequences. This func now is only used to load barcodes.
   uint32_t LoadBatch();
 
+  // As LoadBatch(), but writes its log line to 'log'.
+  uint32_t LoadBatch(std::ostream &log);
+
   // Load all sequences in a file. This function should only be used to load
   // reference. And once the reference is loaded, the batch should never be
   // updated. This func is slow when there are large number of sequences.
+  // When the file was opened with the larger buffers (not default_buffers),
+  // the sequences are read into an arena on huge pages (ReserveArena), which
+  // the batch frees as a whole.
   void LoadAllSequences();
+
+  // As LoadAllSequences(), but writes its log line to 'log' and, when the file
+  // ends inside a record, returns false instead of exiting, so that it can run
+  // on a thread other than the main one. The caller then exits with
+  // IncompleteFileMessage(). Given num_helper_threads, a plain FASTA file read
+  // into the arena is read on this thread and on as many more as
+  // *num_helper_threads allows when it is checked (LoadFastaInParallel), so
+  // another thread may raise it while the file loads.
+  bool LoadAllSequences(std::ostream &log,
+                        const std::atomic<int> *num_helper_threads = nullptr);
+
+  static const char *IncompleteFileMessage() {
+    return "Didn't reach the end of sequence file, which might be corrupted!";
+  }
 
   inline void CorrectBaseAt(uint32_t sequence_index, uint32_t base_position,
                             char correct_base) {
@@ -208,6 +247,47 @@ class SequenceBatch {
   // necessary. Otherwise, it will just reverse the sequence.
   void ReplaceByEffectiveRange(kstring_t &seq, bool is_seq);
 
+  // On Linux, reserves the address space of the arena LoadAllSequences reads
+  // the sequences into, its first half for their bases and its second for the
+  // quality strings of a FASTQ file, and asks for huge pages over it
+  // (MADV_HUGEPAGE): the reference's 3.2 GB (hg38) is then first touched in
+  // 2 MiB pages rather than 4 KiB ones, read by the alignments with fewer TLB
+  // misses and unmapped at once. Leaves arena_ null where that is not
+  // available or the reservation fails: the sequences are then allocated one
+  // by one, by kseq_read.
+  void ReserveArena();
+
+  // Points the loader's sequence and quality buffers at the free space of
+  // the arena's two halves, or, when there is no arena or too little of it
+  // left, at no buffer, which kseq_read then allocates.
+  void PointLoaderAtArena();
+
+  // Takes the loader's buffers that are in the arena out of it, leaving them
+  // empty.
+  void ReleaseLoaderFromArena();
+
+  // Whether 's' lies in the arena.
+  bool IsInArena(const char *s) const {
+    return arena_ != nullptr && s >= arena_ && s < arena_ + arena_size_;
+  }
+
+  // Unmaps the arena, leaving no loaded sequence pointing into it.
+  void ReleaseArena();
+
+  // Loads every sequence of an uncompressed FASTA file into the arena as the
+  // kseq_read loop of LoadAllSequences would, with the same records, names,
+  // ids, sequence bytes and places in the arena, reading the file with
+  // pread on this thread and on helper threads (see LoadAllSequences): a first
+  // pass counts the '\n's of each piece of the file and finds the headers, a
+  // second copies each piece's bases, but the '\n's, to their place. Returns
+  // false, having loaded nothing, where the result could differ from
+  // kseq_read's or the file cannot be read so: without num_helper_threads,
+  // without the arena (on other systems than Linux), when the file is not a
+  // regular file, does not start with '>' (gzip, FASTQ), holds a '\r', '\v'
+  // or '\f', has a line starting with '+' or '@', or a sequence longer than
+  // an int.
+  bool LoadFastaInParallel(const std::atomic<int> *num_helper_threads);
+
   // This is the accumulated number of sequences that have ever been loaded into
   // the batch. It is useful for tracking read ids.
   uint32_t total_num_loaded_sequences_ = 0;
@@ -227,11 +307,28 @@ class SequenceBatch {
   kseq_t *sequence_kseq_ = nullptr;
   std::vector<kseq_t *> sequence_batch_;
 
+  // Set by InitializeLoading when the file is read through the larger
+  // buffers: LoadAllSequences then reads the sequences into the arena.
+  bool use_arena_ = false;
+  // The arena: arena_size_ bytes of reserved address space, or null. The
+  // sequences in it are not freed one by one (kseq_destroy) but unmapped with
+  // it, so a batch holding them is never swapped with another
+  // (SwapSequenceBatch).
+  char *arena_ = nullptr;
+  size_t arena_size_ = 0;
+  // The bytes the loaded bases take in the arena's first half and the loaded
+  // quality strings in its second.
+  size_t arena_bases_used_ = 0;
+  size_t arena_quals_used_ = 0;
+
   // TODO: avoid constructing the negative sequence batch.
   std::vector<std::string> negative_sequence_batch_;
 
   // Actual range within each sequence.
   const SequenceEffectiveRange effective_range_;
+
+  // The path InitializeLoading opened, unless with default_buffers.
+  std::string sequence_file_path_;
 };
 
 }  // namespace chromap

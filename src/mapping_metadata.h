@@ -2,7 +2,9 @@
 #define MAPPING_METADATA_H_
 
 #include <algorithm>
+#include <cstdint>
 #include <cstdio>
+#include <cstring>
 #include <utility>
 #include <vector>
 
@@ -63,8 +65,8 @@ class MappingMetadata {
   }
 
   inline void SortCandidates() {
-    std::sort(positive_candidates_.begin(), positive_candidates_.end());
-    std::sort(negative_candidates_.begin(), negative_candidates_.end());
+    SortCandidatesByCount(positive_candidates_);
+    SortCandidatesByCount(negative_candidates_);
   }
 
   inline void SortMappingsByPositions() {
@@ -113,6 +115,66 @@ class MappingMetadata {
   }
 
  protected:
+  // Sorts the candidates into the order of Candidate::operator< (count
+  // descending, then position ascending). GenerateCandidatesOnOneStrand and
+  // MergeCandidates emit candidates in ascending position order, so after one
+  // pass that checks this, a stable counting sort on count gives that order;
+  // candidates equal in both count and position are identical, so the result
+  // equals std::sort's. Any other input falls back to std::sort.
+  static inline void SortCandidatesByCount(std::vector<Candidate> &candidates) {
+    const size_t num_candidates = candidates.size();
+    if (num_candidates < 2) {
+      return;
+    }
+
+    Candidate *c = candidates.data();
+    bool is_position_sorted = true;
+    bool is_count_sorted = true;
+    uint8_t min_count = c[0].count;
+    uint8_t max_count = c[0].count;
+    for (size_t i = 1; i < num_candidates; ++i) {
+      is_position_sorted &= c[i - 1].position <= c[i].position;
+      is_count_sorted &= c[i - 1].count >= c[i].count;
+      min_count = std::min(min_count, c[i].count);
+      max_count = std::max(max_count, c[i].count);
+    }
+
+    if (!is_position_sorted) {
+      std::sort(candidates.begin(), candidates.end());
+      return;
+    }
+
+    if (is_count_sorted) {
+      return;
+    }
+
+    // Bucket b holds the candidates with count max_count - b.
+    const uint32_t num_buckets = (uint32_t)max_count - min_count + 1;
+    uint32_t bucket_starts[256];
+    std::memset(bucket_starts, 0, num_buckets * sizeof(uint32_t));
+    for (size_t i = 0; i < num_candidates; ++i) {
+      ++bucket_starts[max_count - c[i].count];
+    }
+
+    uint32_t num_before = 0;
+    for (uint32_t b = 0; b < num_buckets; ++b) {
+      const uint32_t bucket_size = bucket_starts[b];
+      bucket_starts[b] = num_before;
+      num_before += bucket_size;
+    }
+
+    static thread_local std::vector<Candidate> sorted_candidates;
+    if (sorted_candidates.size() < num_candidates) {
+      sorted_candidates.resize(num_candidates);
+    }
+
+    Candidate *sorted = sorted_candidates.data();
+    for (size_t i = 0; i < num_candidates; ++i) {
+      sorted[bucket_starts[max_count - c[i].count]++] = c[i];
+    }
+    std::copy(sorted, sorted + num_candidates, c);
+  }
+
   inline void ReserveSpace(int reserve_size) {
     minimizers_.reserve(reserve_size);
     positive_hits_.reserve(reserve_size);

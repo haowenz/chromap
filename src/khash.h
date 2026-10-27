@@ -189,6 +189,32 @@ typedef khint_t khiter_t;
 #define kfree(P) free(P)
 #endif
 
+#if defined(__linux__)
+#include <stdint.h>
+#include <sys/mman.h>
+#endif
+
+/* Asks that the whole 2 MiB pages inside the 'size' bytes at 'pointer', a
+   large array probed at random such as a loaded index's lookup table, be
+   backed by huge pages before they are first touched: a random probe then
+   takes fewer TLB misses, and the first touch fewer page faults. Only where
+   the system backs memory with huge pages on request (Linux's MADV_HUGEPAGE);
+   elsewhere it does nothing. The allocation, its contents and how it is freed
+   are unchanged. */
+static kh_inline klib_unused void kmadvise_huge(void *pointer, size_t size)
+{
+#ifdef MADV_HUGEPAGE
+	const uintptr_t huge_page_bytes = (uintptr_t)2 << 20;
+	const uintptr_t start = ((uintptr_t)pointer + huge_page_bytes - 1) & ~(huge_page_bytes - 1);
+	const uintptr_t end = ((uintptr_t)pointer + size) & ~(huge_page_bytes - 1);
+	if (pointer != NULL && end > start)
+		madvise((void *)start, end - start, MADV_HUGEPAGE); /* a hint: a failure leaves 4 KiB pages */
+#else
+	(void)pointer;
+	(void)size;
+#endif
+}
+
 static const double __ac_HASH_UPPER = 0.77;
 
 #define __KHASH_TYPE(name, khkey_t, khval_t) \
@@ -207,6 +233,7 @@ static const double __ac_HASH_UPPER = 0.77;
 	extern int kh_resize_##name(kh_##name##_t *h, khint_t new_n_buckets); \
 	extern khint_t kh_put_##name(kh_##name##_t *h, khkey_t key, int *ret); \
 	extern void kh_del_##name(kh_##name##_t *h, khint_t x); \
+  extern void kh_load_header_##name(kh_##name##_t *h, FILE* fp); \
   extern void kh_load_##name(kh_##name##_t *h, FILE* fp); \
   extern void kh_save_##name(kh_##name##_t *h, FILE* fp);
 
@@ -355,7 +382,11 @@ static const double __ac_HASH_UPPER = 0.77;
 			--h->size;													\
 		}																\
 	} \
-  SCOPE void kh_load_##name(kh_##name##_t *h, FILE* fp)\
+  /* Reads the four counts kh_save writes first and allocates the flags, keys \
+     and vals arrays, asking for huge pages (kmadvise_huge, as they are \
+     probed at random), leaving their contents, which follow the counts in \
+     the file, for the caller to read. */\
+  SCOPE void kh_load_header_##name(kh_##name##_t *h, FILE* fp)\
   {\
     fread(&(h->n_buckets), sizeof(khint_t), 1, fp);\
     fread(&(h->size), sizeof(khint_t), 1, fp);\
@@ -364,10 +395,20 @@ static const double __ac_HASH_UPPER = 0.77;
     if (h->n_buckets)\
     {\
       h->flags = (khint32_t*)kmalloc(__ac_fsize(h->n_buckets) * sizeof(khint32_t));\
-      fread(h->flags, sizeof(khint32_t), __ac_fsize(h->n_buckets), fp);\
       h->keys = (khkey_t*)kmalloc(sizeof(khkey_t)*h->n_buckets);\
-      fread(h->keys, sizeof(khkey_t), h->n_buckets, fp);\
       h->vals = (khval_t*)kmalloc(sizeof(khval_t)*h->n_buckets);\
+      kmadvise_huge(h->flags, __ac_fsize(h->n_buckets) * sizeof(khint32_t));\
+      kmadvise_huge(h->keys, sizeof(khkey_t)*h->n_buckets);\
+      kmadvise_huge(h->vals, sizeof(khval_t)*h->n_buckets);\
+    }\
+  }\
+  SCOPE void kh_load_##name(kh_##name##_t *h, FILE* fp)\
+  {\
+    kh_load_header_##name(h, fp);\
+    if (h->n_buckets)\
+    {\
+      fread(h->flags, sizeof(khint32_t), __ac_fsize(h->n_buckets), fp);\
+      fread(h->keys, sizeof(khkey_t), h->n_buckets, fp);\
       fread(h->vals, sizeof(khval_t), h->n_buckets, fp);\
     }\
   }\
@@ -607,6 +648,7 @@ static kh_inline khint_t __ac_Wang_hash(khint_t key)
 		code;												\
 	} }
 
+#define kh_load_header(name, h, fp)  kh_load_header_##name(h, fp)
 #define kh_load(name, h, fp)  kh_load_##name(h, fp)
 #define kh_save(name, h, fp)  kh_write_##name(h, fp)
 

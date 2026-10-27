@@ -99,6 +99,18 @@ class BarcodeTranslator {
     return ret;
   }
 
+  bool HasTranslateTable() const { return barcode_translate_table_ != NULL; }
+
+  // Writes the bc_length bases of bc to sequence, the characters Translate
+  // returns when there is no translate table.
+  void WriteUntranslatedBarcode(uint64_t bc, uint32_t bc_length,
+                                char *sequence) const {
+    const uint64_t base_mask = 3;
+    for (uint32_t i = 0; i < bc_length; ++i) {
+      sequence[i] = Uint8ToChar((bc >> ((bc_length - 1 - i) * 2)) & base_mask);
+    }
+  }
+
  private:
   khash_t(k64_str) * barcode_translate_table_;
   int from_bc_length_;

@@ -28,6 +28,12 @@ void DraftMappingGenerator::GenerateDraftMappings(
   // TODO: check if this sorting is necessary.
   mapping_metadata.SortCandidates();
 
+  const uint32_t read_length = read_batch.GetSequenceLengthAt(read_index);
+  PrefetchFirstCandidateReferenceWindows(mapping_metadata.positive_candidates_,
+                                         kPositive, read_length, reference);
+  PrefetchFirstCandidateReferenceWindows(mapping_metadata.negative_candidates_,
+                                         kNegative, read_length, reference);
+
   // For split alignments, SIMD cannot be used.
   if (split_alignment_) {
     GenerateDraftMappingsOnOneStrand(kPositive, read_index, read_batch,
@@ -185,6 +191,13 @@ void DraftMappingGenerator::GenerateDraftMappingsOnOneStrandUsingSIMD(
   while (candidate_index < candidates.size()) {
     if (candidates[candidate_index].count < candidate_count_threshold) {
       break;
+    }
+
+    if (candidate_index + kReferenceWindowPrefetchDistance <
+        candidates.size()) {
+      PrefetchCandidateReferenceWindow(
+          candidates[candidate_index + kReferenceWindowPrefetchDistance],
+          candidate_strand, read_length, reference);
     }
 
     uint32_t rid = candidates[candidate_index].GetReferenceSequenceIndex();
@@ -384,6 +397,12 @@ void DraftMappingGenerator::GenerateDraftMappingsOnOneStrand(
   for (uint32_t ci = 0; ci < candidates.size(); ++ci) {
     if (candidates[ci].count < candidate_count_threshold) {
       break;
+    }
+
+    if (ci + kReferenceWindowPrefetchDistance < candidates.size()) {
+      PrefetchCandidateReferenceWindow(
+          candidates[ci + kReferenceWindowPrefetchDistance], candidate_strand,
+          read_length, reference);
     }
 
     uint32_t rid = candidates[ci].GetReferenceSequenceIndex();

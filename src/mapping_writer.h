@@ -3,6 +3,7 @@
 
 #include <assert.h>
 
+#include <algorithm>
 #include <cinttypes>
 #include <cstring>
 #include <functional>
@@ -81,6 +82,73 @@ class MappingWriter {
     fprintf(mapping_output_file_, "%s", line.data());
   }
 
+  // An output line is formatted in line_buffer_, which is reused from line to
+  // line, and written with one fwrite by WriteLine. The text appended never
+  // holds a '\0' (C strings, numbers, and strings built from C strings), so
+  // this writes the bytes AppendMappingOutput would write for the same line.
+  inline char *ExtendLine(size_t num_chars) {
+    const size_t new_line_length = line_length_ + num_chars;
+    if (new_line_length > line_buffer_.size()) {
+      line_buffer_.resize(std::max(new_line_length, 2 * line_buffer_.size()));
+    }
+    char *line_end = line_buffer_.data() + line_length_;
+    line_length_ = new_line_length;
+    return line_end;
+  }
+
+  inline void AppendCharToLine(char c) { *ExtendLine(1) = c; }
+
+  inline void AppendTextToLine(const char *text, size_t length) {
+    memcpy(ExtendLine(length), text, length);
+  }
+
+  inline void AppendCStringToLine(const char *text) {
+    AppendTextToLine(text, strlen(text));
+  }
+
+  inline void AppendStringToLine(const std::string &text) {
+    AppendTextToLine(text.data(), text.length());
+  }
+
+  // The decimal digits std::to_string gives for value.
+  inline void AppendUnsignedToLine(uint64_t value) {
+    uint32_t num_digits = 1;
+    for (uint64_t rest = value; rest >= 10; rest /= 10) {
+      ++num_digits;
+    }
+    char *digit = ExtendLine(num_digits) + num_digits;
+    do {
+      *--digit = (char)('0' + value % 10);
+      value /= 10;
+    } while (value != 0);
+  }
+
+  inline void AppendSignedToLine(int64_t value) {
+    if (value < 0) {
+      AppendCharToLine('-');
+      AppendUnsignedToLine(-(uint64_t)value);
+    } else {
+      AppendUnsignedToLine((uint64_t)value);
+    }
+  }
+
+  // The characters barcode_translator_.Translate returns for barcode.
+  inline void AppendBarcodeToLine(uint64_t barcode) {
+    if (barcode_translator_.HasTranslateTable()) {
+      AppendStringToLine(
+          barcode_translator_.Translate(barcode, cell_barcode_length_));
+    } else {
+      barcode_translator_.WriteUntranslatedBarcode(
+          barcode, cell_barcode_length_, ExtendLine(cell_barcode_length_));
+    }
+  }
+
+  inline void WriteLine() {
+    fwrite(line_buffer_.data(), sizeof(char), line_length_,
+           mapping_output_file_);
+    line_length_ = 0;
+  }
+
   size_t FindBestMappingIndexFromDuplicates(
       const khash_t(k64_seq) * barcode_whitelist_lookup_table,
       const std::vector<MappingRecord> &duplicates);
@@ -120,6 +188,9 @@ class MappingWriter {
 
   // for pairs
   const std::vector<int> pairs_custom_rid_rank_;
+
+  std::vector<char> line_buffer_ = std::vector<char>(256);
+  size_t line_length_ = 0;
 };
 
 template <typename MappingRecord>
@@ -391,6 +462,17 @@ void MappingWriter<MappingRecord>::OutputTempMappings(
     temp_mapping_file_handle.file_path = "chromap_output.temp" +
       std::to_string(temp_mapping_file_handles.size());
   }
+  size_t max_num_mappings_on_a_rid = 0;
+  for (uint32_t i = 0; i < num_reference_sequences; ++i) {
+    if (mappings_on_diff_ref_seqs[i].size() > max_num_mappings_on_a_rid) {
+      max_num_mappings_on_a_rid = mappings_on_diff_ref_seqs[i].size();
+    }
+  }
+  if (max_num_mappings_on_a_rid > std::numeric_limits<uint32_t>::max()) {
+    max_num_mappings_on_a_rid = std::numeric_limits<uint32_t>::max();
+  }
+  temp_mapping_file_handle.max_num_mappings_on_a_rid =
+      (uint32_t)max_num_mappings_on_a_rid;
   temp_mapping_file_handles.emplace_back(temp_mapping_file_handle);
 
   OutputTempMapping(temp_mapping_file_handle.file_path, num_reference_sequences,

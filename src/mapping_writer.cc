@@ -11,27 +11,24 @@ template <>
 void MappingWriter<MappingWithBarcode>::AppendMapping(
     uint32_t rid, const SequenceBatch &reference,
     const MappingWithBarcode &mapping) {
+  AppendCStringToLine(reference.GetSequenceNameAt(rid));
+  AppendCharToLine('\t');
+  AppendUnsignedToLine(mapping.GetStartPosition());
+  AppendCharToLine('\t');
+  AppendUnsignedToLine(mapping.GetEndPosition());
   if (mapping_parameters_.mapping_output_format == MAPPINGFORMAT_BED) {
-    std::string strand = mapping.IsPositiveStrand() ? "+" : "-";
-    const char *reference_sequence_name = reference.GetSequenceNameAt(rid);
-    uint32_t mapping_end_position = mapping.GetEndPosition();
-    this->AppendMappingOutput(std::string(reference_sequence_name) + "\t" +
-                              std::to_string(mapping.GetStartPosition()) +
-                              "\t" + std::to_string(mapping_end_position) +
-                              "\t" +
-                              barcode_translator_.Translate(
-                                  mapping.cell_barcode_, cell_barcode_length_) +
-                              "\t" + std::to_string(mapping.num_dups_) + "\n");
+    AppendCharToLine('\t');
+    AppendBarcodeToLine(mapping.cell_barcode_);
+    AppendCharToLine('\t');
+    AppendUnsignedToLine(mapping.num_dups_);
   } else {
-    std::string strand = mapping.IsPositiveStrand() ? "+" : "-";
-    const char *reference_sequence_name = reference.GetSequenceNameAt(rid);
-    uint32_t mapping_end_position = mapping.GetEndPosition();
-    this->AppendMappingOutput(std::string(reference_sequence_name) + "\t" +
-                              std::to_string(mapping.GetStartPosition()) +
-                              "\t" + std::to_string(mapping_end_position) +
-                              "\tN\t" + std::to_string(mapping.mapq_) + "\t" +
-                              strand + "\n");
+    AppendTextToLine("\tN\t", 3);
+    AppendUnsignedToLine(mapping.mapq_);
+    AppendCharToLine('\t');
+    AppendCharToLine(mapping.IsPositiveStrand() ? '+' : '-');
   }
+  AppendCharToLine('\n');
+  WriteLine();
 }
 
 template <>
@@ -42,25 +39,20 @@ template <>
 void MappingWriter<MappingWithoutBarcode>::AppendMapping(
     uint32_t rid, const SequenceBatch &reference,
     const MappingWithoutBarcode &mapping) {
-  if (mapping_parameters_.mapping_output_format == MAPPINGFORMAT_BED) {
-    std::string strand = mapping.IsPositiveStrand() ? "+" : "-";
-    const char *reference_sequence_name = reference.GetSequenceNameAt(rid);
-    uint32_t mapping_end_position = mapping.GetEndPosition();
-    this->AppendMappingOutput(std::string(reference_sequence_name) + "\t" +
-                              std::to_string(mapping.GetStartPosition()) +
-                              "\t" + std::to_string(mapping_end_position) +
-                              "\tN\t" + std::to_string(mapping.mapq_) + "\t" +
-                              strand + "\t" + std::to_string(mapping.num_dups_) + "\n");
-  } else {
-    std::string strand = mapping.IsPositiveStrand() ? "+" : "-";
-    const char *reference_sequence_name = reference.GetSequenceNameAt(rid);
-    uint32_t mapping_end_position = mapping.GetEndPosition();
-    this->AppendMappingOutput(std::string(reference_sequence_name) + "\t" +
-                              std::to_string(mapping.GetStartPosition()) +
-                              "\t" + std::to_string(mapping_end_position) +
-                              "\tN\t" + std::to_string(mapping.mapq_) + "\t" +
-                              strand + "\t" + std::to_string(mapping.num_dups_) + "\n");
-  }
+  // BED and TagAlign lines are the same.
+  AppendCStringToLine(reference.GetSequenceNameAt(rid));
+  AppendCharToLine('\t');
+  AppendUnsignedToLine(mapping.GetStartPosition());
+  AppendCharToLine('\t');
+  AppendUnsignedToLine(mapping.GetEndPosition());
+  AppendTextToLine("\tN\t", 3);
+  AppendUnsignedToLine(mapping.mapq_);
+  AppendCharToLine('\t');
+  AppendCharToLine(mapping.IsPositiveStrand() ? '+' : '-');
+  AppendCharToLine('\t');
+  AppendUnsignedToLine(mapping.num_dups_);
+  AppendCharToLine('\n');
+  WriteLine();
 }
 
 // Specialization for BEDPE format.
@@ -72,15 +64,20 @@ template <>
 void MappingWriter<PairedEndMappingWithoutBarcode>::AppendMapping(
     uint32_t rid, const SequenceBatch &reference,
     const PairedEndMappingWithoutBarcode &mapping) {
+  const char *reference_sequence_name = reference.GetSequenceNameAt(rid);
   if (mapping_parameters_.mapping_output_format == MAPPINGFORMAT_BED) {
-    std::string strand = mapping.IsPositiveStrand() ? "+" : "-";
-    const char *reference_sequence_name = reference.GetSequenceNameAt(rid);
-    uint32_t mapping_end_position = mapping.GetEndPosition();
-    this->AppendMappingOutput(std::string(reference_sequence_name) + "\t" +
-                              std::to_string(mapping.GetStartPosition()) +
-                              "\t" + std::to_string(mapping_end_position) +
-                              "\tN\t" + std::to_string(mapping.mapq_) + "\t" +
-                              strand + "\t" + std::to_string(mapping.num_dups_) + "\n");
+    AppendCStringToLine(reference_sequence_name);
+    AppendCharToLine('\t');
+    AppendUnsignedToLine(mapping.GetStartPosition());
+    AppendCharToLine('\t');
+    AppendUnsignedToLine(mapping.GetEndPosition());
+    AppendTextToLine("\tN\t", 3);
+    AppendUnsignedToLine(mapping.mapq_);
+    AppendCharToLine('\t');
+    AppendCharToLine(mapping.IsPositiveStrand() ? '+' : '-');
+    AppendCharToLine('\t');
+    AppendUnsignedToLine(mapping.num_dups_);
+    AppendCharToLine('\n');
   } else {
     bool positive_strand = mapping.IsPositiveStrand();
     uint32_t positive_read_end =
@@ -89,31 +86,29 @@ void MappingWriter<PairedEndMappingWithoutBarcode>::AppendMapping(
         mapping.fragment_start_position_ + mapping.fragment_length_;
     uint32_t negative_read_start =
         negative_read_end - mapping.negative_alignment_length_;
-    const char *reference_sequence_name = reference.GetSequenceNameAt(rid);
-    if (positive_strand) {
-      this->AppendMappingOutput(
-          std::string(reference_sequence_name) + "\t" +
-          std::to_string(mapping.fragment_start_position_) + "\t" +
-          std::to_string(positive_read_end) + "\tN\t" +
-          std::to_string(mapping.mapq_) + "\t+\n" +
-          std::string(reference_sequence_name) + "\t" +
-          std::to_string(negative_read_start) + "\t" +
-          std::to_string(negative_read_end) + "\tN\t" +
-          std::to_string(mapping.mapq_) + "\t-\t" + 
-          std::to_string(mapping.num_dups_) + "\n");
-    } else {
-      this->AppendMappingOutput(
-          std::string(reference_sequence_name) + "\t" +
-          std::to_string(negative_read_start) + "\t" +
-          std::to_string(negative_read_end) + "\tN\t" +
-          std::to_string(mapping.mapq_) + "\t-\n" +
-          std::string(reference_sequence_name) + "\t" +
-          std::to_string(mapping.fragment_start_position_) + "\t" +
-          std::to_string(positive_read_end) + "\tN\t" +
-          std::to_string(mapping.mapq_) + "\t+\t" +
-          std::to_string(mapping.num_dups_) + "\n");
+    for (int mate = 0; mate < 2; ++mate) {
+      // The positive-strand read first when the fragment is on the positive
+      // strand.
+      const bool positive_read = (mate == 0) == positive_strand;
+      AppendCStringToLine(reference_sequence_name);
+      AppendCharToLine('\t');
+      AppendUnsignedToLine(positive_read ? mapping.fragment_start_position_
+                                         : negative_read_start);
+      AppendCharToLine('\t');
+      AppendUnsignedToLine(positive_read ? positive_read_end
+                                         : negative_read_end);
+      AppendTextToLine("\tN\t", 3);
+      AppendUnsignedToLine(mapping.mapq_);
+      AppendCharToLine('\t');
+      AppendCharToLine(positive_read ? '+' : '-');
+      if (mate == 1) {
+        AppendCharToLine('\t');
+        AppendUnsignedToLine(mapping.num_dups_);
+      }
+      AppendCharToLine('\n');
     }
   }
+  WriteLine();
 }
 
 template <>
@@ -124,17 +119,18 @@ template <>
 void MappingWriter<PairedEndMappingWithBarcode>::AppendMapping(
     uint32_t rid, const SequenceBatch &reference,
     const PairedEndMappingWithBarcode &mapping) {
+  const char *reference_sequence_name = reference.GetSequenceNameAt(rid);
   if (mapping_parameters_.mapping_output_format == MAPPINGFORMAT_BED) {
-    std::string strand = mapping.IsPositiveStrand() ? "+" : "-";
-    const char *reference_sequence_name = reference.GetSequenceNameAt(rid);
-    uint32_t mapping_end_position = mapping.GetEndPosition();
-    this->AppendMappingOutput(std::string(reference_sequence_name) + "\t" +
-                              std::to_string(mapping.GetStartPosition()) +
-                              "\t" + std::to_string(mapping_end_position) +
-                              "\t" +
-                              barcode_translator_.Translate(
-                                  mapping.cell_barcode_, cell_barcode_length_) +
-                              "\t" + std::to_string(mapping.num_dups_) + "\n");
+    AppendCStringToLine(reference_sequence_name);
+    AppendCharToLine('\t');
+    AppendUnsignedToLine(mapping.GetStartPosition());
+    AppendCharToLine('\t');
+    AppendUnsignedToLine(mapping.GetEndPosition());
+    AppendCharToLine('\t');
+    AppendBarcodeToLine(mapping.cell_barcode_);
+    AppendCharToLine('\t');
+    AppendUnsignedToLine(mapping.num_dups_);
+    AppendCharToLine('\n');
   } else {
     bool positive_strand = mapping.IsPositiveStrand();
     uint32_t positive_read_end =
@@ -143,29 +139,25 @@ void MappingWriter<PairedEndMappingWithBarcode>::AppendMapping(
         mapping.fragment_start_position_ + mapping.fragment_length_;
     uint32_t negative_read_start =
         negative_read_end - mapping.negative_alignment_length_;
-    const char *reference_sequence_name = reference.GetSequenceNameAt(rid);
-    if (positive_strand) {
-      this->AppendMappingOutput(
-          std::string(reference_sequence_name) + "\t" +
-          std::to_string(mapping.fragment_start_position_) + "\t" +
-          std::to_string(positive_read_end) + "\tN\t" +
-          std::to_string(mapping.mapq_) + "\t+\n" +
-          std::string(reference_sequence_name) + "\t" +
-          std::to_string(negative_read_start) + "\t" +
-          std::to_string(negative_read_end) + "\tN\t" +
-          std::to_string(mapping.mapq_) + "\t-\n");
-    } else {
-      this->AppendMappingOutput(
-          std::string(reference_sequence_name) + "\t" +
-          std::to_string(negative_read_start) + "\t" +
-          std::to_string(negative_read_end) + "\tN\t" +
-          std::to_string(mapping.mapq_) + "\t-\n" +
-          std::string(reference_sequence_name) + "\t" +
-          std::to_string(mapping.fragment_start_position_) + "\t" +
-          std::to_string(positive_read_end) + "\tN\t" +
-          std::to_string(mapping.mapq_) + "\t+\n");
+    for (int mate = 0; mate < 2; ++mate) {
+      // The positive-strand read first when the fragment is on the positive
+      // strand.
+      const bool positive_read = (mate == 0) == positive_strand;
+      AppendCStringToLine(reference_sequence_name);
+      AppendCharToLine('\t');
+      AppendUnsignedToLine(positive_read ? mapping.fragment_start_position_
+                                         : negative_read_start);
+      AppendCharToLine('\t');
+      AppendUnsignedToLine(positive_read ? positive_read_end
+                                         : negative_read_end);
+      AppendTextToLine("\tN\t", 3);
+      AppendUnsignedToLine(mapping.mapq_);
+      AppendCharToLine('\t');
+      AppendCharToLine(positive_read ? '+' : '-');
+      AppendCharToLine('\n');
     }
   }
+  WriteLine();
 }
 
 // Specialization for PAF format.
@@ -405,19 +397,25 @@ template <>
 void MappingWriter<PairsMapping>::AppendMapping(uint32_t rid,
                                                 const SequenceBatch &reference,
                                                 const PairsMapping &mapping) {
-  const char *reference_sequence_name1 =
-      reference.GetSequenceNameAt(mapping.rid1_);
-  const char *reference_sequence_name2 =
-      reference.GetSequenceNameAt(mapping.rid2_);
-  this->AppendMappingOutput(mapping.read_name_ + "\t" +
-                            std::string(reference_sequence_name1) + "\t" +
-                            std::to_string(mapping.GetPosition(1)) + "\t" +
-                            std::string(reference_sequence_name2) + "\t" +
-                            std::to_string(mapping.GetPosition(2)) + "\t" +
-                            std::string(1, mapping.GetStrand(1)) + "\t" +
-                            std::string(1, mapping.GetStrand(2)) + "\tUU\t" +
-                            std::to_string(mapping.mapq_) + "\t" + // mapq1
-                            std::to_string(mapping.mapq_) + "\n"); // mapq2
+  AppendStringToLine(mapping.read_name_);
+  AppendCharToLine('\t');
+  AppendCStringToLine(reference.GetSequenceNameAt(mapping.rid1_));
+  AppendCharToLine('\t');
+  AppendSignedToLine(mapping.GetPosition(1));
+  AppendCharToLine('\t');
+  AppendCStringToLine(reference.GetSequenceNameAt(mapping.rid2_));
+  AppendCharToLine('\t');
+  AppendSignedToLine(mapping.GetPosition(2));
+  AppendCharToLine('\t');
+  AppendCharToLine(mapping.GetStrand(1));
+  AppendCharToLine('\t');
+  AppendCharToLine(mapping.GetStrand(2));
+  AppendTextToLine("\tUU\t", 4);
+  AppendUnsignedToLine(mapping.mapq_);  // mapq1
+  AppendCharToLine('\t');
+  AppendUnsignedToLine(mapping.mapq_);  // mapq2
+  AppendCharToLine('\n');
+  WriteLine();
 }
 
 template <>
@@ -428,18 +426,35 @@ void MappingWriter<PairsMapping>::OutputTempMapping(
   FILE *temp_mapping_output_file =
       fopen(temp_mapping_output_file_path.c_str(), "wb");
   assert(temp_mapping_output_file != NULL);
+  // The bytes of a size_t count per ref seq and a WriteToFile call per
+  // mapping, collected in a buffer written with one fwrite whenever the next
+  // item would not fit. A record is at most 65,575 bytes (its name length is a
+  // uint16_t), so every item fits in an empty buffer.
+  std::vector<char> buffer((size_t)1 << 20);
+  size_t num_buffered_bytes = 0;
   for (size_t ri = 0; ri < num_reference_sequences; ++ri) {
     // make sure mappings[ri] exists even if its size is 0
     size_t num_mappings = mappings[ri].size();
-    fwrite(&num_mappings, sizeof(size_t), 1, temp_mapping_output_file);
-    if (mappings[ri].size() > 0) {
-      for (size_t mi = 0; mi < num_mappings; ++mi) {
-        mappings[ri][mi].WriteToFile(temp_mapping_output_file);
+    if (num_buffered_bytes + sizeof(size_t) > buffer.size()) {
+      fwrite(buffer.data(), sizeof(char), num_buffered_bytes,
+             temp_mapping_output_file);
+      num_buffered_bytes = 0;
+    }
+    memcpy(buffer.data() + num_buffered_bytes, &num_mappings, sizeof(size_t));
+    num_buffered_bytes += sizeof(size_t);
+    for (size_t mi = 0; mi < num_mappings; ++mi) {
+      const size_t num_record_bytes = mappings[ri][mi].GetSerializedSize();
+      if (num_buffered_bytes + num_record_bytes > buffer.size()) {
+        fwrite(buffer.data(), sizeof(char), num_buffered_bytes,
+               temp_mapping_output_file);
+        num_buffered_bytes = 0;
       }
-      // fwrite(mappings[ri].data(), sizeof(MappingRecord), mappings[ri].size(),
-      // temp_mapping_output_file);
+      mappings[ri][mi].SerializeTo(buffer.data() + num_buffered_bytes);
+      num_buffered_bytes += num_record_bytes;
     }
   }
+  fwrite(buffer.data(), sizeof(char), num_buffered_bytes,
+         temp_mapping_output_file);
   fclose(temp_mapping_output_file);
 }
 

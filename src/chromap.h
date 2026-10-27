@@ -3,6 +3,7 @@
 
 #include <omp.h>
 
+#include <functional>
 #include <memory>
 #include <random>
 #include <string>
@@ -37,6 +38,28 @@
 #define CHROMAP_VERSION "0.3.3-r521"
 
 namespace chromap {
+
+// Returns object, which is never destroyed. MapSingleEndReads and
+// MapPairedEndReads hand it the objects that live until the process exits
+// (main returns right after them): the candidate cache, the read batches and
+// the minimizer histories, whose destructors write nothing and only free
+// millions of small blocks one by one, about a second of a run. The operating
+// system takes their memory back at exit. Each pointer is recorded in a static
+// array, so that LeakSanitizer and valgrind count the object as reachable
+// rather than leaked. Called from one thread at a time.
+template <typename T>
+T *KeepUntilExit(T *object) {
+  static void *volatile kept_objects[32];
+  static size_t num_kept_objects = 0;
+  if (num_kept_objects < sizeof(kept_objects) / sizeof(kept_objects[0])) {
+    kept_objects[num_kept_objects++] = object;
+  }
+  return object;
+}
+
+// Loads the barcode files' batches on a thread of its own, ahead of the
+// barcode abundance pass, which takes their whitelist keys (chromap.cc).
+class BarcodeBatchReadAhead;
 
 class K_MinHash {
 public:
@@ -126,10 +149,36 @@ class Chromap {
                                           SequenceBatch &barcode_batch,
                                           bool parallel_parsing);
 
+  // With parallel_parsing outside a parallel region, read 1, read 2 and the
+  // barcodes are loaded on this thread and on up to num_loading_helpers more,
+  // each file by one thread; an exit any of the loads defers on its thread is
+  // taken here, for the first of them in that order.
   uint32_t LoadPairedEndReadsWithBarcodes(SequenceBatch &read_batch1,
                                           SequenceBatch &read_batch2,
                                           SequenceBatch &barcode_batch,
-                                          bool parallel_parsing);
+                                          bool parallel_parsing,
+                                          int num_loading_helpers = 0);
+
+  // Open the files of the 'read_file_index'th input in the loading batches
+  // and load their first batch, as the read loops of MapSingleEndReads and
+  // MapPairedEndReads do; return the number of reads (pairs) loaded.
+  uint32_t OpenAndLoadFirstSingleEndBatch(size_t read_file_index,
+                                          SequenceBatch &read_batch,
+                                          SequenceBatch &barcode_batch);
+
+  // The paired-end batch loads on this thread and on up to
+  // num_loading_helpers more (LoadPairedEndReadsWithBarcodes).
+  uint32_t OpenAndLoadFirstPairedEndBatch(size_t read_file_index,
+                                          SequenceBatch &read_batch1,
+                                          SequenceBatch &read_batch2,
+                                          SequenceBatch &barcode_batch,
+                                          int num_loading_helpers = 0);
+
+  // Runs 'work' with exits deferred on this thread: returns the message
+  // ExitWithMessage would have exited with (an empty string when there is
+  // none), so that the caller can exit with it later, where the work used to
+  // run.
+  std::string RunWithExitDeferred(const std::function<void()> &work);
 
   void TrimAdapterForPairedEndRead(uint32_t pair_index,
                                    SequenceBatch &read_batch1,
@@ -140,11 +189,26 @@ class Chromap {
                                            const SequenceBatch &read_batch1,
                                            const SequenceBatch &read_batch2);
 
-  uint32_t SampleInputBarcodesAndExamineLength();
+  uint32_t SampleInputBarcodesAndExamineLength(std::ostream &log);
 
-  void LoadBarcodeWhitelist();
+  void LoadBarcodeWhitelist(std::ostream &log);
 
-  void ComputeBarcodeAbundance(uint64_t max_num_sample_barcodes);
+  // Given read_ahead, takes the barcode batches' whitelist keys from it
+  // instead of loading the batches here.
+  void ComputeBarcodeAbundance(uint64_t max_num_sample_barcodes,
+                               std::ostream &log,
+                               BarcodeBatchReadAhead *read_ahead = nullptr);
+
+  // Prepares the barcodes of single-cell data:
+  // SampleInputBarcodesAndExamineLength and, with a whitelist,
+  // LoadBarcodeWhitelist and ComputeBarcodeAbundance, which write their log
+  // lines to 'log'. An error does not exit: it returns the message it would
+  // have exited with (an empty string when there is none), so that this can
+  // run beside the reference and index loads and the caller can write the log
+  // and exit where the barcodes were prepared before. Given a loading helper,
+  // the barcode files' batches load on one more thread, ahead of the abundance
+  // pass, from before the whitelist loads.
+  std::string PrepareBarcodes(std::ostream &log, int num_loading_helpers = 0);
 
   void UpdateBarcodeAbundance(uint32_t num_loaded_barcodes,
                               const SequenceBatch &barcode_batch);
@@ -172,6 +236,30 @@ class Chromap {
 
   // TODO: generate reranked candidates directly.
   void RerankCandidatesRid(std::vector<Candidate> &candidates);
+
+  // Loads the reference, whose file InitializeLoading has opened, and the
+  // index. With more than one mapping thread the two loads run at once, the
+  // reference on a second thread. Writes the reference's log line to std::cerr
+  // and returns the index's log lines, which the caller writes where the index
+  // used to be loaded, so the log keeps the order of loading one after the
+  // other. Calls prepare_mapping once, on this thread, after the index has
+  // loaded: with more than one thread while the reference is still loading
+  // (the mapping's set-up: the candidate cache and the first read batch).
+  // Its argument is the number of threads, at most
+  // max_num_preparing_helpers, that it may run besides this one until it
+  // returns; the reference loader leaves them free.
+  // Calls prepare_barcodes once unless it is empty: with three threads or more
+  // on a thread of its own while the index loads, on one thread fewer, and
+  // otherwise on this thread after prepare_mapping. Its argument is the
+  // number of threads, at most max_num_barcode_helpers, that it may run
+  // besides its own; they come out of the index load's, which keeps at least
+  // this thread, and so out of the reference helpers' and prepare_mapping's
+  // after it.
+  std::string LoadReferenceAndIndex(
+      SequenceBatch &reference, Index &index,
+      const std::function<void(int)> &prepare_mapping,
+      const std::function<void(int)> &prepare_barcodes,
+      int max_num_preparing_helpers = 0, int max_num_barcode_helpers = 0);
 
   // Parameters
   const IndexParameters index_parameters_;
@@ -221,7 +309,51 @@ void Chromap::MapSingleEndReads() {
 
   SequenceBatch reference;
   reference.InitializeLoading(mapping_parameters_.reference_file_path);
-  reference.LoadAllSequences();
+  Index index(mapping_parameters_.index_file_path);
+  // The candidate cache is built while the reference loads.
+  std::unique_ptr<mm_cache> mm_to_candidates_cache_storage;
+  // So are single-cell barcodes prepared, with their log and any error written
+  // below, where they were prepared before.
+  std::ostringstream barcode_log;
+  barcode_log.flags(std::cerr.flags());
+  barcode_log.precision(std::cerr.precision());
+  barcode_log.imbue(std::cerr.getloc());
+  std::string barcode_error;
+  std::function<void(int)> prepare_barcodes;
+  if (!mapping_parameters_.is_bulk_data) {
+    prepare_barcodes = [this, &barcode_log,
+                        &barcode_error](int num_loading_helpers) {
+      barcode_error = PrepareBarcodes(barcode_log, num_loading_helpers);
+    };
+  }
+  // With a whitelist, one thread loads the barcode files ahead of the
+  // abundance pass.
+  const int max_num_barcode_helpers =
+      mapping_parameters_.barcode_whitelist_file_path.empty() ? 0 : 1;
+  // And so are the first read files opened and their first batch loaded, with
+  // any error written in the read loop below, where they were loaded before.
+  std::unique_ptr<SequenceBatch> read_batch_for_loading_storage;
+  std::unique_ptr<SequenceBatch> barcode_batch_for_loading_storage;
+  uint32_t num_first_loaded_reads = 0;
+  std::string first_batch_error;
+  const std::string index_log = LoadReferenceAndIndex(
+      reference, index,
+      [this, &mm_to_candidates_cache_storage, &read_batch_for_loading_storage,
+       &barcode_batch_for_loading_storage, &num_first_loaded_reads,
+       &first_batch_error](int /*num_preparing_helpers*/) {
+        mm_to_candidates_cache_storage.reset(new mm_cache(2000003));
+        read_batch_for_loading_storage.reset(
+            new SequenceBatch(read_batch_size_, read1_effective_range_));
+        barcode_batch_for_loading_storage.reset(
+            new SequenceBatch(read_batch_size_, barcode_effective_range_));
+        first_batch_error = RunWithExitDeferred([&]() {
+          num_first_loaded_reads = OpenAndLoadFirstSingleEndBatch(
+              0, *read_batch_for_loading_storage,
+              *barcode_batch_for_loading_storage);
+        });
+      },
+      prepare_barcodes, /*max_num_preparing_helpers=*/0,
+      max_num_barcode_helpers);
   uint32_t num_reference_sequences = reference.GetNumSequences();
   if (mapping_parameters_.custom_rid_order_file_path.length() > 0) {
     GenerateCustomRidRanks(mapping_parameters_.custom_rid_order_file_path,
@@ -230,18 +362,21 @@ void Chromap::MapSingleEndReads() {
     reference.ReorderSequences(custom_rid_rank_);
   }
 
-  Index index(mapping_parameters_.index_file_path);
-  index.Load();
+  std::cerr << index_log;
   const int kmer_size = index.GetKmerSize();
   const int window_size = index.GetWindowSize();
   // index.Statistics(num_sequences, reference);
 
-  SequenceBatch read_batch(read_batch_size_, read1_effective_range_);
-  SequenceBatch read_batch_for_loading(read_batch_size_,
-                                       read1_effective_range_);
-  SequenceBatch barcode_batch(read_batch_size_, barcode_effective_range_);
-  SequenceBatch barcode_batch_for_loading(read_batch_size_,
-                                          barcode_effective_range_);
+  // The read batches, the candidate cache and the minimizer history live
+  // until the process exits (KeepUntilExit).
+  SequenceBatch &read_batch = *KeepUntilExit(
+      new SequenceBatch(read_batch_size_, read1_effective_range_));
+  SequenceBatch &read_batch_for_loading =
+      *KeepUntilExit(read_batch_for_loading_storage.release());
+  SequenceBatch &barcode_batch = *KeepUntilExit(
+      new SequenceBatch(read_batch_size_, barcode_effective_range_));
+  SequenceBatch &barcode_batch_for_loading =
+      *KeepUntilExit(barcode_batch_for_loading_storage.release());
 
   std::vector<std::vector<MappingRecord>> mappings_on_diff_ref_seqs;
   mappings_on_diff_ref_seqs.reserve(num_reference_sequences);
@@ -251,12 +386,12 @@ void Chromap::MapSingleEndReads() {
 
   std::vector<TempMappingFileHandle<MappingRecord>> temp_mapping_file_handles;
 
-  // Preprocess barcodes for single cell data
+  // Preprocess barcodes for single cell data: prepared while the reference
+  // and index loaded.
   if (!mapping_parameters_.is_bulk_data) {
-    barcode_length_ = SampleInputBarcodesAndExamineLength();
-    if (!mapping_parameters_.barcode_whitelist_file_path.empty()) {
-      LoadBarcodeWhitelist();
-      ComputeBarcodeAbundance(initial_num_sample_barcodes_);
+    std::cerr << barcode_log.str();
+    if (!barcode_error.empty()) {
+      ExitWithMessage(barcode_error);
     }
   }
 
@@ -288,12 +423,22 @@ void Chromap::MapSingleEndReads() {
     max_num_mappings_in_mem = 1 * ((uint64_t)1 << 29) / sizeof(MappingRecord);
   }
 
-  mm_cache mm_to_candidates_cache(2000003);
+  mm_cache &mm_to_candidates_cache =
+      *KeepUntilExit(mm_to_candidates_cache_storage.release());
   mm_to_candidates_cache.SetKmerLength(kmer_size);
-  struct _mm_history *mm_history = new struct _mm_history[read_batch_size_];
+  struct _mm_history *mm_history =
+      KeepUntilExit(new struct _mm_history[read_batch_size_]);
+  // The cache update after each batch runs as num_cache_update_tasks tasks.
+  // Task t makes the updates of the history entries whose cache entry index %
+  // num_cache_update_tasks == t, in read order, so every cache entry receives
+  // the same updates in the same order as in one loop over the reads. The
+  // mapping loop records each history entry's task where it writes the entry.
+  const uint32_t num_cache_update_tasks = mapping_parameters_.num_threads;
+  std::vector<uint32_t> cache_update_task_of_history(read_batch_size_, 0);
+  uint32_t *const cache_update_task = cache_update_task_of_history.data();
   // Use bit encoding to represent mapping results
   // bit 0: is barcode in whitelist
-  uint8_t *read_map_summary = NULL ; 
+  uint8_t *read_map_summary = NULL ;
   if (!mapping_parameters_.summary_metadata_file_path.empty()) {
     read_map_summary = new uint8_t[read_batch_size_];
     memset(read_map_summary, 1, sizeof(*read_map_summary)*read_batch_size_);
@@ -313,18 +458,18 @@ void Chromap::MapSingleEndReads() {
   for (size_t read_file_index = 0;
        read_file_index < mapping_parameters_.read_file1_paths.size();
        ++read_file_index) {
-    read_batch_for_loading.InitializeLoading(
-        mapping_parameters_.read_file1_paths[read_file_index]);
-
-    if (!mapping_parameters_.is_bulk_data) {
-      barcode_batch_for_loading.InitializeLoading(
-          mapping_parameters_.barcode_file_paths[read_file_index]);
-    }
-
     uint32_t num_loaded_reads_for_loading = 0;
-    uint32_t num_loaded_reads = LoadSingleEndReadsWithBarcodes(
-        read_batch_for_loading, barcode_batch_for_loading,
-        mapping_parameters_.num_threads >= 3 ? true : false);
+    uint32_t num_loaded_reads = 0;
+    if (read_file_index == 0) {
+      // Opened and loaded with the reference and index.
+      if (!first_batch_error.empty()) {
+        ExitWithMessage(first_batch_error);
+      }
+      num_loaded_reads = num_first_loaded_reads;
+    } else {
+      num_loaded_reads = OpenAndLoadFirstSingleEndBatch(
+          read_file_index, read_batch_for_loading, barcode_batch_for_loading);
+    }
     read_batch_for_loading.SwapSequenceBatch(read_batch);
 
     if (!mapping_parameters_.is_bulk_data) {
@@ -437,6 +582,10 @@ void Chromap::MapSingleEndReads() {
                     mapping_metadata.negative_candidates_;
                 mm_history[read_index].repetitive_seed_length =
                     mapping_metadata.repetitive_seed_length_;
+                cache_update_task[read_index] =
+                    (uint32_t)mm_to_candidates_cache.GetEntryIndex(
+                        mapping_metadata.minimizers_) %
+                    num_cache_update_tasks;
               }
 
               size_t current_num_candidates =
@@ -471,25 +620,39 @@ void Chromap::MapSingleEndReads() {
             }
           }
 #pragma omp taskwait
-          for (uint32_t read_index = 0; read_index < history_update_threshold;
-               ++read_index) {
-            if (mm_history[read_index].timestamp != num_reads_) continue;
-            mm_to_candidates_cache.Update(
-                mm_history[read_index].minimizers,
-                mm_history[read_index].positive_candidates,
-                mm_history[read_index].negative_candidates,
-                mm_history[read_index].repetitive_seed_length);
-            if (mm_history[read_index].positive_candidates.size() <
-                mm_history[read_index].positive_candidates.capacity() / 2) {
-              std::vector<Candidate>().swap(
-                  mm_history[read_index].positive_candidates);
-            }
-            if (mm_history[read_index].negative_candidates.size() <
-                mm_history[read_index].negative_candidates.capacity() / 2) {
-              std::vector<Candidate>().swap(
-                  mm_history[read_index].negative_candidates);
-            }
+          // An entry with the current timestamp was written in this batch,
+          // together with its task.
+          for (uint32_t task_index = 0; task_index < num_cache_update_tasks;
+               ++task_index) {
+#pragma omp task
+            {
+              for (uint32_t read_index = 0;
+                   read_index < history_update_threshold; ++read_index) {
+                if (cache_update_task[read_index] != task_index ||
+                    mm_history[read_index].timestamp != num_reads_) {
+                  continue;
+                }
+                mm_to_candidates_cache.Update(
+                    mm_history[read_index].minimizers,
+                    mm_history[read_index].positive_candidates,
+                    mm_history[read_index].negative_candidates,
+                    mm_history[read_index].repetitive_seed_length);
+                if (mm_history[read_index].positive_candidates.size() <
+                    mm_history[read_index].positive_candidates.capacity() /
+                        2) {
+                  std::vector<Candidate>().swap(
+                      mm_history[read_index].positive_candidates);
+                }
+                if (mm_history[read_index].negative_candidates.size() <
+                    mm_history[read_index].negative_candidates.capacity() /
+                        2) {
+                  std::vector<Candidate>().swap(
+                      mm_history[read_index].negative_candidates);
+                }
+              }
+            }  // end of openmp cache update task
           }
+#pragma omp taskwait
           // std::cerr<<"cache memusage: " <<
           // mm_to_candidates_cache.GetMemoryBytes() <<"\n" ;
           if (!mapping_parameters_.summary_metadata_file_path.empty()) {
@@ -565,7 +728,6 @@ void Chromap::MapSingleEndReads() {
   std::cerr << "Mapped all reads in " << GetRealTime() - real_start_mapping_time
             << "s.\n";
 
-  delete[] mm_history;
   if (read_map_summary != NULL)
     delete[] read_map_summary;
 
@@ -580,8 +742,9 @@ void Chromap::MapSingleEndReads() {
     // First, process the remaining mappings in the memory and save them on
     // disk.
     if (num_mappings_in_mem > 0) {
-      mapping_processor.SortOutputMappings(num_reference_sequences,
-                                           mappings_on_diff_ref_seqs);
+      mapping_processor.ParallelSortOutputMappings(
+          num_reference_sequences, mappings_on_diff_ref_seqs,
+          mapping_parameters_.num_threads);
 
       mapping_writer.OutputTempMappings(num_reference_sequences,
                                         mappings_on_diff_ref_seqs,
@@ -637,10 +800,61 @@ template <typename MappingRecord>
 void Chromap::MapPairedEndReads() {
   double real_start_time = GetRealTime();
 
-  // Load reference
+  // Load reference and index
   SequenceBatch reference;
   reference.InitializeLoading(mapping_parameters_.reference_file_path);
-  reference.LoadAllSequences();
+  Index index(mapping_parameters_.index_file_path);
+  // The candidate cache is built while the reference loads.
+  std::unique_ptr<mm_cache> mm_to_candidates_cache_storage;
+  const int cache_size = mapping_parameters_.cache_size;
+  // So are single-cell barcodes prepared, with their log and any error written
+  // below, where they were prepared before.
+  std::ostringstream barcode_log;
+  barcode_log.flags(std::cerr.flags());
+  barcode_log.precision(std::cerr.precision());
+  barcode_log.imbue(std::cerr.getloc());
+  std::string barcode_error;
+  std::function<void(int)> prepare_barcodes;
+  if (!mapping_parameters_.is_bulk_data) {
+    prepare_barcodes = [this, &barcode_log,
+                        &barcode_error](int num_loading_helpers) {
+      barcode_error = PrepareBarcodes(barcode_log, num_loading_helpers);
+    };
+  }
+  // With a whitelist, one thread loads the barcode files ahead of the
+  // abundance pass.
+  const int max_num_barcode_helpers =
+      mapping_parameters_.barcode_whitelist_file_path.empty() ? 0 : 1;
+  // And so are the first read files opened and their first batch loaded, with
+  // any error written in the read loop below, where they were loaded before.
+  std::unique_ptr<SequenceBatch> read_batch1_for_loading_storage;
+  std::unique_ptr<SequenceBatch> read_batch2_for_loading_storage;
+  std::unique_ptr<SequenceBatch> barcode_batch_for_loading_storage;
+  uint32_t num_first_loaded_pairs = 0;
+  std::string first_batch_error;
+  const std::string index_log = LoadReferenceAndIndex(
+      reference, index,
+      [this, &mm_to_candidates_cache_storage, cache_size,
+       &read_batch1_for_loading_storage, &read_batch2_for_loading_storage,
+       &barcode_batch_for_loading_storage, &num_first_loaded_pairs,
+       &first_batch_error](int num_preparing_helpers) {
+        mm_to_candidates_cache_storage.reset(new mm_cache(cache_size));
+        read_batch1_for_loading_storage.reset(
+            new SequenceBatch(read_batch_size_, read1_effective_range_));
+        read_batch2_for_loading_storage.reset(
+            new SequenceBatch(read_batch_size_, read2_effective_range_));
+        barcode_batch_for_loading_storage.reset(
+            new SequenceBatch(read_batch_size_, barcode_effective_range_));
+        first_batch_error = RunWithExitDeferred([&]() {
+          num_first_loaded_pairs = OpenAndLoadFirstPairedEndBatch(
+              0, *read_batch1_for_loading_storage,
+              *read_batch2_for_loading_storage,
+              *barcode_batch_for_loading_storage, num_preparing_helpers);
+        });
+      },
+      prepare_barcodes,
+      // Read 2 and the barcodes, each on a thread of its own.
+      mapping_parameters_.is_bulk_data ? 1 : 2, max_num_barcode_helpers);
   uint32_t num_reference_sequences = reference.GetNumSequences();
   
   // Debugging Info (printing out reference information)
@@ -663,23 +877,26 @@ void Chromap::MapPairedEndReads() {
         num_reference_sequences, reference, pairs_custom_rid_rank_);
   }
 
-  // Load index
-  Index index(mapping_parameters_.index_file_path);
-  index.Load();
+  std::cerr << index_log;
   const int kmer_size = index.GetKmerSize();
   const int window_size = index.GetWindowSize();
   // index.Statistics(num_sequences, reference);
 
   // Initialize read batches
-  SequenceBatch read_batch1(read_batch_size_, read1_effective_range_);
-  SequenceBatch read_batch2(read_batch_size_, read2_effective_range_);
-  SequenceBatch barcode_batch(read_batch_size_, barcode_effective_range_);
-  SequenceBatch read_batch1_for_loading(read_batch_size_,
-                                        read1_effective_range_);
-  SequenceBatch read_batch2_for_loading(read_batch_size_,
-                                        read2_effective_range_);
-  SequenceBatch barcode_batch_for_loading(read_batch_size_,
-                                          barcode_effective_range_);
+  // The read batches, the candidate cache and the minimizer histories live
+  // until the process exits (KeepUntilExit).
+  SequenceBatch &read_batch1 = *KeepUntilExit(
+      new SequenceBatch(read_batch_size_, read1_effective_range_));
+  SequenceBatch &read_batch2 = *KeepUntilExit(
+      new SequenceBatch(read_batch_size_, read2_effective_range_));
+  SequenceBatch &barcode_batch = *KeepUntilExit(
+      new SequenceBatch(read_batch_size_, barcode_effective_range_));
+  SequenceBatch &read_batch1_for_loading =
+      *KeepUntilExit(read_batch1_for_loading_storage.release());
+  SequenceBatch &read_batch2_for_loading =
+      *KeepUntilExit(read_batch2_for_loading_storage.release());
+  SequenceBatch &barcode_batch_for_loading =
+      *KeepUntilExit(barcode_batch_for_loading_storage.release());
 
   // Check cache-related parameters
   std::cerr << "Cache Size: " << mapping_parameters_.cache_size << std::endl;
@@ -730,11 +947,14 @@ void Chromap::MapPairedEndReads() {
   std::vector<int> cache_hits_per_thread(mapping_parameters_.num_threads, 0);
 
   // Initialize cache
-  mm_cache mm_to_candidates_cache(mapping_parameters_.cache_size);
+  mm_cache &mm_to_candidates_cache =
+      *KeepUntilExit(mm_to_candidates_cache_storage.release());
   mm_to_candidates_cache.SetKmerLength(kmer_size);
 
-  struct _mm_history *mm_history1 = new struct _mm_history[read_batch_size_];
-  struct _mm_history *mm_history2 = new struct _mm_history[read_batch_size_];
+  struct _mm_history *mm_history1 =
+      KeepUntilExit(new struct _mm_history[read_batch_size_]);
+  struct _mm_history *mm_history2 =
+      KeepUntilExit(new struct _mm_history[read_batch_size_]);
   
   // The explanation for read_map_summary is in the single-end mapping function
   uint8_t *read_map_summary = NULL ;
@@ -751,12 +971,12 @@ void Chromap::MapPairedEndReads() {
   }
   std::vector<TempMappingFileHandle<MappingRecord>> temp_mapping_file_handles;
 
-  // Preprocess barcodes for single cell data
+  // Preprocess barcodes for single cell data: prepared while the reference
+  // and index loaded.
   if (!mapping_parameters_.is_bulk_data) {
-    barcode_length_ = SampleInputBarcodesAndExamineLength();
-    if (!mapping_parameters_.barcode_whitelist_file_path.empty()) {
-      LoadBarcodeWhitelist();
-      ComputeBarcodeAbundance(initial_num_sample_barcodes_);
+    std::cerr << barcode_log.str();
+    if (!barcode_error.empty()) {
+      ExitWithMessage(barcode_error);
     }
   }
 
@@ -801,21 +1021,20 @@ void Chromap::MapPairedEndReads() {
   for (size_t read_file_index = 0;
        read_file_index < mapping_parameters_.read_file1_paths.size();
        ++read_file_index) {
-    // Set read batches to the current read files.
-    read_batch1_for_loading.InitializeLoading(
-        mapping_parameters_.read_file1_paths[read_file_index]);
-    read_batch2_for_loading.InitializeLoading(
-        mapping_parameters_.read_file2_paths[read_file_index]);
-    if (!mapping_parameters_.is_bulk_data) {
-      barcode_batch_for_loading.InitializeLoading(
-          mapping_parameters_.barcode_file_paths[read_file_index]);
-    }
-
-    // Load the first batches.
+    // Set read batches to the current read files and load the first batches.
     uint32_t num_loaded_pairs_for_loading = 0;
-    uint32_t num_loaded_pairs = LoadPairedEndReadsWithBarcodes(
-        read_batch1_for_loading, read_batch2_for_loading,
-        barcode_batch_for_loading, mapping_parameters_.num_threads >= 3 ? true : false);
+    uint32_t num_loaded_pairs = 0;
+    if (read_file_index == 0) {
+      // Opened and loaded with the reference and index.
+      if (!first_batch_error.empty()) {
+        ExitWithMessage(first_batch_error);
+      }
+      num_loaded_pairs = num_first_loaded_pairs;
+    } else {
+      num_loaded_pairs = OpenAndLoadFirstPairedEndBatch(
+          read_file_index, read_batch1_for_loading, read_batch2_for_loading,
+          barcode_batch_for_loading);
+    }
     read_batch1_for_loading.SwapSequenceBatch(read_batch1);
     read_batch2_for_loading.SwapSequenceBatch(read_batch2);
     if (!mapping_parameters_.is_bulk_data) {
@@ -1290,8 +1509,6 @@ void Chromap::MapPairedEndReads() {
   std::cerr << "Mapped all reads in " << GetRealTime() - real_start_mapping_time
             << "s.\n";
 
-  delete[] mm_history1;
-  delete[] mm_history2;
   if (read_map_summary != NULL)
     delete[] read_map_summary;
 
@@ -1306,8 +1523,9 @@ void Chromap::MapPairedEndReads() {
     // First, process the remaining mappings in the memory and save them on
     // disk.
     if (num_mappings_in_mem > 0) {
-      mapping_processor.SortOutputMappings(num_reference_sequences,
-                                           mappings_on_diff_ref_seqs);
+      mapping_processor.ParallelSortOutputMappings(
+          num_reference_sequences, mappings_on_diff_ref_seqs,
+          mapping_parameters_.num_threads);
 
       mapping_writer.OutputTempMappings(num_reference_sequences,
                                         mappings_on_diff_ref_seqs,

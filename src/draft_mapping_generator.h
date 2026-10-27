@@ -2,6 +2,7 @@
 #define DRAFT_MAPPING_GENERATOR_H_
 
 #include <cstdint>
+#include <vector>
 
 #include "draft_mapping.h"
 #include "mapping_metadata.h"
@@ -34,6 +35,65 @@ class DraftMappingGenerator {
   // function. So the input rid must be valid.
   bool IsValidCandidate(uint32_t rid, uint32_t position, uint32_t read_length,
                         const SequenceBatch &reference);
+
+  // How many candidates ahead of the one being verified the reference window
+  // is prefetched.
+  static constexpr uint32_t kReferenceWindowPrefetchDistance = 8;
+
+  // Prefetches, one cache line at a time, the reference window that the
+  // banded alignment of a valid candidate reads, [position - e, position +
+  // read_length + e), so that the DRAM and TLB misses of a read's candidates
+  // overlap with each other and with the alignments before them. Does nothing
+  // for an invalid candidate. A hint only: no result depends on it, and where
+  // the compiler has no prefetch builtin it does nothing. It must be inlined:
+  // GCC 13 at -O3 deduces a function whose only effect is __builtin_prefetch
+  // to be pure and deletes calls to it.
+#if defined(__GNUC__) || defined(__clang__)
+  __attribute__((always_inline)) void PrefetchCandidateReferenceWindow(
+      const Candidate &candidate, const Strand candidate_strand,
+      uint32_t read_length, const SequenceBatch &reference) {
+    const uint32_t rid = candidate.GetReferenceSequenceIndex();
+    uint32_t position = candidate.GetReferenceSequencePosition();
+    if (candidate_strand == kNegative) {
+      position = position - read_length + 1;
+    }
+    if (!IsValidCandidate(rid, position, read_length, reference)) {
+      return;
+    }
+    const uintptr_t window_start = reinterpret_cast<uintptr_t>(
+        reference.GetSequenceAt(rid) + position - error_threshold_);
+    const uintptr_t window_end =
+        window_start + read_length + 2 * error_threshold_;
+    for (uintptr_t line = window_start & ~(uintptr_t)63; line < window_end;
+         line += 64) {
+      __builtin_prefetch(reinterpret_cast<const void *>(line));
+    }
+  }
+#else
+  void PrefetchCandidateReferenceWindow(const Candidate & /*candidate*/,
+                                        const Strand /*candidate_strand*/,
+                                        uint32_t /*read_length*/,
+                                        const SequenceBatch & /*reference*/) {}
+#endif
+
+  // Prefetches the reference windows of the first
+  // kReferenceWindowPrefetchDistance candidates on the strand. Inlined for the
+  // same reason as PrefetchCandidateReferenceWindow.
+#if defined(__GNUC__) || defined(__clang__)
+  __attribute__((always_inline))
+#endif
+  void PrefetchFirstCandidateReferenceWindows(
+      const std::vector<Candidate> &candidates, const Strand candidate_strand,
+      uint32_t read_length, const SequenceBatch &reference) {
+    const size_t num_candidates =
+        candidates.size() < kReferenceWindowPrefetchDistance
+            ? candidates.size()
+            : kReferenceWindowPrefetchDistance;
+    for (size_t ci = 0; ci < num_candidates; ++ci) {
+      PrefetchCandidateReferenceWindow(candidates[ci], candidate_strand,
+                                       read_length, reference);
+    }
+  }
 
   // Return true when there is one non-split mapping generated and the mapping
   // is supported by all the minimizers.

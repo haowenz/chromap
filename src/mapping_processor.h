@@ -142,7 +142,10 @@ void MappingProcessor<MappingRecord>::ParallelSortOutputMappings(
     {
 #pragma omp single
       {
-#pragma omp taskloop
+        // One reference per task: a few chromosomes hold most mappings, and
+        // the default chunks of contiguous references (one per thread) put
+        // most of them in one task.
+#pragma omp taskloop grainsize(1)
         for (uint32_t ri = 0; ri < num_reference_sequences; ++ri) {
           std::sort(mappings[ri].begin(), mappings[ri].end());
         }

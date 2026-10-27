@@ -3,11 +3,301 @@
 #include <assert.h>
 
 #include <algorithm>
+#include <atomic>
+#include <cstring>
+#include <fstream>
 #include <iostream>
+#include <thread>
 
 #include "minimizer_generator.h"
 
 namespace chromap {
+
+namespace {
+
+// A run of bytes of a file and the memory it is read into.
+struct FileRange {
+  uint64_t file_offset;
+  char *destination;
+  uint64_t num_bytes;
+};
+
+// Reads every range of the file at 'file_path' into its destination on up to
+// 'num_threads' threads. Each thread opens the file and takes the next piece of
+// at most 64 MiB, in file order, until none is left, so the first touch of the
+// destination pages is spread over the threads too. Returns whether every byte
+// was read.
+bool ReadFileRanges(const std::string &file_path,
+                    const std::vector<FileRange> &ranges, int num_threads) {
+  const uint64_t kMaxPieceBytes = static_cast<uint64_t>(64) << 20;
+  std::vector<FileRange> pieces;
+  for (const FileRange &range : ranges) {
+    for (uint64_t start = 0; start < range.num_bytes; start += kMaxPieceBytes) {
+      pieces.push_back({range.file_offset + start, range.destination + start,
+                        std::min(kMaxPieceBytes, range.num_bytes - start)});
+    }
+  }
+
+  std::atomic<size_t> next_piece(0);
+  std::atomic<bool> is_complete(true);
+  auto read_pieces = [&file_path, &pieces, &next_piece, &is_complete]() {
+    std::ifstream file(file_path, std::ios::in | std::ios::binary);
+    for (size_t pi = next_piece++; pi < pieces.size(); pi = next_piece++) {
+      const FileRange &piece = pieces[pi];
+      file.seekg(static_cast<std::streamoff>(piece.file_offset));
+      file.read(piece.destination,
+                static_cast<std::streamsize>(piece.num_bytes));
+      if (!file) {
+        is_complete = false;
+        return;
+      }
+    }
+  };
+
+  const size_t num_workers = std::max<size_t>(
+      1, std::min<size_t>(std::max(num_threads, 1), pieces.size()));
+  std::vector<std::thread> workers;
+  for (size_t ti = 1; ti < num_workers; ++ti) {
+    workers.emplace_back(read_pieces);
+  }
+  read_pieces();
+  for (std::thread &worker : workers) {
+    worker.join();
+  }
+  return is_complete;
+}
+
+// Merges the sorted runs [a, a_end) and [b, b_end) into 'out', from both ends
+// at once: the front takes the smaller head (the head of a on a tie) and the
+// back the larger tail (the tail of b on a tie), so the two halves are
+// disjoint and each step's selection is a conditional move, not a branch.
+inline void MergeTwoSortedRuns(const uint64_t *a, const uint64_t *a_end,
+                               const uint64_t *b, const uint64_t *b_end,
+                               uint64_t *out) {
+  const size_t total = (a_end - a) + (b_end - b);
+  // The back pointers point one past the next tail to take.
+  const uint64_t *a_front = a, *b_front = b;
+  const uint64_t *a_back = a_end, *b_back = b_end;
+  uint64_t *out_front = out, *out_back = out + total;
+  for (size_t step = total / 2; step > 0; --step) {
+    if (a_front < a_end && b_front < b_end) {
+      const uint64_t x = *a_front, y = *b_front;
+      const bool take_b = y < x;
+      *out_front++ = take_b ? y : x;
+      a_front += !take_b;
+      b_front += take_b;
+    } else if (a_front < a_end) {
+      *out_front++ = *a_front++;
+    } else {
+      *out_front++ = *b_front++;
+    }
+    if (a_back > a && b_back > b) {
+      const uint64_t x = a_back[-1], y = b_back[-1];
+      const bool take_a = y < x;
+      *--out_back = take_a ? x : y;
+      a_back -= take_a;
+      b_back -= !take_a;
+    } else if (a_back > a) {
+      *--out_back = *--a_back;
+    } else {
+      *--out_back = *--b_back;
+    }
+  }
+  if (total & 1) {
+    // One element is left. A head that the back has already taken is not
+    // smaller than it, so the smaller of the two heads is its value.
+    if (a_front < a_end && b_front < b_end) {
+      *out_front = *b_front < *a_front ? *b_front : *a_front;
+    } else if (a_front < a_end) {
+      *out_front = *a_front;
+    } else {
+      *out_front = *b_front;
+    }
+  }
+}
+
+// The most ascending runs SortHits merges; past this it calls std::sort.
+const uint32_t kMaxHitRuns = 128;
+
+// Merges the 'num_runs' (2 to kMaxHitRuns) non-descending runs of 'hits' that
+// start at run_starts[0] = 0 < run_starts[1] < ... pass by pass through a
+// per-thread scratch buffer, about log2(runs) passes over the hits. Overwrites
+// 'run_starts', which has room for num_runs + 1 entries.
+inline void MergeHitRuns(std::vector<uint64_t> &hits, uint32_t *run_starts,
+                         uint32_t num_runs) {
+  const uint32_t num_hits = hits.size();
+  uint64_t *data = hits.data();
+  run_starts[num_runs] = num_hits;
+
+  static thread_local std::vector<uint64_t> scratch;
+  if (scratch.size() < num_hits) {
+    scratch.resize(num_hits);
+  }
+  uint64_t *source = data;
+  uint64_t *destination = scratch.data();
+  while (num_runs > 1) {
+    uint32_t num_merged_runs = 0;
+    uint32_t ri = 0;
+    for (; ri + 1 < num_runs; ri += 2) {
+      const uint32_t start = run_starts[ri];
+      const uint32_t middle = run_starts[ri + 1];
+      const uint32_t end = run_starts[ri + 2];
+      MergeTwoSortedRuns(source + start, source + middle, source + middle,
+                         source + end, destination + start);
+      run_starts[num_merged_runs++] = start;
+    }
+    if (ri < num_runs) {
+      const uint32_t start = run_starts[ri];
+      const uint32_t end = run_starts[ri + 1];
+      std::memcpy(destination + start, source + start,
+                  (end - start) * sizeof(uint64_t));
+      run_starts[num_merged_runs++] = start;
+    }
+    run_starts[num_merged_runs] = num_hits;
+    num_runs = num_merged_runs;
+    std::swap(source, destination);
+  }
+  if (source != data) {
+    std::memcpy(data, source, num_hits * sizeof(uint64_t));
+  }
+}
+
+// Sorts 'hits' in ascending order. The hits arrive as a few ascending runs,
+// one per minimizer and strand (a minimizer's occurrences are sorted by
+// reference position), so this finds the maximal non-descending runs and
+// merges them with MergeHitRuns instead of std::sort's n log n compares. Plain
+// uint64 keys, so the result equals std::sort's. Falls back to std::sort when
+// there are more than kMaxHitRuns runs.
+void SortHits(std::vector<uint64_t> &hits) {
+  const uint32_t num_hits = hits.size();
+  if (num_hits < 2) {
+    return;
+  }
+  const uint64_t *data = hits.data();
+  uint32_t run_starts[kMaxHitRuns + 1];
+  uint32_t num_runs = 1;
+  run_starts[0] = 0;
+  for (uint32_t i = 1; i < num_hits; ++i) {
+    if (data[i] < data[i - 1]) {
+      if (num_runs == kMaxHitRuns) {
+        std::sort(hits.begin(), hits.end());
+        return;
+      }
+      run_starts[num_runs++] = i;
+    }
+  }
+  if (num_runs == 1) {
+    return;
+  }
+  MergeHitRuns(hits, run_starts, num_runs);
+}
+
+// Appends positions[0, num_positions) to 'hits' and sorts 'hits'. When
+// 'are_runs_known' and 'hits' was empty, the positions are the
+// 'num_runs' maximal non-descending runs starting at run_starts[0] = 0 <
+// run_starts[1] < ... (run_starts has room for kMaxHitRuns + 1 entries and
+// holds the first min(num_runs, kMaxHitRuns + 1) of them), so SortHits' pass
+// that finds them is skipped; otherwise SortHits sorts the whole vector.
+void AppendAndSortHits(const uint64_t *positions, uint32_t num_positions,
+                       uint32_t *run_starts, uint32_t num_runs,
+                       bool are_runs_known, std::vector<uint64_t> &hits) {
+  const bool was_empty = hits.empty();
+  hits.insert(hits.end(), positions, positions + num_positions);
+  if (!was_empty || !are_runs_known) {
+    SortHits(hits);
+    return;
+  }
+  if (num_runs <= 1) {
+    return;
+  }
+  if (num_runs > kMaxHitRuns) {
+    std::sort(hits.begin(), hits.end());
+    return;
+  }
+  MergeHitRuns(hits, run_starts, num_runs);
+}
+
+// The state of one repetitive minimizer's binary searches in
+// GenerateCandidatePositionsFromRepetitiveReadWithMateInfoOnOneStrand: the
+// search for boundary 'boundary_index', which starts at 'boundary', over the
+// minimizer's occurrences [offset, offset + last].
+struct OccurrenceSearch {
+  uint64_t boundary;
+  uint32_t offset;
+  int32_t l;
+  int32_t r;
+  int32_t m;
+  int32_t last;
+  uint32_t boundary_index;
+  // Where the final m of each boundary's search is stored.
+  uint32_t result_start;
+};
+
+// A hint to load the cache line holding 'address'. It must be inlined: GCC 13
+// at -O3 deduces a function whose only effect is __builtin_prefetch to be pure
+// and deletes calls to it. Where the compiler has no prefetch builtin it does
+// nothing.
+#if defined(__GNUC__) || defined(__clang__)
+__attribute__((always_inline)) inline void PrefetchOccurrence(
+    const uint64_t *address) {
+  __builtin_prefetch(address);
+}
+#else
+inline void PrefetchOccurrence(const uint64_t * /*address*/) {}
+#endif
+
+// The middle of [l, r] that a binary search probes, (l + r) / 2, for
+// 0 <= l <= r.
+inline int32_t MiddleOfRange(int32_t l, int32_t r) {
+  return static_cast<int32_t>(static_cast<uint32_t>(l + r) >> 1);
+}
+
+// Prefetches the two probes a binary search over [l, r] that probes m next
+// may make after it: the middle of [l, m - 1] and of [m + 1, r], or m itself
+// for a side that is empty. 0 <= l <= m <= r.
+#if defined(__GNUC__) || defined(__clang__)
+__attribute__((always_inline))
+#endif
+inline void PrefetchNextProbes(const uint64_t *occurrences, int32_t l,
+                               int32_t m, int32_t r) {
+  const int32_t left = MiddleOfRange(l, m - static_cast<int32_t>(l < m));
+  const int32_t right = MiddleOfRange(m + static_cast<int32_t>(m < r), r);
+  PrefetchOccurrence(&occurrences[left]);
+  PrefetchOccurrence(&occurrences[right]);
+}
+
+// Prefetches the cache lines holding the 'num_occurrences' >= 1 occurrences
+// that start at 'occurrences', up to eight lines (57 to 64 occurrences, by
+// alignment). A hint only, assuming 64-byte lines. Eight lines mapped faster
+// than two, four or 64 in a rotated sweep of the ATAC, ChIP and Hi-C cases.
+#if defined(__GNUC__) || defined(__clang__)
+__attribute__((always_inline))
+#endif
+inline void PrefetchOccurrenceListStart(const uint64_t *occurrences,
+                                        uint32_t num_occurrences) {
+  const uintptr_t kLineSize = 64;
+  const uintptr_t kMaxLines = 8;
+  const uintptr_t first_line =
+      reinterpret_cast<uintptr_t>(occurrences) & ~(kLineSize - 1);
+  const uintptr_t last_line =
+      reinterpret_cast<uintptr_t>(occurrences + (num_occurrences - 1)) &
+      ~(kLineSize - 1);
+  PrefetchOccurrence(occurrences);
+  for (uintptr_t line = first_line + kLineSize,
+                 stop = first_line + kMaxLines * kLineSize;
+       line <= last_line && line < stop; line += kLineSize) {
+    PrefetchOccurrence(reinterpret_cast<const uint64_t *>(line));
+  }
+}
+
+// The kind of lookup table entry a minimizer found.
+enum MinimizerLookupKind : uint8_t {
+  kNotInLookupTable = 0,
+  kSingletonLookup = 1,
+  kRepetitiveLookup = 2,
+};
+
+}  // namespace
 
 void Index::Construct(uint32_t num_sequences, const SequenceBatch &reference) {
   const double real_start_time = GetRealTime();
@@ -129,7 +419,9 @@ void Index::Save() const {
   std::cerr << "Saved in " << GetRealTime() - real_start_time << "s.\n";
 }
 
-void Index::Load() {
+void Index::Load() { Load(std::cerr); }
+
+void Index::Load(std::ostream &log, int num_threads) {
   const double real_start_time = GetRealTime();
   FILE *index_file = fopen(index_file_path_.c_str(), "rb");
   assert(index_file != nullptr);
@@ -145,27 +437,59 @@ void Index::Load() {
   err = fread(&lookup_table_size, sizeof(uint32_t), 1, index_file);
   assert(err != 0);
 
-  kh_load(k64, lookup_table_, index_file);
+  // The lookup table's counts, after which come its flags, keys and values,
+  // then the occurrence count and the occurrences: every offset follows from
+  // the counts, so the arrays are read by offset, on several threads.
+  kh_load_header(k64, lookup_table_, index_file);
+  uint64_t offset = static_cast<uint64_t>(ftell(index_file));
+  fclose(index_file);
+
+  std::vector<FileRange> ranges;
+  if (lookup_table_->n_buckets > 0) {
+    const uint64_t num_buckets = lookup_table_->n_buckets;
+    const uint64_t num_flag_bytes =
+        sizeof(khint32_t) * static_cast<uint64_t>(__ac_fsize(num_buckets));
+    ranges.push_back({offset, reinterpret_cast<char *>(lookup_table_->flags),
+                      num_flag_bytes});
+    offset += num_flag_bytes;
+    ranges.push_back({offset, reinterpret_cast<char *>(lookup_table_->keys),
+                      sizeof(uint64_t) * num_buckets});
+    offset += sizeof(uint64_t) * num_buckets;
+    ranges.push_back({offset, reinterpret_cast<char *>(lookup_table_->vals),
+                      sizeof(uint64_t) * num_buckets});
+    offset += sizeof(uint64_t) * num_buckets;
+  }
 
   uint32_t occurrence_table_size = 0;
-  err = fread(&occurrence_table_size, sizeof(uint32_t), 1, index_file);
-  assert(err != 0);
+  const bool has_occurrence_table_size = ReadFileRanges(
+      index_file_path_,
+      {{offset, reinterpret_cast<char *>(&occurrence_table_size),
+        sizeof(uint32_t)}},
+      /*num_threads=*/1);
+  assert(has_occurrence_table_size);
+  offset += sizeof(uint32_t);
 
   if (occurrence_table_size > 0) {
     occurrence_table_.resize(occurrence_table_size);
-    err = fread(occurrence_table_.data(), sizeof(uint64_t),
-                occurrence_table_size, index_file);
-    assert(err != 0);
+    // Huge pages, as for the lookup table's arrays: the occurrences are read
+    // at random, and resize left the pages untouched.
+    kmadvise_huge(occurrence_table_.data(),
+                  sizeof(uint64_t) * occurrence_table_.size());
+    ranges.push_back({offset,
+                      reinterpret_cast<char *>(occurrence_table_.data()),
+                      sizeof(uint64_t) * occurrence_table_size});
   }
 
-  fclose(index_file);
+  const bool is_complete =
+      ReadFileRanges(index_file_path_, ranges, num_threads);
+  assert(is_complete);
 
-  std::cerr << "Kmer size: " << kmer_size_ << ", window size: " << window_size_
-            << ".\n";
-  std::cerr << "Lookup table size: " << kh_size(lookup_table_)
-            << ", occurrence table size: " << occurrence_table_.size() << ".\n";
-  std::cerr << "Loaded index successfully in "
-            << GetRealTime() - real_start_time << "s.\n";
+  log << "Kmer size: " << kmer_size_ << ", window size: " << window_size_
+      << ".\n";
+  log << "Lookup table size: " << kh_size(lookup_table_)
+      << ", occurrence table size: " << occurrence_table_.size() << ".\n";
+  log << "Loaded index successfully in " << GetRealTime() - real_start_time
+      << "s.\n";
 }
 
 void Index::Statistics(uint32_t num_sequences,
@@ -255,63 +579,196 @@ int Index::GenerateCandidatePositions(
   mapping_metadata.negative_hits_.reserve(
       generating_config.GetMaxSeedFrequency() * 2);
 
-  RepetitiveSeedStats repetitive_seed_stats;
+  for (uint32_t mi = 0; mi < num_minimizers; ++mi) {
+    PrefetchLookupTableBucket(minimizers[mi].GetHash());
+  }
+
+  // Look up every minimizer first, in minimizer order, and prefetch the start
+  // of each occurrence list copied below, so that the first misses on those
+  // lists overlap instead of each stalling the copy loop in turn.
+  static thread_local std::vector<uint64_t> lookup_values;
+  static thread_local std::vector<uint8_t> lookup_kinds;
+  lookup_values.resize(num_minimizers);
+  lookup_kinds.resize(num_minimizers);
+  const uint64_t *occurrences = occurrence_table_.data();
+  // The number of candidate positions the copy below can generate.
+  uint32_t max_num_candidate_positions = 0;
   for (uint32_t mi = 0; mi < num_minimizers; ++mi) {
     khiter_t khash_iterator =
         kh_get(k64, lookup_table_,
                GenerateHashInLookupTable(minimizers[mi].GetHash()));
     if (khash_iterator == kh_end(lookup_table_)) {
       // std::cerr << "The minimizer is not in reference!\n";
+      lookup_kinds[mi] = kNotInLookupTable;
       continue;
     }
-
-    std::vector<uint64_t> &positive_candidate_positions =
-        generating_config.UseHeapMerge() ? positive_candidate_position_lists[mi]
-                                         : mapping_metadata.positive_hits_;
-    std::vector<uint64_t> &negative_candidate_positions =
-        generating_config.UseHeapMerge() ? negative_candidate_position_lists[mi]
-                                         : mapping_metadata.negative_hits_;
 
     const uint64_t lookup_key = kh_key(lookup_table_, khash_iterator);
     const uint64_t lookup_value = kh_value(lookup_table_, khash_iterator);
-    const uint64_t read_hit = minimizers[mi].GetHit();
+    lookup_values[mi] = lookup_value;
     if (IsSingletonLookupKey(lookup_key)) {
-      const uint64_t candidate_position = GenerateCandidatePositionFromHits(
-          /*reference_hit=*/lookup_value, read_hit);
-      if (AreTwoHitsOnTheSameStrand(/*reference_hit=*/lookup_value, read_hit)) {
-        positive_candidate_positions.push_back(candidate_position);
-      } else {
-        negative_candidate_positions.push_back(candidate_position);
-      }
+      lookup_kinds[mi] = kSingletonLookup;
+      ++max_num_candidate_positions;
       continue;
     }
 
+    lookup_kinds[mi] = kRepetitiveLookup;
     const uint32_t num_occurrences =
         GenerateNumOccurrenceInOccurrenceTable(lookup_value);
-    if (!generating_config.IsFrequentSeed(num_occurrences)) {
-      const uint32_t read_position = HitToSequencePosition(read_hit);
-      const uint32_t occ_offset = GenerateOffsetInOccurrenceTable(lookup_value);
-      for (uint32_t oi = 0; oi < num_occurrences; ++oi) {
-        const uint64_t reference_hit = occurrence_table_[occ_offset + oi];
-        const uint64_t candidate_position =
-            GenerateCandidatePositionFromHits(reference_hit, read_hit);
-        if (AreTwoHitsOnTheSameStrand(reference_hit, read_hit)) {
-          const uint32_t reference_position =
+    if (num_occurrences > 0 &&
+        !generating_config.IsFrequentSeed(num_occurrences)) {
+      PrefetchOccurrenceListStart(
+          occurrences + GenerateOffsetInOccurrenceTable(lookup_value),
+          num_occurrences);
+      max_num_candidate_positions += num_occurrences;
+    }
+  }
+
+  // Every candidate position is written to the tails of both strands' buffers
+  // and only the tail of its own strand advances, so the copy below has no
+  // per-occurrence strand branch. Each buffer has room for every candidate
+  // position of the call, and DefaultInitAllocator leaves that room
+  // uninitialized. The positions are then appended to the hit vectors (or the
+  // heap merge's per-minimizer lists) in the order the copy produced them.
+  // Each buffer also has a slot before its first position, holding 0, and one
+  // after its last, so the run bookkeeping below reads in bounds.
+  static thread_local std::vector<uint64_t, DefaultInitAllocator<uint64_t>>
+      positive_buffer;
+  static thread_local std::vector<uint64_t, DefaultInitAllocator<uint64_t>>
+      negative_buffer;
+  if (positive_buffer.size() < max_num_candidate_positions + 2) {
+    positive_buffer.resize(max_num_candidate_positions + 2);
+    negative_buffer.resize(max_num_candidate_positions + 2);
+  }
+  positive_buffer[0] = 0;
+  negative_buffer[0] = 0;
+  // positive_before[i] is positive_out[i - 1], and the same for negative.
+  const uint64_t *const positive_before = positive_buffer.data();
+  const uint64_t *const negative_before = negative_buffer.data();
+  uint64_t *const positive_out = positive_buffer.data() + 1;
+  uint64_t *const negative_out = negative_buffer.data() + 1;
+  uint32_t num_positive = 0;
+  uint32_t num_negative = 0;
+  // Nonzero above bit 31 when a candidate position of either strand, computed
+  // in 64 bits, falls outside [0, 2^32), so that its 32-bit start wraps and
+  // may break the ascending order of its minimizer's list.
+  uint64_t has_wrapped_position = 0;
+  // Each minimizer's positions on a strand form one non-descending run while
+  // nothing wraps (its occurrences are sorted by reference id and position).
+  // A run starts where a minimizer's first position is below the last
+  // position before it, so these are the maximal runs SortHits would find.
+  uint32_t positive_run_starts[kMaxHitRuns + 1];
+  uint32_t negative_run_starts[kMaxHitRuns + 1];
+  positive_run_starts[0] = 0;
+  negative_run_starts[0] = 0;
+  uint32_t num_positive_runs = 1;
+  uint32_t num_negative_runs = 1;
+
+  RepetitiveSeedStats repetitive_seed_stats;
+  for (uint32_t mi = 0; mi < num_minimizers; ++mi) {
+    const uint8_t lookup_kind = lookup_kinds[mi];
+    if (lookup_kind == kNotInLookupTable) {
+      continue;
+    }
+
+    const uint64_t lookup_value = lookup_values[mi];
+    const uint64_t read_hit = minimizers[mi].GetHit();
+    const uint32_t read_position = HitToSequencePosition(read_hit);
+    // A candidate position is (reference id << 32) | start, where the start is
+    // reference_position - read_position on the read's strand and
+    // reference_position + read_position - kmer_size_ + 1 on the other, both
+    // in 32-bit arithmetic (GenerateCandidatePositionFromHits).
+    const uint32_t negative_start_offset = read_position - kmer_size_ + 1;
+    // The same offsets in 64 bits, so a start outside [0, 2^32) shows above
+    // bit 31; the low 32 bits are the 32-bit starts.
+    const uint64_t positive_start_offset64 =
+        static_cast<uint64_t>(-static_cast<int64_t>(read_position));
+    const uint64_t negative_start_offset64 = static_cast<uint64_t>(
+        static_cast<int64_t>(read_position) - kmer_size_ + 1);
+    const uint32_t first_positive = num_positive;
+    const uint32_t first_negative = num_negative;
+    if (lookup_kind == kSingletonLookup) {
+      const uint64_t reference_hit = lookup_value;
+      const uint32_t same_strand =
+          static_cast<uint32_t>(~(reference_hit ^ read_hit)) & 1;
+      const uint32_t reference_position = HitToSequencePosition(reference_hit);
+      const uint64_t reference_id_bits = (reference_hit >> 33) << 32;
+      positive_out[num_positive] =
+          reference_id_bits | (reference_position - read_position);
+      negative_out[num_negative] =
+          reference_id_bits | (reference_position + negative_start_offset);
+      num_positive += same_strand;
+      num_negative += same_strand ^ 1;
+    } else {
+      const uint32_t num_occurrences =
+          GenerateNumOccurrenceInOccurrenceTable(lookup_value);
+      if (!generating_config.IsFrequentSeed(num_occurrences)) {
+        const uint64_t *const occurrence_list =
+            occurrences + GenerateOffsetInOccurrenceTable(lookup_value);
+        uint32_t positive_end = num_positive;
+        uint32_t negative_end = num_negative;
+        uint64_t wrapped = 0;
+        for (uint32_t oi = 0; oi < num_occurrences; ++oi) {
+          const uint64_t reference_hit = occurrence_list[oi];
+          const uint32_t same_strand =
+              static_cast<uint32_t>(~(reference_hit ^ read_hit)) & 1;
+          const uint64_t reference_position =
               HitToSequencePosition(reference_hit);
-          if (reference_position < read_position) {
-            is_candidate_position_list_sorted = false;
-          }
-          positive_candidate_positions.push_back(candidate_position);
-        } else {
-          negative_candidate_positions.push_back(candidate_position);
+          const uint64_t reference_id_bits = (reference_hit >> 33) << 32;
+          // Both strands' starts are checked, whichever strand the occurrence
+          // is on: a wrap the copy discards only costs SortHits' run search.
+          const uint64_t positive_start =
+              reference_position + positive_start_offset64;
+          const uint64_t negative_start =
+              reference_position + negative_start_offset64;
+          positive_out[positive_end] =
+              reference_id_bits | static_cast<uint32_t>(positive_start);
+          negative_out[negative_end] =
+              reference_id_bits | static_cast<uint32_t>(negative_start);
+          wrapped |= positive_start | negative_start;
+          positive_end += same_strand;
+          negative_end += same_strand ^ 1;
         }
+        num_positive = positive_end;
+        num_negative = negative_end;
+        has_wrapped_position |= wrapped;
+      }
+
+      if (generating_config.IsRepetitiveSeed(num_occurrences)) {
+        UpdateRepetitiveSeedStats(read_position, repetitive_seed_stats);
       }
     }
 
-    if (generating_config.IsRepetitiveSeed(num_occurrences)) {
-      const uint32_t read_position = HitToSequencePosition(read_hit);
-      UpdateRepetitiveSeedStats(read_position, repetitive_seed_stats);
+    // Start a run at this minimizer's first position on a strand when it has
+    // positions there and the first is below the one before it (the slot
+    // before the buffer holds 0, below no position). The start is stored
+    // either way and kept only by counting it; past kMaxHitRuns runs the
+    // slot is reused, since SortHits then calls std::sort.
+    const uint32_t positive_run_break =
+        static_cast<uint32_t>(num_positive != first_positive) &
+        static_cast<uint32_t>(positive_out[first_positive] <
+                              positive_before[first_positive]);
+    const uint32_t negative_run_break =
+        static_cast<uint32_t>(num_negative != first_negative) &
+        static_cast<uint32_t>(negative_out[first_negative] <
+                              negative_before[first_negative]);
+    positive_run_starts[std::min(num_positive_runs, kMaxHitRuns)] =
+        first_positive;
+    negative_run_starts[std::min(num_negative_runs, kMaxHitRuns)] =
+        first_negative;
+    num_positive_runs += positive_run_break;
+    num_negative_runs += negative_run_break;
+
+    if (generating_config.UseHeapMerge()) {
+      positive_candidate_position_lists[mi].assign(
+          positive_out + first_positive, positive_out + num_positive);
+      negative_candidate_position_lists[mi].assign(
+          negative_out + first_negative, negative_out + num_negative);
     }
+  }
+
+  if ((has_wrapped_position >> 32) != 0) {
+    is_candidate_position_list_sorted = false;
   }
 
   if (generating_config.UseHeapMerge()) {
@@ -327,10 +784,14 @@ int Index::GenerateCandidatePositions(
     HeapMergeCandidatePositionLists(negative_candidate_position_lists,
                                     mapping_metadata.negative_hits_);
   } else {
-    std::sort(mapping_metadata.positive_hits_.begin(),
-              mapping_metadata.positive_hits_.end());
-    std::sort(mapping_metadata.negative_hits_.begin(),
-              mapping_metadata.negative_hits_.end());
+    // Where a start wrapped, a minimizer's positions may not ascend, so the
+    // runs found above are not trusted.
+    AppendAndSortHits(positive_out, num_positive, positive_run_starts,
+                      num_positive_runs, is_candidate_position_list_sorted,
+                      mapping_metadata.positive_hits_);
+    AppendAndSortHits(negative_out, num_negative, negative_run_starts,
+                      num_negative_runs, is_candidate_position_list_sorted,
+                      mapping_metadata.negative_hits_);
   }
 
 #ifdef LI_DEBUG
@@ -411,21 +872,126 @@ int Index::GenerateCandidatePositionsFromRepetitiveReadWithMateInfoOnOneStrand(
   }
   boundaries.resize(boundary_size);
 
-  RepetitiveSeedStats repetitive_seed_stats;
   for (uint32_t mi = 0; mi < minimizers.size(); ++mi) {
+    PrefetchLookupTableBucket(minimizers[mi].GetHash());
+  }
+
+  // Look up every minimizer first, in minimizer order.
+  const uint32_t num_minimizers = minimizers.size();
+  static thread_local std::vector<uint64_t> lookup_values;
+  static thread_local std::vector<uint8_t> lookup_kinds;
+  static thread_local std::vector<OccurrenceSearch> searches;
+  static thread_local std::vector<int32_t> search_results;
+  lookup_values.resize(num_minimizers);
+  lookup_kinds.resize(num_minimizers);
+  searches.clear();
+  uint32_t num_repetitive_minimizers = 0;
+  for (uint32_t mi = 0; mi < num_minimizers; ++mi) {
     khiter_t khash_iterator =
         kh_get(k64, lookup_table_,
                GenerateHashInLookupTable(minimizers[mi].GetHash()));
     if (khash_iterator == kh_end(lookup_table_)) {
       // std::cerr << "The minimizer is not in reference!\n";
+      lookup_kinds[mi] = kNotInLookupTable;
       continue;
     }
 
     const uint64_t lookup_key = kh_key(lookup_table_, khash_iterator);
     const uint64_t lookup_value = kh_value(lookup_table_, khash_iterator);
+    lookup_values[mi] = lookup_value;
+    if (IsSingletonLookupKey(lookup_key)) {
+      lookup_kinds[mi] = kSingletonLookup;
+      continue;
+    }
+
+    lookup_kinds[mi] = kRepetitiveLookup;
+    const uint32_t offset = GenerateOffsetInOccurrenceTable(lookup_value);
+    const uint32_t num_occurrences =
+        GenerateNumOccurrenceInOccurrenceTable(lookup_value);
+    const int32_t last = num_occurrences - 1;
+    // With no occurrence to search, every boundary's m stays 0.
+    if (last >= 0) {
+      searches.push_back({boundaries[0].first, offset, /*l=*/0, /*r=*/last,
+                          /*m=*/0, last, /*boundary_index=*/0,
+                          num_repetitive_minimizers * boundary_size});
+    }
+    ++num_repetitive_minimizers;
+  }
+
+  // Use binary search to locate the coordinate near mate position, for each
+  // boundary of each repetitive minimizer. A minimizer searches its boundaries
+  // in order, and the search for the next boundary starts from the previous
+  // one's m. The searches of different minimizers are independent, so they run
+  // in lockstep: in each round every active search compares its probe and
+  // prefetches both probes that may follow its next one, so that each probe is
+  // prefetched two rounds before it is compared and the cache misses of the
+  // searches overlap instead of running one after another. l and r are
+  // updated with conditional moves, so only the end of a search is a branch.
+  // Each search makes the same probes as when run alone, so its final m is
+  // unchanged.
+  search_results.resize(num_repetitive_minimizers * boundary_size);
+  const uint64_t *occurrences = occurrence_table_.data();
+  OccurrenceSearch *active_searches = searches.data();
+  uint32_t num_active_searches = searches.size();
+  for (uint32_t si = 0; si < num_active_searches; ++si) {
+    OccurrenceSearch &search = active_searches[si];
+    search.m = MiddleOfRange(search.l, search.r);
+    PrefetchOccurrence(&occurrences[search.offset + search.m]);
+    PrefetchNextProbes(occurrences + search.offset, search.l, search.m,
+                       search.r);
+  }
+  while (num_active_searches > 0) {
+    for (uint32_t si = 0; si < num_active_searches;) {
+      OccurrenceSearch &search = active_searches[si];
+      const int32_t m = search.m;
+      const uint64_t candidate_position =
+          GenerateCandidatePositionFromOccurrenceTableEntry(
+              occurrences[search.offset + m]);
+      const bool below = candidate_position < search.boundary;
+      const bool above = candidate_position > search.boundary;
+      // All ones where the condition holds, zero elsewhere.
+      const int32_t below_mask = -static_cast<int32_t>(below);
+      const int32_t above_mask = -static_cast<int32_t>(above);
+      const int32_t l = ((m + 1) & below_mask) | (search.l & ~below_mask);
+      const int32_t r = ((m - 1) & above_mask) | (search.r & ~above_mask);
+      if ((below | above) & (l <= r)) {
+        search.l = l;
+        search.r = r;
+        search.m = MiddleOfRange(l, r);
+        PrefetchNextProbes(occurrences + search.offset, l, search.m, r);
+        ++si;
+        continue;
+      }
+      search_results[search.result_start + search.boundary_index] = m;
+      ++search.boundary_index;
+      if (search.boundary_index < boundary_size) {
+        // For next boundary, we don't have to start from l=0.
+        search.boundary = boundaries[search.boundary_index].first;
+        search.l = m;
+        search.r = search.last;
+        search.m = MiddleOfRange(search.l, search.r);
+        PrefetchOccurrence(&occurrences[search.offset + search.m]);
+        PrefetchNextProbes(occurrences + search.offset, search.l, search.m,
+                           search.r);
+        ++si;
+        continue;
+      }
+      active_searches[si] = active_searches[--num_active_searches];
+    }
+  }
+
+  // Collect the candidate positions in minimizer order.
+  RepetitiveSeedStats repetitive_seed_stats;
+  uint32_t repetitive_minimizer_index = 0;
+  for (uint32_t mi = 0; mi < num_minimizers; ++mi) {
+    if (lookup_kinds[mi] == kNotInLookupTable) {
+      continue;
+    }
+
+    const uint64_t lookup_value = lookup_values[mi];
     const uint64_t read_hit = minimizers[mi].GetHit();
     const uint32_t read_position = HitToSequencePosition(read_hit);
-    if (IsSingletonLookupKey(lookup_key)) {
+    if (lookup_kinds[mi] == kSingletonLookup) {
       const uint64_t candidate_position =
           GenerateCandidatePositionFromHits(lookup_value, read_hit);
       const bool on_same_strand =
@@ -440,27 +1006,12 @@ int Index::GenerateCandidatePositionsFromRepetitiveReadWithMateInfoOnOneStrand(
     const uint32_t offset = GenerateOffsetInOccurrenceTable(lookup_value);
     const uint32_t num_occurrences =
         GenerateNumOccurrenceInOccurrenceTable(lookup_value);
-    int32_t prev_l = 0;
+    const int32_t *boundary_results =
+        search_results.data() + repetitive_minimizer_index * boundary_size;
+    const bool searched = static_cast<int32_t>(num_occurrences - 1) >= 0;
+    ++repetitive_minimizer_index;
     for (uint32_t bi = 0; bi < boundary_size; ++bi) {
-      // Use binary search to locate the coordinate near mate position.
-      int32_t l = prev_l, m = 0, r = num_occurrences - 1;
-      uint64_t boundary = boundaries[bi].first;
-      while (l <= r) {
-        m = (l + r) / 2;
-        uint64_t candidate_position =
-            GenerateCandidatePositionFromOccurrenceTableEntry(
-                occurrence_table_[offset + m]);
-        if (candidate_position < boundary) {
-          l = m + 1;
-        } else if (candidate_position > boundary) {
-          r = m - 1;
-        } else {
-          break;
-        }
-      }
-      // For next boundary, we don't have to start from l=0.
-      prev_l = m;
-
+      const int32_t m = searched ? boundary_results[bi] : 0;
       for (uint32_t oi = m; oi < num_occurrences; ++oi) {
         const uint64_t reference_hit = occurrence_table_[offset + oi];
         if ((GenerateCandidatePositionFromOccurrenceTableEntry(reference_hit)) >
@@ -483,7 +1034,7 @@ int Index::GenerateCandidatePositionsFromRepetitiveReadWithMateInfoOnOneStrand(
     }
   }
 
-  std::sort(candidate_positions.begin(), candidate_positions.end());
+  SortHits(candidate_positions);
   repetitive_seed_length = repetitive_seed_stats.repetitive_seed_length;
   return max_minimizer_count;
 }

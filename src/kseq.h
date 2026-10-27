@@ -40,7 +40,7 @@
 #define __KS_TYPE(type_t)						\
 	typedef struct __kstream_t {				\
 		unsigned char *buf;						\
-		int begin, end, is_eof;					\
+		int begin, end, is_eof, bufsize;		\
 		type_t f;								\
 	} kstream_t;
 
@@ -49,13 +49,17 @@
 #define ks_rewind(ks) ((ks)->is_eof = (ks)->begin = (ks)->end = 0)
 
 #define __KS_BASIC(type_t, __bufsize)								\
-	static inline kstream_t *ks_init(type_t f)						\
+	/* a stream reading bufsize bytes at a time */				\
+	static inline kstream_t *ks_init2(type_t f, int bufsize)		\
 	{																\
 		kstream_t *ks = (kstream_t*)calloc(1, sizeof(kstream_t));	\
 		ks->f = f;													\
-		ks->buf = (unsigned char*)malloc(__bufsize);				\
+		ks->bufsize = bufsize;										\
+		ks->buf = (unsigned char*)malloc(bufsize);					\
 		return ks;													\
 	}																\
+	static inline kstream_t *ks_init(type_t f)						\
+	{ return ks_init2(f, __bufsize); }							\
 	static inline void ks_destroy(kstream_t *ks)					\
 	{																\
 		if (ks) {													\
@@ -71,7 +75,7 @@
 		if (ks->is_eof && ks->begin >= ks->end) return -1;	\
 		if (ks->begin >= ks->end) {							\
 			ks->begin = 0;									\
-			ks->end = __read(ks->f, ks->buf, __bufsize);	\
+			ks->end = __read(ks->f, ks->buf, ks->bufsize);	\
 			if (ks->end == 0) { ks->is_eof = 1; return -1;}	\
 			if (ks->end == -1) { ks->is_eof = 1; return -3;}\
 		}													\
@@ -102,17 +106,18 @@ typedef struct __kstring_t {
 			if (ks->begin >= ks->end) {									\
 				if (!ks->is_eof) {										\
 					ks->begin = 0;										\
-					ks->end = __read(ks->f, ks->buf, __bufsize);		\
+					ks->end = __read(ks->f, ks->buf, ks->bufsize);	\
 					if (ks->end == 0) { ks->is_eof = 1; break; }		\
 					if (ks->end == -1) { ks->is_eof = 1; return -3; }	\
 				} else break;											\
 			}															\
 			if (delimiter == KS_SEP_LINE) { \
-				for (i = ks->begin; i < ks->end; ++i) \
-					if (ks->buf[i] == '\n') break; \
+				unsigned char *sep = (unsigned char*)memchr(ks->buf + ks->begin, '\n', ks->end - ks->begin); \
+				i = sep != 0 ? (int)(sep - ks->buf) : ks->end; \
 			} else if (delimiter > KS_SEP_MAX) {						\
-				for (i = ks->begin; i < ks->end; ++i)					\
-					if (ks->buf[i] == delimiter) break;					\
+				/* a delimiter above 0xff matches no byte */ \
+				unsigned char *sep = delimiter <= 0xff ? (unsigned char*)memchr(ks->buf + ks->begin, delimiter, ks->end - ks->begin) : 0; \
+				i = sep != 0 ? (int)(sep - ks->buf) : ks->end; \
 			} else if (delimiter == KS_SEP_SPACE) {						\
 				for (i = ks->begin; i < ks->end; ++i)					\
 					if (isspace(ks->buf[i])) break;						\
@@ -160,6 +165,13 @@ typedef struct __kstring_t {
 		s->f = ks_init(fd);												\
 		return s;														\
 	}																	\
+	/* as kseq_init, with a stream buffer of bufsize bytes */	\
+	SCOPE kseq_t *kseq_init2(type_t fd, int bufsize)				\
+	{																\
+		kseq_t *s = (kseq_t*)calloc(1, sizeof(kseq_t));				\
+		s->f = ks_init2(fd, bufsize);								\
+		return s;													\
+	}																\
 	SCOPE void kseq_destroy(kseq_t *ks)									\
 	{																	\
 		if (!ks) return;												\
@@ -237,6 +249,7 @@ typedef struct __kstring_t {
 	__KS_TYPE(type_t) \
 	__KSEQ_TYPE(type_t) \
 	extern kseq_t *kseq_init(type_t fd); \
+	extern kseq_t *kseq_init2(type_t fd, int bufsize); \
 	void kseq_destroy(kseq_t *ks); \
 	int kseq_read(kseq_t *seq);
 
